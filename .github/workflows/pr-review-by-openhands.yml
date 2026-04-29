@@ -52,6 +52,35 @@ jobs:
       cancel-in-progress: true
     runs-on: ubuntu-24.04
     steps:
+      - name: Preflight review permission smoke test
+        env:
+          GITHUB_TOKEN: ${{ secrets.OPENHANDS_BOT_GITHUB_PAT_PUBLIC }}
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "gh not found on runner"
+            exit 1
+          fi
+
+          if ! REVIEW_ID="$(
+            gh api \
+              -X POST \
+              repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+              -f body='Preflight review permission smoke test. This pending review will be deleted immediately.' \
+              --jq '.id'
+          )"; then
+            echo "Failed to create pending review during preflight smoke test"
+            exit 1
+          fi
+
+          if [ -z "$REVIEW_ID" ]; then
+            echo "Preflight smoke test returned an empty review id"
+            exit 1
+          fi
+
+          gh api \
+            -X DELETE \
+            repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${REVIEW_ID}
+
       - name: Run PR Review
         uses: OpenHands/extensions/plugins/pr-review@main
         with:
