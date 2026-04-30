@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe("AgentServerSettingsScreen", () => {
-  it("renders the friendlier onboarding copy and prefills environment defaults", async () => {
+  it("renders the simplified settings-style form and prefills environment defaults", async () => {
     vi.stubEnv("VITE_BACKEND_BASE_URL", "https://env-agent.example.com/");
     vi.stubEnv("VITE_SESSION_API_KEY", "env-session-key");
 
@@ -88,6 +88,10 @@ describe("AgentServerSettingsScreen", () => {
     expect(
       screen.getByRole("button", { name: /retry connection/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-server-checklist")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/connection details/i),
+    ).not.toBeInTheDocument();
   });
 
   it("saves agent server settings locally and reconnects", async () => {

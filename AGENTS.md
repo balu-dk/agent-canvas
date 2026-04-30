@@ -64,6 +64,7 @@
 - Agent-server recovery UX gotchas:
   - Keep `/settings/agent-server` in the intermediate-page bypass path (`use-is-on-intermediate-page`) so `useConfig()`-driven layout/sidebar queries do not block the recovery screen behind a global spinner.
   - `PostHogWrapper` should treat config-fetch failures as silent/optional (no user-facing toast), otherwise onboarding/recovery screens show a duplicate incompatible-server toast on top of the friendly guidance.
+  - Keep the settings route on the compact `AgentServerConnectionForm` variant with `showSectionHeader={false}` and no checklist; the full onboarding screen can keep the extra recovery context, but the settings page should match the simpler visual style of other settings screens.
   - For local screenshot/GIF capture of SPA routes, serve `build/` with an SPA fallback (for example `sirv build --single`) and restart the static server after each rebuild so hashed asset URLs stay in sync.
 
 - Git provider token persistence note: this direct-agent-server frontend now persists `Settings > Git` provider tokens locally in browser storage instead of posting to an app-backend secrets route. `src/api/secrets-service.ts` writes the token payload to localStorage, mirrors provider hosts into `provider_tokens_set` through `SettingsService.saveSettings()`, and `use-delete-git-providers` clears that local state.

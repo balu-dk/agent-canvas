@@ -1,9 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import {
-  AgentServerChecklist,
-  AgentServerConnectionForm,
-} from "#/components/features/settings/agent-server-onboarding";
+import { AgentServerConnectionForm } from "#/components/features/settings/agent-server-onboarding";
 import { Typography } from "#/ui/typography";
 
 export const clientLoader = async () => null;
@@ -15,24 +12,19 @@ export function AgentServerSettingsScreen() {
   return (
     <div
       data-testid="agent-server-settings-screen"
-      className="flex h-full flex-col gap-8"
+      className="flex h-full flex-col gap-6 pb-8"
     >
-      <div className="max-w-3xl">
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-primary">
-          {t("SETTINGS$AGENT_SERVER_ONBOARDING_EYEBROW")}
-        </p>
-        <Typography.H2 className="mt-4 text-3xl font-semibold leading-tight text-white">
+      <div>
+        <Typography.H2 className="mb-2">
           {t("SETTINGS$AGENT_SERVER_SETTINGS_TITLE")}
         </Typography.H2>
-        <p className="mt-4 text-sm leading-7 text-gray-400">
+        <Typography.Paragraph className="max-w-3xl text-sm text-[#A3A3A3]">
           {t("SETTINGS$AGENT_SERVER_DESCRIPTION")}
-        </p>
+        </Typography.Paragraph>
       </div>
 
-      <AgentServerChecklist />
-
       <div className="max-w-2xl">
-        <AgentServerConnectionForm />
+        <AgentServerConnectionForm variant="settings" showSectionHeader={false} />
       </div>
     </div>
   );
