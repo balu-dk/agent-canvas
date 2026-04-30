@@ -17,6 +17,7 @@ import {
   isAgentServerUnavailableError,
 } from "#/api/agent-server-compatibility";
 import { useConfig } from "#/hooks/query/use-config";
+import { AgentServerUIRoot } from "#/components/providers";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -27,12 +28,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
-        {children}
+      <body style={{ margin: 0 }}>
+        <AgentServerUIRoot contentClassName="min-h-screen">
+          {children}
+          <Toaster />
+          <div id="modal-portal-exit" />
+        </AgentServerUIRoot>
         <ScrollRestoration />
         <Scripts />
-        <Toaster />
-        <div id="modal-portal-exit" />
       </body>
     </html>
   );
@@ -55,6 +58,7 @@ function AgentServerNotice({
         data-testid={testId}
         className="w-full max-w-2xl rounded-2xl border border-danger/30 bg-neutral-900/80 p-8 shadow-2xl"
       >
+        {/* eslint-disable-next-line i18next/no-literal-string */}
         <p className="text-sm font-medium uppercase tracking-[0.24em] text-danger">
           Connection blocked
         </p>
@@ -78,9 +82,12 @@ function UnsupportedAgentServerNotice({
       message={error.message}
     >
       {error.serverVersion && (
-        <p className="mt-4 text-sm text-neutral-400">
-          Detected version: <code>{error.serverVersion}</code>
-        </p>
+        <>
+          {/* eslint-disable-next-line i18next/no-literal-string */}
+          <p className="mt-4 text-sm text-neutral-400">
+            Detected version: <code>{error.serverVersion}</code>
+          </p>
+        </>
       )}
     </AgentServerNotice>
   );
@@ -98,9 +105,12 @@ function MissingAgentServerNotice({
       message={error.message}
     >
       {error.details && (
-        <p className="mt-4 text-sm text-neutral-400">
-          Details: {error.details}
-        </p>
+        <>
+          {/* eslint-disable-next-line i18next/no-literal-string */}
+          <p className="mt-4 text-sm text-neutral-400">
+            Details: {error.details}
+          </p>
+        </>
       )}
     </AgentServerNotice>
   );
