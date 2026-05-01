@@ -92,24 +92,6 @@ describe("OptionService", () => {
     expect(isAgentServerToolAvailable("terminal")).toBe(true);
   });
 
-  it("falls back to available_tools when usable_tools is absent", async () => {
-    server.use(
-      http.get("/server_info", () =>
-        HttpResponse.json({
-          uptime: 0,
-          idle_time: 0,
-          version: MINIMUM_SUPPORTED_AGENT_SERVER_VERSION,
-          available_tools: ["terminal", "file_editor", "task_tracker"],
-        }),
-      ),
-    );
-
-    await OptionService.getConfig();
-
-    expect(isAgentServerToolAvailable("browser_tool_set")).toBe(false);
-    expect(isAgentServerToolAvailable("terminal")).toBe(true);
-  });
-
   it("allows all tools when the server does not advertise tool metadata", async () => {
     server.use(
       http.get("/server_info", () =>

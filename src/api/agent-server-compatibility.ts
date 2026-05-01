@@ -10,7 +10,6 @@ const AGENT_SERVER_INFO_TIMEOUT_MS = 5000;
 const SEMVER_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
 
 export interface AgentServerInfo extends BaseServerInfo {
-  available_tools?: string[] | null;
   usable_tools?: string[] | null;
 }
 
@@ -21,9 +20,6 @@ const getServerVersion = (serverInfo: AgentServerInfo): string => serverInfo.ver
 const getAdvertisedTools = (serverInfo: AgentServerInfo | null) => {
   if (Array.isArray(serverInfo?.usable_tools)) {
     return serverInfo.usable_tools;
-  }
-  if (Array.isArray(serverInfo?.available_tools)) {
-    return serverInfo.available_tools;
   }
   return null;
 };
