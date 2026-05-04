@@ -1,117 +1,51 @@
 import { describe, it, expect } from "vitest";
+import { DEFAULT_WORKING_DIR } from "#/api/agent-server-config";
 import { getGitPath } from "#/utils/get-git-path";
 
 describe("getGitPath", () => {
-  const conversationId = "abc123";
-
-  describe("without sandbox grouping (NO_GROUPING)", () => {
-    it("should return /workspace/project when no repository is selected", () => {
-      expect(getGitPath(conversationId, null, false)).toBe("/workspace/project");
-      expect(getGitPath(conversationId, undefined, false)).toBe(
-        "/workspace/project",
-      );
-    });
-
-    it("should handle standard owner/repo format (GitHub)", () => {
-      expect(getGitPath(conversationId, "OpenHands/OpenHands", false)).toBe(
-        "/workspace/project/OpenHands",
-      );
-      expect(getGitPath(conversationId, "facebook/react", false)).toBe(
-        "/workspace/project/react",
-      );
-    });
-
-    it("should handle nested group paths (GitLab)", () => {
-      expect(
-        getGitPath(conversationId, "modernhealth/frontend-guild/pan", false),
-      ).toBe("/workspace/project/pan");
-      expect(getGitPath(conversationId, "group/subgroup/repo", false)).toBe(
-        "/workspace/project/repo",
-      );
-      expect(getGitPath(conversationId, "a/b/c/d/repo", false)).toBe(
-        "/workspace/project/repo",
-      );
-    });
-
-    it("should handle single segment paths", () => {
-      expect(getGitPath(conversationId, "repo", false)).toBe(
-        "/workspace/project/repo",
-      );
-    });
-
-    it("should handle empty string", () => {
-      expect(getGitPath(conversationId, "", false)).toBe("/workspace/project");
-    });
+  it("should return the default working dir when no repository is selected", () => {
+    expect(getGitPath(null)).toBe(DEFAULT_WORKING_DIR);
+    expect(getGitPath(undefined)).toBe(DEFAULT_WORKING_DIR);
   });
 
-  describe("with sandbox grouping enabled", () => {
-    it("should return /workspace/project/{conversationId} when no repository is selected", () => {
-      expect(getGitPath(conversationId, null, true)).toBe(
-        `/workspace/project/${conversationId}`,
-      );
-      expect(getGitPath(conversationId, undefined, true)).toBe(
-        `/workspace/project/${conversationId}`,
-      );
-    });
-
-    it("should handle standard owner/repo format (GitHub)", () => {
-      expect(getGitPath(conversationId, "OpenHands/OpenHands", true)).toBe(
-        `/workspace/project/${conversationId}/OpenHands`,
-      );
-      expect(getGitPath(conversationId, "facebook/react", true)).toBe(
-        `/workspace/project/${conversationId}/react`,
-      );
-    });
-
-    it("should handle nested group paths (GitLab)", () => {
-      expect(
-        getGitPath(conversationId, "modernhealth/frontend-guild/pan", true),
-      ).toBe(`/workspace/project/${conversationId}/pan`);
-      expect(getGitPath(conversationId, "group/subgroup/repo", true)).toBe(
-        `/workspace/project/${conversationId}/repo`,
-      );
-      expect(getGitPath(conversationId, "a/b/c/d/repo", true)).toBe(
-        `/workspace/project/${conversationId}/repo`,
-      );
-    });
-
-    it("should handle single segment paths", () => {
-      expect(getGitPath(conversationId, "repo", true)).toBe(
-        `/workspace/project/${conversationId}/repo`,
-      );
-    });
-
-    it("should handle empty string", () => {
-      expect(getGitPath(conversationId, "", true)).toBe(
-        `/workspace/project/${conversationId}`,
-      );
-    });
+  it("should handle standard owner/repo format (GitHub)", () => {
+    expect(getGitPath("OpenHands/OpenHands")).toBe(
+      `${DEFAULT_WORKING_DIR}/OpenHands`,
+    );
+    expect(getGitPath("facebook/react")).toBe(`${DEFAULT_WORKING_DIR}/react`);
   });
 
-  describe("default behavior (useSandboxGrouping defaults to false)", () => {
-    it("should default to no sandbox grouping", () => {
-      expect(getGitPath(conversationId, null)).toBe("/workspace/project");
-      expect(getGitPath(conversationId, "owner/repo")).toBe(
-        "/workspace/project/repo",
-      );
-    });
+  it("should handle nested group paths (GitLab)", () => {
+    expect(getGitPath("modernhealth/frontend-guild/pan")).toBe(
+      `${DEFAULT_WORKING_DIR}/pan`,
+    );
+    expect(getGitPath("group/subgroup/repo")).toBe(
+      `${DEFAULT_WORKING_DIR}/repo`,
+    );
+    expect(getGitPath("a/b/c/d/repo")).toBe(`${DEFAULT_WORKING_DIR}/repo`);
+  });
+
+  it("should handle single segment paths", () => {
+    expect(getGitPath("repo")).toBe(`${DEFAULT_WORKING_DIR}/repo`);
+  });
+
+  it("should handle empty string", () => {
+    expect(getGitPath("")).toBe(DEFAULT_WORKING_DIR);
   });
 
   describe("with a backend-provided workspace path", () => {
     it("prefers the explicit workspace path over derived git paths", () => {
       expect(
         getGitPath(
-          conversationId,
           "OpenHands/software-agent-sdk",
-          true,
           "/workspace/project/agent-server-gui",
         ),
       ).toBe("/workspace/project/agent-server-gui");
     });
 
     it("ignores blank workspace paths and falls back to heuristics", () => {
-      expect(getGitPath(conversationId, "OpenHands/software-agent-sdk", true, "  ")).toBe(
-        `/workspace/project/${conversationId}/software-agent-sdk`,
+      expect(getGitPath("OpenHands/software-agent-sdk", "  ")).toBe(
+        `${DEFAULT_WORKING_DIR}/software-agent-sdk`,
       );
     });
   });

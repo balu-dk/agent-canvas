@@ -1,6 +1,7 @@
 import { Provider } from "#/types/settings";
 import { SuggestedTask } from "#/utils/types";
 import {
+  buildConversationWorkingDir,
   getAgentServerBaseUrl,
   getAgentServerWorkingDir,
 } from "../agent-server-config";
@@ -9,6 +10,7 @@ import {
   buildStartConversationRequest,
   downloadTextFile,
   emptyHooksResponse,
+  getDefaultConversationTitle,
   loadSkillsForConversation,
   toV1AppConversation,
   toV1ConversationPage,
@@ -28,7 +30,6 @@ import type {
   V1AppConversationPage,
   V1AppConversationStartRequest,
   V1AppConversationStartTask,
-  V1AppConversationStartTaskPage,
   V1RuntimeConversationInfo,
   V1SendMessageRequest,
   V1SendMessageResponse,
@@ -39,41 +40,39 @@ class V1ConversationService {
     conversationId: string,
     message: V1SendMessageRequest,
   ): Promise<V1SendMessageResponse> {
-    await createHttpClient().post(`/api/conversations/${conversationId}/events`, {
-      ...message,
-      run: true,
-    });
+    await createHttpClient().post(
+      `/api/conversations/${conversationId}/events`,
+      {
+        ...message,
+        run: true,
+      },
+    );
 
     return message;
   }
 
   static async createConversation(
-    _selectedRepository?: string,
-    _git_provider?: Provider,
     initialUserMsg?: string,
-    _selected_branch?: string,
     conversationInstructions?: string,
-    _suggestedTask?: SuggestedTask,
-    _trigger?: ConversationTrigger,
-    _parent_conversation_id?: string,
-    _agent_type?: "default" | "plan",
     plugins?: PluginSpec[],
-    _sandbox_id?: string,
-    _llm_model?: string,
   ): Promise<V1AppConversationStartTask> {
     const settings = await SettingsService.getSettings();
+    const conversationId = crypto.randomUUID();
+    const workingDir = buildConversationWorkingDir(conversationId);
     const payload = buildStartConversationRequest({
       settings,
       query: initialUserMsg,
       conversationInstructions,
       plugins,
+      conversationId,
+      workingDir,
     });
 
     const response = await createHttpClient().post<DirectConversationInfo>(
       "/api/conversations",
       payload,
     );
-    const data = response.data;
+    const { data } = response;
 
     return {
       id: data.id,
@@ -81,7 +80,6 @@ class V1ConversationService {
       status: "READY",
       detail: null,
       app_conversation_id: data.id,
-      sandbox_id: data.id,
       agent_server_url: getAgentServerBaseUrl(),
       request: {
         initial_message: payload.initial_message as
@@ -107,16 +105,28 @@ class V1ConversationService {
   }
 
   static async getVSCodeUrl(
-    _conversationId: string,
+    conversationId: string,
     _conversationUrl: string | null | undefined,
     sessionApiKey?: string | null,
   ): Promise<GetVSCodeUrlResponse> {
+    const workspaceDir =
+      await this.resolveConversationWorkingDir(conversationId);
     const vscode_url = await createVSCodeClient({ sessionApiKey }).getUrl({
-      baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
-      workspaceDir: getAgentServerWorkingDir(),
+      baseUrl:
+        typeof window !== "undefined" ? window.location.origin : undefined,
+      workspaceDir,
     });
 
     return { vscode_url };
+  }
+
+  static async resolveConversationWorkingDir(
+    conversationId: string,
+  ): Promise<string> {
+    const [conversation] = await this.batchGetAppConversations([
+      conversationId,
+    ]);
+    return conversation?.workspace?.working_dir ?? getAgentServerWorkingDir();
   }
 
   static async pauseConversation(
@@ -124,10 +134,9 @@ class V1ConversationService {
     _conversationUrl: string | null | undefined,
     sessionApiKey?: string | null,
   ): Promise<{ success: boolean }> {
-    const response = await createHttpClient({ sessionApiKey }).post<{ success: boolean }>(
-      `/api/conversations/${conversationId}/pause`,
-      {},
-    );
+    const response = await createHttpClient({ sessionApiKey }).post<{
+      success: boolean;
+    }>(`/api/conversations/${conversationId}/pause`, {});
 
     return response.data;
   }
@@ -138,10 +147,9 @@ class V1ConversationService {
     question: string,
     sessionApiKey?: string | null,
   ): Promise<{ response: string }> {
-    const response = await createHttpClient({ sessionApiKey }).post<{ response: string }>(
-      `/api/conversations/${conversationId}/ask_agent`,
-      { question },
-    );
+    const response = await createHttpClient({ sessionApiKey }).post<{
+      response: string;
+    }>(`/api/conversations/${conversationId}/ask_agent`, { question });
 
     return response.data;
   }
@@ -151,10 +159,9 @@ class V1ConversationService {
     _conversationUrl: string | null | undefined,
     sessionApiKey?: string | null,
   ): Promise<{ success: boolean }> {
-    const response = await createHttpClient({ sessionApiKey }).post<{ success: boolean }>(
-      `/api/conversations/${conversationId}/run`,
-      {},
-    );
+    const response = await createHttpClient({ sessionApiKey }).post<{
+      success: boolean;
+    }>(`/api/conversations/${conversationId}/run`, {});
 
     return response.data;
   }
@@ -164,12 +171,13 @@ class V1ConversationService {
   ): Promise<(V1AppConversation | null)[]> {
     if (ids.length === 0) return [];
 
-    const response = await createHttpClient().get<(DirectConversationInfo | null)[]>(
-      "/api/conversations",
-      { params: { ids } },
-    );
+    const response = await createHttpClient().get<
+      (DirectConversationInfo | null)[]
+    >("/api/conversations", { params: { ids } });
 
-    return response.data.map((item) => (item ? toV1AppConversation(item) : null));
+    return response.data.map((item) =>
+      item ? toV1AppConversation(item) : null,
+    );
   }
 
   static async uploadFile(
@@ -207,10 +215,15 @@ class V1ConversationService {
   }
 
   static async readConversationFile(
-    _conversationId: string,
-    filePath: string = "/workspace/project/.agents_tmp/PLAN.md",
+    conversationId: string,
+    filePath?: string,
   ): Promise<string> {
-    return downloadTextFile(filePath);
+    if (filePath) {
+      return downloadTextFile(filePath);
+    }
+
+    const workingDir = await this.resolveConversationWorkingDir(conversationId);
+    return downloadTextFile(`${workingDir}/.agents_tmp/PLAN.md`);
   }
 
   static async downloadConversation(conversationId: string): Promise<Blob> {
@@ -225,7 +238,9 @@ class V1ConversationService {
   }
 
   static async getSkills(conversationId: string): Promise<GetSkillsResponse> {
-    const [conversation] = await this.batchGetAppConversations([conversationId]);
+    const [conversation] = await this.batchGetAppConversations([
+      conversationId,
+    ]);
     return loadSkillsForConversation(conversation);
   }
 
@@ -241,11 +256,11 @@ class V1ConversationService {
     const response = await createHttpClient({ sessionApiKey }).get<
       DirectConversationInfo & { stats?: V1RuntimeConversationInfo["stats"] }
     >(`/api/conversations/${conversationId}`);
-    const data = response.data;
+    const { data } = response;
 
     return {
       id: data.id,
-      title: data.title ?? null,
+      title: data.title?.trim() ? data.title : getDefaultConversationTitle(data.id),
       metrics: data.metrics
         ? {
             accumulated_cost: data.metrics.accumulated_cost ?? null,
@@ -259,7 +274,8 @@ class V1ConversationService {
                   cache_read_tokens:
                     data.metrics.accumulated_token_usage.cache_read_tokens ?? 0,
                   cache_write_tokens:
-                    data.metrics.accumulated_token_usage.cache_write_tokens ?? 0,
+                    data.metrics.accumulated_token_usage.cache_write_tokens ??
+                    0,
                   context_window:
                     data.metrics.accumulated_token_usage.context_window ?? 0,
                   per_turn_token:
@@ -270,17 +286,11 @@ class V1ConversationService {
         : null,
       created_at: data.created_at,
       updated_at: data.updated_at,
-      status: (data.execution_status as V1RuntimeConversationInfo["status"]) ?? "idle",
+      status:
+        (data.execution_status as V1RuntimeConversationInfo["status"]) ??
+        "idle",
       stats: data.stats ?? { usage_to_metrics: {} },
     };
-  }
-
-  static async searchConversationsBySandboxId(
-    sandboxId: string,
-    limit: number = 100,
-  ): Promise<V1AppConversation[]> {
-    const page = await this.searchConversations(limit);
-    return page.items.filter((item) => item.sandbox_id === sandboxId);
   }
 
   static async searchConversations(
@@ -309,8 +319,12 @@ class V1ConversationService {
     conversationId: string,
     title: string,
   ): Promise<V1AppConversation> {
-    await createHttpClient().patch(`/api/conversations/${conversationId}`, { title });
-    const [conversation] = await this.batchGetAppConversations([conversationId]);
+    await createHttpClient().patch(`/api/conversations/${conversationId}`, {
+      title,
+    });
+    const [conversation] = await this.batchGetAppConversations([
+      conversationId,
+    ]);
     return conversation as V1AppConversation;
   }
 }

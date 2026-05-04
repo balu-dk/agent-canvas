@@ -8,7 +8,6 @@ import { DEFAULT_SETTINGS } from "#/services/settings";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { SettingsSwitch } from "#/components/features/settings/settings-switch";
 import { SettingsInput } from "#/components/features/settings/settings-input";
-import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input";
 import { I18nKey } from "#/i18n/declaration";
 import { LanguageInput } from "#/components/features/settings/app-settings/language-input";
 import { handleCaptureConsent } from "#/utils/handle-capture-consent";
@@ -18,26 +17,14 @@ import {
 } from "#/utils/custom-toast-handlers";
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
 import { AppSettingsInputsSkeleton } from "#/components/features/settings/app-settings/app-settings-inputs-skeleton";
-import { useConfig } from "#/hooks/query/use-config";
 import { parseMaxBudgetPerTask } from "#/utils/settings-utils";
-import {
-  SandboxGroupingStrategy,
-  SandboxGroupingStrategyOptions,
-} from "#/types/settings";
-import { ENABLE_SANDBOX_GROUPING } from "#/utils/feature-flags";
-import { createPermissionGuard } from "#/utils/org/permission-guard";
-
-export const clientLoader = createPermissionGuard(
-  "manage_application_settings",
-);
 
 export function AppSettingsScreen() {
   const posthog = usePostHog();
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   const { mutate: saveSettings, isPending } = useSaveSettings();
   const { data: settings, isLoading } = useSettings();
-  const { data: config } = useConfig();
 
   const [languageInputHasChanged, setLanguageInputHasChanged] =
     React.useState(false);
@@ -47,20 +34,6 @@ export function AppSettingsScreen() {
     soundNotificationsSwitchHasChanged,
     setSoundNotificationsSwitchHasChanged,
   ] = React.useState(false);
-  const [
-    proactiveConversationsSwitchHasChanged,
-    setProactiveConversationsSwitchHasChanged,
-  ] = React.useState(false);
-  const [
-    solvabilityAnalysisSwitchHasChanged,
-    setSolvabilityAnalysisSwitchHasChanged,
-  ] = React.useState(false);
-  const [
-    sandboxGroupingStrategyHasChanged,
-    setSandboxGroupingStrategyHasChanged,
-  ] = React.useState(false);
-  const [selectedSandboxGroupingStrategy, setSelectedSandboxGroupingStrategy] =
-    React.useState<SandboxGroupingStrategy | null>(null);
   const [maxBudgetPerTaskHasChanged, setMaxBudgetPerTaskHasChanged] =
     React.useState(false);
   const [gitUserNameHasChanged, setGitUserNameHasChanged] =
@@ -80,18 +53,6 @@ export function AppSettingsScreen() {
     const enableSoundNotifications =
       formData.get("enable-sound-notifications-switch")?.toString() === "on";
 
-    const enableProactiveConversations =
-      formData.get("enable-proactive-conversations-switch")?.toString() ===
-      "on";
-
-    const enableSolvabilityAnalysis =
-      formData.get("enable-solvability-analysis-switch")?.toString() === "on";
-
-    const sandboxGroupingStrategy =
-      selectedSandboxGroupingStrategy ||
-      settings?.sandbox_grouping_strategy ||
-      DEFAULT_SETTINGS.sandbox_grouping_strategy;
-
     const maxBudgetPerTaskValue = formData
       .get("max-budget-per-task-input")
       ?.toString();
@@ -109,9 +70,6 @@ export function AppSettingsScreen() {
         language,
         user_consents_to_analytics: enableAnalytics,
         enable_sound_notifications: enableSoundNotifications,
-        enable_proactive_conversation_starters: enableProactiveConversations,
-        enable_solvability_analysis: enableSolvabilityAnalysis,
-        sandbox_grouping_strategy: sandboxGroupingStrategy,
         max_budget_per_task: maxBudgetPerTask,
         git_user_name: gitUserName,
         git_user_email: gitUserEmail,
@@ -129,9 +87,6 @@ export function AppSettingsScreen() {
           setLanguageInputHasChanged(false);
           setAnalyticsSwitchHasChanged(false);
           setSoundNotificationsSwitchHasChanged(false);
-          setProactiveConversationsSwitchHasChanged(false);
-          setSandboxGroupingStrategyHasChanged(false);
-          setSelectedSandboxGroupingStrategy(null);
           setMaxBudgetPerTaskHasChanged(false);
           setGitUserNameHasChanged(false);
           setGitUserEmailHasChanged(false);
@@ -164,30 +119,6 @@ export function AppSettingsScreen() {
     );
   };
 
-  const checkIfProactiveConversationsSwitchHasChanged = (checked: boolean) => {
-    const currentProactiveConversations =
-      !!settings?.enable_proactive_conversation_starters;
-    setProactiveConversationsSwitchHasChanged(
-      checked !== currentProactiveConversations,
-    );
-  };
-
-  const checkIfSolvabilityAnalysisSwitchHasChanged = (checked: boolean) => {
-    const currentSolvabilityAnalysis = !!settings?.enable_solvability_analysis;
-    setSolvabilityAnalysisSwitchHasChanged(
-      checked !== currentSolvabilityAnalysis,
-    );
-  };
-
-  const handleSandboxGroupingStrategyChange = (key: React.Key | null) => {
-    const newStrategy = key?.toString() as SandboxGroupingStrategy | undefined;
-    setSelectedSandboxGroupingStrategy(newStrategy || null);
-    const currentStrategy =
-      settings?.sandbox_grouping_strategy ||
-      DEFAULT_SETTINGS.sandbox_grouping_strategy;
-    setSandboxGroupingStrategyHasChanged(newStrategy !== currentStrategy);
-  };
-
   const checkIfMaxBudgetPerTaskHasChanged = (value: string) => {
     const newValue = parseMaxBudgetPerTask(value);
     const currentValue = settings?.max_budget_per_task;
@@ -208,9 +139,6 @@ export function AppSettingsScreen() {
     !languageInputHasChanged &&
     !analyticsSwitchHasChanged &&
     !soundNotificationsSwitchHasChanged &&
-    !proactiveConversationsSwitchHasChanged &&
-    !solvabilityAnalysisSwitchHasChanged &&
-    !sandboxGroupingStrategyHasChanged &&
     !maxBudgetPerTaskHasChanged &&
     !gitUserNameHasChanged &&
     !gitUserEmailHasChanged;
@@ -249,50 +177,6 @@ export function AppSettingsScreen() {
           >
             {t(I18nKey.SETTINGS$SOUND_NOTIFICATIONS)}
           </SettingsSwitch>
-
-          {config?.app_mode === "saas" && (
-            <SettingsSwitch
-              testId="enable-proactive-conversations-switch"
-              name="enable-proactive-conversations-switch"
-              defaultIsToggled={
-                !!settings.enable_proactive_conversation_starters
-              }
-              onToggle={checkIfProactiveConversationsSwitchHasChanged}
-            >
-              {t(I18nKey.SETTINGS$PROACTIVE_CONVERSATION_STARTERS)}
-            </SettingsSwitch>
-          )}
-
-          {config?.app_mode === "saas" && (
-            <SettingsSwitch
-              testId="enable-solvability-analysis-switch"
-              name="enable-solvability-analysis-switch"
-              defaultIsToggled={!!settings.enable_solvability_analysis}
-              onToggle={checkIfSolvabilityAnalysisSwitchHasChanged}
-            >
-              {t(I18nKey.SETTINGS$SOLVABILITY_ANALYSIS)}
-            </SettingsSwitch>
-          )}
-
-          {ENABLE_SANDBOX_GROUPING() && (
-            <SettingsDropdownInput
-              testId="sandbox-grouping-strategy-input"
-              name="sandbox-grouping-strategy-input"
-              label={t(I18nKey.SETTINGS$SANDBOX_GROUPING_STRATEGY)}
-              items={Object.keys(SandboxGroupingStrategyOptions).map((key) => ({
-                key,
-                label: t(`SETTINGS$SANDBOX_GROUPING_${key}` as I18nKey),
-              }))}
-              selectedKey={
-                selectedSandboxGroupingStrategy ||
-                settings.sandbox_grouping_strategy ||
-                DEFAULT_SETTINGS.sandbox_grouping_strategy
-              }
-              isClearable={false}
-              onSelectionChange={handleSandboxGroupingStrategyChange}
-              wrapperClassName="w-full max-w-[680px]"
-            />
-          )}
 
           {!settings?.v1_enabled && (
             <SettingsInput

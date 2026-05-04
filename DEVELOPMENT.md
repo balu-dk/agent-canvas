@@ -21,14 +21,6 @@ Useful overrides:
 - `OH_GUI_SAFE_STATE_DIR` — base directory for isolated server state
 - `VITE_WORKING_DIR` — repo root used for new conversations (defaults to the current checkout)
 
-## OpenHands Cloud sandbox warning
-
-If you are editing this repo from an OpenHands Cloud sandbox: **do not point this frontend at the sandbox's existing agent-server**.
-
-Current `agent-server` releases share the default `openhands` tmux socket and `workspace/conversations` persistence directory, so a naive second server in the same sandbox can break the OpenHands conversation that is powering your cloud session (for example with errors like `no server running on /tmp/tmux-*/openhands`).
-
-Use `npm run dev` / `npm run dev:safe` so this repo launches its own isolated backend.
-
 ## Alternative development workflows
 
 ### Frontend against an existing backend
@@ -49,8 +41,6 @@ If you want to run the frontend without a live backend, use:
 
 ```sh
 npm run dev:mock
-# or
-npm run dev:mock:saas
 ```
 
 ## Build and test
@@ -67,6 +57,34 @@ Useful targeted verification for the isolated dev launcher:
 npm run test -- __tests__/api/agent-server-config.test.ts __tests__/scripts/dev-safe.test.ts
 ```
 
+## CSS isolation and host-app customization
+
+The standalone app and the exported provider/root wrapper now scope all bundled CSS under a dedicated shell element with the `data-agent-server-ui` attribute. That means Tailwind utilities, HeroUI component styles, xterm styles, and local CSS only apply inside the OpenHands UI subtree instead of leaking into a host app.
+
+### Embedding strategy
+
+- Use `AgentServerUIProviders` in host apps. It renders a scoped style root by default.
+- For direct wrapper control, use `AgentServerUIRoot`.
+- The standalone app opts out of the provider wrapper because the router layout already renders the scoped root.
+
+### Customization strategy
+
+Theme and surface tokens are exposed as CSS custom properties on the scoped root. You can override them either through the provider/root `styleOverrides` prop or with host CSS targeting `[data-agent-server-ui]`.
+
+```tsx
+<AgentServerUIProviders
+  styleOverrides={{
+    "--oh-color-base": "#101820",
+    "--oh-color-content-2": "#f5f7ff",
+    "--oh-accent": "#8b5cf6",
+  }}
+>
+  <App />
+</AgentServerUIProviders>
+```
+
+If you want Tailwind layout utilities on the inner themed container, pass `contentClassName` instead of `className`, because the outer scope element is what all generated selectors key off of.
+
 ## Environment variables
 
 You can create a `.env` file in the project directory with these variables based on `.env.sample`.
@@ -76,11 +94,10 @@ You can create a `.env` file in the project directory with these variables based
 | `VITE_BACKEND_BASE_URL`     | Full base URL for the agent server used by direct browser requests                 | current browser origin |
 | `VITE_BACKEND_HOST`         | Backend host used by the Vite dev proxy                                            | `127.0.0.1:8000`       |
 | `VITE_SESSION_API_KEY`      | Optional `X-Session-API-Key` header value for authenticated agent_server instances | -                      |
-| `VITE_WORKING_DIR`          | Workspace path sent when starting new conversations                                | `/workspace/project`   |
+| `VITE_WORKING_DIR`          | Workspace path sent when starting new conversations                                | `workspace/project`    |
 | `VITE_WORKER_URLS`          | Optional comma-separated worker/app URLs for the Browser tab                       | -                      |
 | `VITE_ENABLE_BROWSER_TOOLS` | Set to `false` to omit `BrowserToolSet` from new conversation payloads             | `true`                 |
 | `VITE_MOCK_API`             | Enable/disable API mocking with MSW                                                | `false`                |
-| `VITE_MOCK_SAAS`            | Simulate SaaS mode in development                                                  | `false`                |
 | `VITE_USE_TLS`              | Use HTTPS/WSS for the Vite proxy target                                            | `false`                |
 | `VITE_FRONTEND_PORT`        | Port to run the frontend application                                               | `3001`                 |
 | `VITE_INSECURE_SKIP_VERIFY` | Skip TLS certificate verification for proxied backend requests                     | `false`                |

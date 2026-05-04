@@ -18,14 +18,14 @@ interface UserContextMenuProps {
 }
 
 export function UserContextMenu({ onClose }: UserContextMenuProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
   const settingsNavItems = useSettingsNavItems();
 
   return (
     <ContextMenuContainer testId="user-context-menu" onClose={onClose}>
       <div className="flex flex-col gap-3 w-[248px]">
         <h3 className="text-lg font-semibold text-white">
-          {t(I18nKey.ORG$ACCOUNT)}
+          {t(I18nKey.USER$ACCOUNT_SETTINGS)}
         </h3>
 
         <div className="flex flex-col items-start gap-0 w-full">

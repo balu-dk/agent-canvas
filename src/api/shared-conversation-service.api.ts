@@ -4,7 +4,6 @@ import { createHttpClient } from "./typescript-client";
 export interface SharedConversation {
   id: string;
   created_by_user_id: string | null;
-  sandbox_id: string;
   selected_repository: string | null;
   selected_branch: string | null;
   git_provider: string | null;
@@ -27,10 +26,9 @@ export const sharedConversationService = {
   async getSharedConversation(
     conversationId: string,
   ): Promise<SharedConversation | null> {
-    const response = await createHttpClient().get<(SharedConversation | null)[]>(
-      "/api/shared-conversations",
-      { params: { ids: conversationId } },
-    );
+    const response = await createHttpClient().get<
+      (SharedConversation | null)[]
+    >("/api/shared-conversations", { params: { ids: conversationId } });
 
     return response.data[0] || null;
   },

@@ -12,7 +12,7 @@ import { parseMcpConfig } from "#/utils/mcp-config";
 
 export const getErrorStatus = (error: unknown): number | undefined => {
   if (typeof error === "object" && error !== null && "status" in error) {
-    const status = (error as { status?: unknown }).status;
+    const { status } = error as { status?: unknown };
     if (typeof status === "number") {
       return status;
     }
@@ -111,9 +111,6 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
       settings.conversation_settings_schema ??
       DEFAULT_SETTINGS.conversation_settings_schema,
     conversation_settings: conversationSettings,
-    sandbox_grouping_strategy:
-      settings.sandbox_grouping_strategy ??
-      DEFAULT_SETTINGS.sandbox_grouping_strategy,
   };
 };
 

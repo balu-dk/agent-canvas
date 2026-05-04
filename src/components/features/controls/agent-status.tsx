@@ -31,7 +31,7 @@ export function AgentStatus({
   disabled = false,
   isPausing = false,
 }: AgentStatusProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
   const { setShouldShownAgentLoading } = useConversationStore();
   const { curAgentState, executionStatus } = useAgentState();
 
@@ -53,7 +53,6 @@ export function AgentStatus({
   const statusCode = getStatusCode(
     webSocketStatus,
     executionStatus ?? null,
-    conversation?.sandbox_status || null,
     taskStatus,
     subConversationTaskStatus,
   );

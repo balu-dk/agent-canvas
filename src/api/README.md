@@ -12,12 +12,9 @@ Each service lives in its own directory:
 
 ```
 src/api/
-├── billing-service/
-│   ├── billing-service.api.ts    # Service methods
-│   └── billing.types.ts          # Types and interfaces
-├── organization-service/
-│   ├── organization-service.api.ts
-│   └── organization.types.ts
+├── feature-service/
+│   ├── feature-service.api.ts    # Service methods
+│   └── feature.types.ts          # Types and interfaces
 └── open-hands-axios.ts           # Shared axios instance
 ```
 
@@ -96,7 +93,7 @@ export const useFeature = (id: string) => {
 
 | Item | Convention | Example |
 |------|------------|---------|
-| Directory | `feature-service/` | `billing-service/` |
-| Service file | `feature-service.api.ts` | `billing-service.api.ts` |
-| Types file | `feature.types.ts` | `billing.types.ts` |
-| Export name | `featureService` | `billingService` |
+| Directory | `feature-service/` | `secrets-service/` |
+| Service file | `feature-service.api.ts` | `secrets-service.api.ts` |
+| Types file | `feature.types.ts` | `secrets.types.ts` |
+| Export name | `featureService` | `secretsService` |

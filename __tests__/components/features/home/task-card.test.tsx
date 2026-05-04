@@ -18,10 +18,6 @@ vi.mock("#/hooks/query/use-settings", async () => {
   };
 });
 
-vi.mock("#/context/use-selected-organization", () => ({
-  useSelectedOrganizationId: () => ({ organizationId: null }),
-}));
-
 const MOCK_TASK_1: SuggestedTask = {
   issue_number: 123,
   repo: "repo1",
@@ -60,10 +56,8 @@ describe("TaskCard", () => {
         status: "READY",
         detail: null,
         app_conversation_id: "conv-123",
-        sandbox_id: null,
         agent_server_url: "http://agent-server.local",
         request: {
-          sandbox_id: null,
           initial_message: null,
           processors: [],
           llm_model: null,
@@ -112,10 +106,8 @@ describe("TaskCard", () => {
           status: "READY",
           detail: null,
           app_conversation_id: "conv-123",
-          sandbox_id: null,
           agent_server_url: "http://agent-server.local",
           request: {
-            sandbox_id: null,
             initial_message: null,
             processors: [],
             llm_model: null,
@@ -139,19 +131,6 @@ describe("TaskCard", () => {
       await userEvent.click(launchButton);
 
       expect(createConversationSpy).toHaveBeenCalledWith(
-        MOCK_RESPOSITORIES[0].full_name,
-        MOCK_RESPOSITORIES[0].git_provider,
-        undefined,
-        undefined,
-        undefined,
-        {
-          git_provider: "github",
-          issue_number: 123,
-          repo: "repo1",
-          task_type: "MERGE_CONFLICTS",
-          title: "Task 1",
-        },
-        undefined,
         undefined,
         undefined,
         undefined,
@@ -168,10 +147,8 @@ describe("TaskCard", () => {
       status: "READY",
       detail: null,
       app_conversation_id: "test-conversation-id",
-      sandbox_id: null,
       agent_server_url: "http://agent-server.local",
       request: {
-        sandbox_id: null,
         initial_message: null,
         processors: [],
         llm_model: null,

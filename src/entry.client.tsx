@@ -12,9 +12,12 @@ import {
   AgentServerUIProviders,
   DEFAULT_AGENT_SERVER_ANALYTICS,
 } from "./components/providers";
+import { waitForI18n } from "./i18n";
 import { shouldStartMockWorker } from "./mocks/should-start-mock-worker";
 
 async function prepareApp() {
+  await waitForI18n();
+
   if (shouldStartMockWorker()) {
     const { worker } = await import("./mocks/browser");
 
@@ -29,7 +32,10 @@ prepareApp().then(() =>
     hydrateRoot(
       document,
       <StrictMode>
-        <AgentServerUIProviders analytics={DEFAULT_AGENT_SERVER_ANALYTICS}>
+        <AgentServerUIProviders
+          analytics={DEFAULT_AGENT_SERVER_ANALYTICS}
+          withStyleRoot={false}
+        >
           <HydratedRouter />
         </AgentServerUIProviders>
       </StrictMode>,

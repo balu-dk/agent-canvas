@@ -52,12 +52,11 @@
   },
   "scripts": {
     "dev": "npm run dev:safe",
-    "dev:safe": "node scripts/dev-safe.mjs",
+    "dev:safe": "node --env-file-if-exists=.env scripts/dev-safe.mjs",
     "dev:frontend": "npm run make-i18n && cross-env VITE_MOCK_API=false react-router dev",
-    "dev:mock": "npm run make-i18n && cross-env VITE_MOCK_API=true VITE_MOCK_SAAS=false react-router dev",
-    "dev:mock:saas": "npm run make-i18n && cross-env VITE_MOCK_API=true VITE_MOCK_SAAS=true react-router dev",
+    "dev:mock": "npm run make-i18n && cross-env VITE_MOCK_API=true react-router dev",
     "build": "npm run build:app",
-    "build:mock": "npm run make-i18n && cross-env VITE_MOCK_API=true VITE_MOCK_SAAS=false react-router build",
+    "build:mock": "npm run make-i18n && cross-env VITE_MOCK_API=true react-router build",
     "start": "npx sirv-cli build/ --single",
     "test": "npm run make-i18n && vitest run",
     "test:e2e": "playwright test",
@@ -121,6 +120,7 @@
     "jsdom": "29.0.2",
     "lint-staged": "16.4.0",
     "msw": "2.13.4",
+    "postcss-prefix-selector": "2.1.1",
     "prettier": "3.8.3",
     "tailwindcss": "4.2.2",
     "typescript": "6.0.3",
@@ -181,6 +181,11 @@
       "types": "./dist/components/terminal/index.d.ts",
       "import": "./dist/components/terminal/index.js",
       "require": "./dist/components/terminal/index.cjs"
+    },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "require": "./dist/i18n/index.cjs"
     },
     "./package.json": "./package.json"
   },

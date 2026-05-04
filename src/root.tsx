@@ -22,6 +22,7 @@ import {
 import { AgentServerConnectionForm } from "#/components/features/settings/agent-server-onboarding";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useConfig } from "#/hooks/query/use-config";
+import { AgentServerUIRoot } from "#/components/providers";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -32,12 +33,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
-        {children}
+      <body style={{ margin: 0 }}>
+        <AgentServerUIRoot contentClassName="min-h-screen">
+          {children}
+          <Toaster />
+          <div id="modal-portal-exit" />
+        </AgentServerUIRoot>
         <ScrollRestoration />
         <Scripts />
-        <Toaster />
-        <div id="modal-portal-exit" />
       </body>
     </html>
   );
@@ -54,7 +57,7 @@ function AgentServerStatusCard({
   details?: string | null;
   version?: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   return (
     <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/10 p-4">
@@ -86,7 +89,6 @@ function AgentServerBootstrapLoading() {
   );
 }
 
-
 function AgentServerOnboardingLayout({
   testId,
   eyebrow,
@@ -106,7 +108,7 @@ function AgentServerOnboardingLayout({
   statusDetails?: string | null;
   version?: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   return (
     <main className="min-h-screen bg-base px-6 py-10 text-white">
@@ -161,7 +163,7 @@ function UnsupportedAgentServerNotice({
 }: {
   error: AgentServerIncompatibilityError;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   return (
     <AgentServerOnboardingLayout
@@ -181,7 +183,7 @@ function UnsupportedAgentServerNotice({
 }
 
 function UnknownAgentServerNotice() {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   return (
     <AgentServerOnboardingLayout
@@ -204,7 +206,7 @@ function MissingAgentServerNotice({
 }: {
   error: AgentServerUnavailableError;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
 
   return (
     <AgentServerOnboardingLayout

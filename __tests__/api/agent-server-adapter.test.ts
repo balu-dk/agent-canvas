@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildStartConversationRequest } from "#/api/agent-server-adapter";
+import {
+  buildStartConversationRequest,
+  getDefaultConversationTitle,
+  toV1AppConversation,
+  type DirectConversationInfo,
+} from "#/api/agent-server-adapter";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 
 const { mockGetAgentServerWorkingDir } = vi.hoisted(() => ({
@@ -109,6 +114,28 @@ describe("buildStartConversationRequest", () => {
     });
   });
 
+  it("uses the supplied conversationId and workingDir overrides", () => {
+    const conversationId = "11111111-1111-4111-8111-111111111111";
+    const workingDir = `/base/${conversationId}`;
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          llm: { model: "nested-model" },
+        },
+      },
+      conversationId,
+      workingDir,
+    }) as {
+      conversation_id?: string;
+      workspace: { working_dir: string };
+    };
+
+    expect(payload.conversation_id).toBe(conversationId);
+    expect(payload.workspace.working_dir).toBe(workingDir);
+  });
+
   it("forwards supported conversation runtime fields from nested settings", () => {
     const payload = buildStartConversationRequest({
       settings: {
@@ -146,5 +173,49 @@ describe("buildStartConversationRequest", () => {
       role: "user",
       content: [{ type: "text", text: "Follow the repo conventions." }],
     });
+  });
+});
+
+describe("getDefaultConversationTitle", () => {
+  it("formats the title using the first 5 characters of the conversation id", () => {
+    expect(getDefaultConversationTitle("372eb-1234-5678-9abc")).toBe(
+      "Conversation 372eb",
+    );
+  });
+});
+
+describe("toV1AppConversation", () => {
+  const baseInfo: DirectConversationInfo = {
+    id: "372eb-1234-5678-9abc",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  it("falls back to the default title when the backend returns null", () => {
+    const result = toV1AppConversation({ ...baseInfo, title: null });
+    expect(result.title).toBe("Conversation 372eb");
+  });
+
+  it("falls back to the default title when the backend returns undefined", () => {
+    const result = toV1AppConversation({ ...baseInfo });
+    expect(result.title).toBe("Conversation 372eb");
+  });
+
+  it("falls back to the default title when the backend returns an empty string", () => {
+    const result = toV1AppConversation({ ...baseInfo, title: "" });
+    expect(result.title).toBe("Conversation 372eb");
+  });
+
+  it("falls back to the default title when the backend returns whitespace only", () => {
+    const result = toV1AppConversation({ ...baseInfo, title: "   " });
+    expect(result.title).toBe("Conversation 372eb");
+  });
+
+  it("preserves a backend-provided title when one is set", () => {
+    const result = toV1AppConversation({
+      ...baseInfo,
+      title: "My real title",
+    });
+    expect(result.title).toBe("My real title");
   });
 });

@@ -28,7 +28,7 @@ import { I18nKey } from "#/i18n/declaration";
 import { useEventStore } from "#/stores/use-event-store";
 
 function AppContent() {
-  const { t } = useTranslation();
+  const { t } = useTranslation("openhands");
   const { conversationId } = useConversationId();
   const clearEvents = useEventStore((state) => state.clearEvents);
 
@@ -77,8 +77,6 @@ function AppContent() {
     }
   }, [isTask, taskStatus, taskDetail, t]);
 
-  // 3. Handle conversation not found
-  // NOTE: Resuming STOPPED conversations is handled by useSandboxRecovery in WebSocketProviderWrapper
   React.useEffect(() => {
     // Wait for data to be fetched
     if (!isFetched || !isAuthed) return;

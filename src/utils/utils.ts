@@ -161,22 +161,13 @@ export const getFileExtension = (fileName: string): string => {
   return extension || "FILE";
 };
 
-export const shouldUseInstallationRepos = (
-  provider: Provider,
-  app_mode: "saas" | "oss" | undefined,
-) => {
+export const shouldUseInstallationRepos = (provider: Provider) => {
   if (!provider) return false;
 
   switch (provider) {
     case "bitbucket":
     case "bitbucket_data_center":
       return true;
-    case "gitlab":
-      return false;
-    case "azure_devops":
-      return false;
-    case "github":
-      return app_mode === "saas";
     default:
       return false;
   }
@@ -792,12 +783,12 @@ interface GetStatusTextArgs {
  * getStatusText({
  *   isPausing: false,
  *   isTask: true,
- *   taskStatus: "WAITING_FOR_SANDBOX",
+ *   taskStatus: "STARTING_CONVERSATION",
  *   taskDetail: null,
  *   isStartingStatus: false,
  *   isStopStatus: false,
  *   curAgentState: AgentState.RUNNING
- * }) // Returns "Waiting for sandbox"
+ * }) // Returns "Starting conversation"
  */
 export function getStatusText({
   isPausing = false,
@@ -825,7 +816,6 @@ export function getStatusText({
       return t(I18nKey.CONVERSATION$READY);
     }
 
-    // Format status text with sentence case: "WAITING_FOR_SANDBOX" -> "Waiting for sandbox"
     return (
       taskDetail ||
       taskStatus

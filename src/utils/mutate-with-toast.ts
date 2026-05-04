@@ -1,6 +1,6 @@
 import toast from "react-hot-toast";
-import i18next from "i18next";
 import { UseMutationResult } from "@tanstack/react-query";
+import i18n from "#/i18n";
 import {
   TOAST_OPTIONS,
   displaySuccessToast,
@@ -48,7 +48,7 @@ export async function mutateWithToast<TData, TVariables>(
       } else if (err instanceof Error) {
         message = err.message;
       } else {
-        message = i18next.t("ERROR$GENERIC");
+        message = i18n.t("ERROR$GENERIC");
       }
       displayErrorToast(message);
     }

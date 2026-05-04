@@ -1,42 +1,35 @@
-import { useTranslation } from "react-i18next";
 import React from "react";
 import { useNavigation } from "#/context/navigation-context";
 import useMetricsStore from "#/stores/metrics-store";
 import { useDeleteConversation } from "./mutation/use-delete-conversation";
-import { useUnifiedPauseConversationSandbox } from "./mutation/use-unified-stop-conversation";
-import { useUpdateConversationPublicFlag } from "./mutation/use-update-conversation-public-flag";
-import { displaySuccessToast } from "#/utils/custom-toast-handlers";
-import { I18nKey } from "#/i18n/declaration";
+import { useUnifiedPauseConversation } from "./mutation/use-unified-stop-conversation";
 import { useEventStore } from "#/stores/use-event-store";
 
-import { useActiveConversation } from "./query/use-active-conversation";
 import { useDownloadConversation } from "./use-download-conversation";
 import {
   adaptSystemMessage,
   SystemMessageForModal,
 } from "#/utils/system-message-adapter";
-import { V1SandboxStatus } from "#/api/sandbox-service/sandbox-service.types";
+import { V1ExecutionStatus } from "#/types/v1/core/base/common";
+import { isExecutionActive } from "#/utils/status";
 
 interface UseConversationNameContextMenuProps {
   conversationId?: string;
-  sandboxStatus?: V1SandboxStatus;
+  executionStatus?: V1ExecutionStatus | null;
   showOptions?: boolean;
   onContextMenuToggle?: (isOpen: boolean) => void;
 }
 
 export function useConversationNameContextMenu({
   conversationId,
-  sandboxStatus = "MISSING",
+  executionStatus,
   showOptions = false,
   onContextMenuToggle,
 }: UseConversationNameContextMenuProps) {
-  const { t } = useTranslation();
   const { conversationId: currentConversationId, navigate } = useNavigation();
   const events = useEventStore((state) => state.events);
   const { mutate: deleteConversation } = useDeleteConversation();
-  const { mutate: stopConversation } = useUnifiedPauseConversationSandbox();
-  const { mutate: updatePublicFlag } = useUpdateConversationPublicFlag();
-  const { data: conversation } = useActiveConversation();
+  const { mutate: stopConversation } = useUnifiedPauseConversation();
   const metrics = useMetricsStore();
 
   const [metricsModalVisible, setMetricsModalVisible] = React.useState(false);
@@ -131,41 +124,6 @@ export function useConversationNameContextMenu({
     onContextMenuToggle?.(false);
   };
 
-  const handleTogglePublic = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (conversationId && conversation) {
-      // Toggle the current public state
-      const newPublicState = !conversation.public;
-      updatePublicFlag({
-        conversationId,
-        isPublic: newPublicState,
-      });
-    }
-    // Don't close menu - let user see the toggle state change
-  };
-
-  const shareUrl = React.useMemo(() => {
-    if (conversationId) {
-      return `${window.location.origin}/shared/conversations/${conversationId}`;
-    }
-    return "";
-  }, [conversationId]);
-
-  const handleCopyShareLink = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (!shareUrl) {
-      onContextMenuToggle?.(false);
-      return;
-    }
-
-    navigator.clipboard.writeText(shareUrl);
-    displaySuccessToast(t(I18nKey.CONVERSATION$LINK_COPIED));
-  };
-
   return {
     // Handlers
     handleDelete,
@@ -176,9 +134,6 @@ export function useConversationNameContextMenu({
     handleShowAgentTools,
     handleShowSkills,
     handleShowHooks,
-    handleTogglePublic,
-    handleCopyShareLink,
-    shareUrl,
     handleConfirmDelete,
     handleConfirmStop,
 
@@ -200,14 +155,13 @@ export function useConversationNameContextMenu({
     metrics,
     systemMessage,
 
-    // Computed values for conditional rendering
-    shouldShowStop: sandboxStatus !== "MISSING",
+    shouldShowStop: isExecutionActive(executionStatus),
     shouldShowDownloadConversation: Boolean(conversationId && showOptions),
     shouldShowDisplayCost: showOptions,
     shouldShowAgentTools: Boolean(showOptions && systemMessage),
     shouldShowSkills: Boolean(showOptions && conversationId),
     shouldShowHooks: Boolean(
-      showOptions && conversationId && sandboxStatus === "RUNNING",
+      showOptions && conversationId && isExecutionActive(executionStatus),
     ),
   };
 }
