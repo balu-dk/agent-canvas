@@ -206,8 +206,10 @@ describe("dev-safe CLI startup", () => {
       env: {
         ...process.env,
         // No OH_GUI_DISABLE_VSCODE_DOCKER → preflight runs.
-        // Empty PATH ensures `docker` cannot be found.
-        PATH: "/usr/bin:/bin",
+        // Use a PATH that definitely contains no `docker` binary so the
+        // preflight fails fast on every platform (CI Linux ships docker in
+        // /usr/bin, so "/usr/bin:/bin" would still find it).
+        PATH: "/__oh_gui_dev_safe_no_docker__",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
