@@ -61,10 +61,12 @@ class V1ConversationService {
     conversationInstructions?: string,
     plugins?: PluginSpec[],
     metadata?: ConversationMetadata | null,
+    workingDirOverride?: string,
   ): Promise<V1AppConversationStartTask> {
     const settings = await SettingsService.getSettings();
     const conversationId = crypto.randomUUID();
-    const workingDir = buildConversationWorkingDir(conversationId);
+    const workingDir =
+      workingDirOverride ?? buildConversationWorkingDir(conversationId);
     const payload = buildStartConversationRequest({
       settings,
       query: initialUserMsg,

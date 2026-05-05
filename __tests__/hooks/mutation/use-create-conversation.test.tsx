@@ -80,6 +80,7 @@ describe("useCreateConversation", () => {
           selected_branch: "main",
           git_provider: "github",
         },
+        undefined,
       );
     });
   });
