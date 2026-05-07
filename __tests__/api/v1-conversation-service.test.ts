@@ -1,6 +1,14 @@
+import axios from "axios";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
+import {
+  __resetActiveStoreForTests,
+  setActiveSelection,
+  setRegisteredBackends,
+} from "#/api/backend-registry/active-store";
+import type { Backend } from "#/api/backend-registry/types";
 import V1ConversationService from "#/api/conversation-service/v1-conversation-service.api";
+
+vi.mock("axios");
 
 const {
   mockHttpGet,
@@ -195,6 +203,87 @@ describe("V1ConversationService", () => {
 
       expect(mockHttpDelete).toHaveBeenCalledWith(
         "/api/conversations/conv-abc",
+      );
+    });
+  });
+
+  describe("cloud branches", () => {
+    const cloudBackend: Backend = {
+      id: "prod",
+      name: "Production",
+      host: "https://app.all-hands.dev",
+      apiKey: "bearer-token",
+      kind: "cloud",
+    };
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      __resetActiveStoreForTests();
+      setRegisteredBackends([cloudBackend]);
+      setActiveSelection({ backendId: cloudBackend.id });
+      vi.mocked(axios.post).mockReset();
+    });
+
+    afterEach(() => {
+      window.localStorage.clear();
+      __resetActiveStoreForTests();
+    });
+
+    it("forwards parent_conversation_id, agent_type, and sandbox_id to the cloud createConversation payload", async () => {
+      // Arrange
+      vi.mocked(axios.post).mockResolvedValue({
+        data: {
+          id: "task-1",
+          status: "WORKING",
+          app_conversation_id: null,
+          agent_server_url: null,
+          request: {},
+          created_at: "2024-01-01",
+          updated_at: "2024-01-01",
+        },
+      });
+
+      // Act
+      await V1ConversationService.createConversation(
+        undefined,
+        undefined,
+        undefined,
+        null,
+        undefined,
+        "parent-conv-1",
+        "plan",
+        "sandbox-9",
+      );
+
+      // Assert
+      const [, body] = vi.mocked(axios.post).mock.calls[0]!;
+      const upstream = body as {
+        path: string;
+        body: Record<string, unknown>;
+      };
+      expect(upstream.path).toBe("/api/v1/app-conversations");
+      expect(upstream.body).toMatchObject({
+        parent_conversation_id: "parent-conv-1",
+        agent_type: "plan",
+        sandbox_id: "sandbox-9",
+      });
+    });
+
+    it("routes readConversationFile to the SaaS file endpoint with the file_path query param", async () => {
+      // Arrange
+      vi.mocked(axios.post).mockResolvedValue({ data: "# PLAN content" });
+
+      // Act
+      const content =
+        await V1ConversationService.readConversationFile("conv-cloud-1");
+
+      // Assert
+      expect(content).toBe("# PLAN content");
+      const [, body] = vi.mocked(axios.post).mock.calls[0]!;
+      const upstream = body as { method: string; path: string };
+      expect(upstream.method).toBe("GET");
+      expect(upstream.path).toBe(
+        "/api/v1/app-conversations/conv-cloud-1/file?file_path=%2Fworkspace%2Fproject%2F.agents_tmp%2FPLAN.md",
       );
     });
   });

@@ -45,6 +45,7 @@ const mockConversation = {
   selected_repository: null,
   selected_branch: null,
   git_provider: null,
+  sandbox_id: "sandbox-abc",
   conversation_version: "V1" as const,
 };
 
@@ -178,6 +179,35 @@ describe("useNewConversationCommand", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["v1-batch-get-app-conversations"],
       });
+    });
+  });
+
+  it("forwards the active conversation's sandbox_id so /new reuses the same runtime", async () => {
+    // Arrange
+    const readyTask = makeStartTask();
+    const createSpy = vi
+      .spyOn(V1ConversationService, "createConversation")
+      .mockResolvedValue(readyTask as never);
+
+    // Act
+    const { result } = renderHook(() => useNewConversationCommand(), {
+      wrapper,
+    });
+    await result.current.mutateAsync();
+
+    // Assert — sandbox_id is the 8th positional argument; parent_conversation_id
+    // and agent_type stay undefined because /new is NOT a sub-conversation.
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "sandbox-abc",
+      );
     });
   });
 

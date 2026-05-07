@@ -150,6 +150,27 @@ export async function pauseCloudSandbox(sandboxId: string): Promise<void> {
 }
 
 /**
+ * Read a file from a cloud conversation's sandbox workspace. Mirrors
+ * OpenHands' `V1ConversationService.readConversationFile` — hits
+ * `GET /api/v1/app-conversations/{id}/file?file_path=...` on the SaaS
+ * and returns the file content as a string.
+ */
+export async function readCloudConversationFile(
+  conversationId: string,
+  filePath: string,
+): Promise<string> {
+  const backend = getActiveCloudBackend();
+  const params = new URLSearchParams();
+  params.append("file_path", filePath);
+  const data = await callCloudProxy<string>({
+    backend,
+    method: "GET",
+    path: `/api/v1/app-conversations/${conversationId}/file?${params.toString()}`,
+  });
+  return data ?? "";
+}
+
+/**
  * Fetch a single v1 app-conversation start task. Mirrors OpenHands'
  * `V1ConversationService.getStartTask` — uses the batch search endpoint
  * with a single id and unwraps the first result.

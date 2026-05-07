@@ -15,6 +15,7 @@ import {
   deleteCloudConversation,
   downloadCloudConversation,
   getCloudAppConversationStartTask,
+  readCloudConversationFile,
   searchCloudConversations,
 } from "../cloud/conversation-service.api";
 import {
@@ -74,6 +75,9 @@ class V1ConversationService {
     plugins?: PluginSpec[],
     metadata?: ConversationMetadata | null,
     workingDirOverride?: string,
+    parentConversationId?: string,
+    agentType?: "default" | "plan",
+    sandboxId?: string,
   ): Promise<V1AppConversationStartTask> {
     if (getActiveBackend().backend.kind === "cloud") {
       // Cloud SaaS path mirrors OpenHands' frontend: build a flat
@@ -93,7 +97,9 @@ class V1ConversationService {
         selected_branch: metadata?.selected_branch ?? null,
         git_provider: metadata?.git_provider ?? null,
         plugins: plugins ?? null,
-        parent_conversation_id: null,
+        parent_conversation_id: parentConversationId ?? null,
+        agent_type: agentType,
+        sandbox_id: sandboxId ?? null,
       };
       return createCloudAppConversation(request);
     }
@@ -312,6 +318,16 @@ class V1ConversationService {
     conversationId: string,
     filePath?: string,
   ): Promise<string> {
+    if (getActiveBackend().backend.kind === "cloud") {
+      // Cloud SaaS exposes a per-conversation file endpoint; the sandbox
+      // working dir is fixed (`/workspace/project`), so PLAN.md lives at
+      // a known absolute path. Mirrors OpenHands' readConversationFile.
+      return readCloudConversationFile(
+        conversationId,
+        filePath ?? "/workspace/project/.agents_tmp/PLAN.md",
+      );
+    }
+
     if (filePath) {
       return downloadTextFile(filePath);
     }

@@ -23,7 +23,19 @@ export const useNewConversationCommand = () => {
         throw new Error("No active conversation");
       }
 
-      const startTask = await V1ConversationService.createConversation();
+      // /new reuses the parent conversation's sandbox (matches OpenHands
+      // SaaS behavior); it is NOT a sub-conversation, so parent_conversation_id
+      // and agent_type stay undefined.
+      const startTask = await V1ConversationService.createConversation(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        conversation.sandbox_id ?? undefined,
+      );
 
       if (startTask.status === "ERROR") {
         throw new Error(

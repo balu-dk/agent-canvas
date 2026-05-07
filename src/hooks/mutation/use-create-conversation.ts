@@ -44,6 +44,8 @@ export const useCreateConversation = () => {
         plugins,
         repository,
         workingDir,
+        parentConversationId,
+        agentType,
       } = variables;
 
       const conversation = await V1ConversationService.createConversation(
@@ -58,6 +60,8 @@ export const useCreateConversation = () => {
             }
           : null,
         workingDir,
+        parentConversationId,
+        agentType,
       );
 
       // OpenHands SaaS pattern: when the start task isn't immediately
