@@ -15,12 +15,14 @@ import {
   getCloudOrganizations,
   switchCloudOrganization,
   getCloudOrganizationMe,
+  getCurrentCloudApiKey,
 } from "#/api/cloud/organization-service.api";
 
 vi.mock("#/api/cloud/organization-service.api", () => ({
   getCloudOrganizations: vi.fn(),
   switchCloudOrganization: vi.fn().mockResolvedValue(undefined),
   getCloudOrganizationMe: vi.fn(),
+  getCurrentCloudApiKey: vi.fn(),
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -68,6 +70,14 @@ beforeEach(() => {
   vi.mocked(getCloudOrganizationMe).mockResolvedValue({
     orgId: "",
     userId: "",
+  });
+  // Default to the legacy-key fallback so existing assertions about
+  // multiple orgs being visible still hold. Tests that exercise
+  // org-filter behavior override this with an explicit orgId.
+  vi.mocked(getCurrentCloudApiKey).mockReset();
+  vi.mocked(getCurrentCloudApiKey).mockResolvedValue({
+    orgId: null,
+    isLegacyKey: true,
   });
 });
 
@@ -155,6 +165,62 @@ describe("BackendSelector", () => {
       "org-2",
       expect.objectContaining({ host: "https://app.all-hands.dev" }),
     );
+  });
+
+  it("filters each cloud backend's org rows to the org its API key is bound to", async () => {
+    // Both backends point at the same host; the user belongs to all three
+    // orgs, but each API key is scoped to a different one. The selector
+    // must show one row per backend, each labeled with its key's own org.
+    vi.mocked(getCloudOrganizations).mockResolvedValue({
+      items: [
+        { id: "org-personal", name: "Personal" },
+        { id: "org-acme", name: "Acme Inc" },
+        { id: "org-beta", name: "Beta Co" },
+      ],
+      currentOrgId: "org-personal",
+    });
+    vi.mocked(getCurrentCloudApiKey).mockImplementation(async (backend) => ({
+      orgId: backend?.apiKey === "key-personal" ? "org-personal" : "org-acme",
+      isLegacyKey: false,
+    }));
+
+    renderWithProviders(
+      <TestSeed
+        onMount={(ctx) => {
+          ctx.addBackend({
+            name: "ProdPersonal",
+            host: "https://app.all-hands.dev",
+            apiKey: "key-personal",
+            kind: "cloud",
+          });
+          ctx.addBackend({
+            name: "ProdAcme",
+            host: "https://app.all-hands.dev",
+            apiKey: "key-acme",
+            kind: "cloud",
+          });
+        }}
+      >
+        <BackendSelector />
+      </TestSeed>,
+    );
+
+    await openDropdown();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("ProdPersonal – Personal"),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("ProdAcme – Acme Inc")).toBeInTheDocument();
+    // Inaccessible orgs must not appear under either backend.
+    expect(
+      screen.queryByText("ProdPersonal – Acme Inc"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("ProdAcme – Personal"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Beta Co/)).not.toBeInTheDocument();
   });
 
   it("labels an org as 'Personal Workspace' when /me reports user_id === org.id", async () => {

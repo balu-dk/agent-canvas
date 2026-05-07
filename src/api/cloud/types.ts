@@ -29,6 +29,20 @@ export interface CloudOrganizationMember {
 }
 
 /**
+ * Response from `GET /api/keys/current`. Identifies the org the calling
+ * API key is scoped to. Legacy keys without an org binding cause the
+ * upstream to return HTTP 400 instead of producing this shape — the
+ * caller catches that case rather than expecting a partial response.
+ */
+export interface CloudApiKeyMetadata {
+  id: string;
+  name: string;
+  org_id: string | null;
+  user_id: string;
+  auth_type: string;
+}
+
+/**
  * Response from `GET /api/v1/users/git-info`. Identifies the currently
  * authenticated user across the connected git providers.
  */

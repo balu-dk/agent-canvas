@@ -1,7 +1,12 @@
+import axios from "axios";
 import { getActiveBackend } from "../backend-registry/active-store";
 import type { Backend } from "../backend-registry/types";
 import { callCloudProxy } from "./proxy";
-import type { CloudOrganization, CloudOrganizationsResponse } from "./types";
+import type {
+  CloudApiKeyMetadata,
+  CloudOrganization,
+  CloudOrganizationsResponse,
+} from "./types";
 
 interface OrganizationsResult {
   items: CloudOrganization[];
@@ -46,6 +51,36 @@ export async function getCloudOrganizations(
     path: "/api/organizations",
   });
   return normalizeResult(data);
+}
+
+/**
+ * Fetch metadata for the API key used to authenticate this cloud backend.
+ * The returned `orgId` is the single org the key is authorized to act on
+ * (the SaaS contract: one key → one org).
+ *
+ * Legacy keys minted before per-key org binding existed cause the upstream
+ * to return HTTP 400 — we surface that as `isLegacyKey: true` with a null
+ * `orgId` so the caller can fall back to the unfiltered behavior. Other
+ * statuses (401 revoked, 5xx outage) propagate so React Query can mark
+ * the query as failed and the selector can render the no-org-known row.
+ */
+export async function getCurrentCloudApiKey(
+  backend?: Backend,
+): Promise<{ orgId: string | null; isLegacyKey: boolean }> {
+  const target = resolveBackend(backend);
+  try {
+    const data = await callCloudProxy<CloudApiKeyMetadata>({
+      backend: target,
+      method: "GET",
+      path: "/api/keys/current",
+    });
+    return { orgId: data?.org_id ?? null, isLegacyKey: false };
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.status === 400) {
+      return { orgId: null, isLegacyKey: true };
+    }
+    throw e;
+  }
 }
 
 export async function switchCloudOrganization(
