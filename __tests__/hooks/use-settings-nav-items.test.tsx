@@ -103,10 +103,12 @@ describe("useSettingsNavItems", () => {
       .map((item) => (item.type === "item" ? item.item.to : null));
 
     expect(paths).not.toContain("/settings/agent-server");
-    expect(paths).not.toContain("/settings/condenser");
-    expect(paths).not.toContain("/settings/mcp");
+    expect(paths).not.toContain("/settings/integrations");
     expect(paths).toContain("/settings");
-    expect(paths).toContain("/settings/integrations");
+    expect(paths).toContain("/settings/condenser");
+    expect(paths).toContain("/settings/verification");
+    expect(paths).toContain("/settings/mcp");
+    expect(paths).toContain("/settings/skills");
     expect(paths).toContain("/settings/secrets");
   });
 });
