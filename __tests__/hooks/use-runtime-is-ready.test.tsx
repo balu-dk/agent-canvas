@@ -26,6 +26,7 @@ function makeConversation(): AppConversation {
     execution_status: ExecutionStatus.RUNNING,
     conversation_url: null,
     session_api_key: null,
+    sandbox_id: null,
     sub_conversation_ids: [],
     created_by_user_id: null,
     trigger: null,

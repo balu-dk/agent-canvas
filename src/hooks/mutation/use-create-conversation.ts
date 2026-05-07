@@ -20,13 +20,11 @@ interface CreateConversationVariables {
   workingDir?: string;
 }
 
-// Response type for V1 conversations
 interface CreateConversationResponse {
   conversation_id: string;
   session_api_key: string | null;
   url: string | null;
   task_id?: string;
-  is_v1?: boolean;
 }
 
 export const useCreateConversation = () => {
@@ -44,6 +42,8 @@ export const useCreateConversation = () => {
         plugins,
         repository,
         workingDir,
+        parentConversationId,
+        agentType,
       } = variables;
 
       const conversation = await AgentServerConversationService.createConversation(
@@ -58,13 +58,24 @@ export const useCreateConversation = () => {
             }
           : null,
         workingDir,
+        parentConversationId,
+        agentType,
       );
 
+      // OpenHands SaaS pattern: when the start task isn't immediately
+      // READY (cloud sandbox is still provisioning),
+      // app_conversation_id is null. We return a `task-{id}` URL so the
+      // conversation route's useTaskPolling can drive it to READY and
+      // then redirect to the real `/conversations/{app_conversation_id}`.
+      const conversationId = conversation.app_conversation_id
+        ? conversation.app_conversation_id
+        : `task-${conversation.id}`;
+
       return {
-        conversation_id: conversation.app_conversation_id || conversation.id,
+        conversation_id: conversationId,
         session_api_key: null,
         url: conversation.agent_server_url,
-        is_v1: true,
+        task_id: conversation.id,
       };
     },
     onSuccess: async (_, { repository }) => {

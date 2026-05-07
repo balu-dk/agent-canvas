@@ -61,11 +61,13 @@ export interface AppConversationStartRequest {
   pr_number?: number[];
   parent_conversation_id?: string | null;
   agent_type?: "default" | "plan";
+  sandbox_id?: string | null;
   plugins?: PluginSpec[] | null; // Plugins to load when starting the conversation
 }
 
 export type AppConversationStartTaskStatus =
   | "WORKING"
+  | "WAITING_FOR_SANDBOX"
   | "PREPARING_REPOSITORY"
   | "RUNNING_SETUP_SCRIPT"
   | "SETTING_UP_GIT_HOOKS"
@@ -116,6 +118,7 @@ export interface AppConversation {
   execution_status: ExecutionStatus | null;
   conversation_url: string | null;
   session_api_key: string | null;
+  sandbox_id: string | null;
   workspace?: ConversationWorkspace | null;
   public?: boolean;
   sub_conversation_ids: string[];
