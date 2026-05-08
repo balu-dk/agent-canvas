@@ -16,7 +16,7 @@ import ChevronLeft from "#/icons/chevron-left-small.svg?react";
 interface FolderBrowserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (items: LocalWorkspace[]) => void;
+  onAdd: (item: LocalWorkspace) => void;
 }
 
 interface SidebarEntry {
@@ -134,21 +134,17 @@ export function FolderBrowserModal({
   const subdirs = listing?.items ?? [];
   const parent = currentPath ? getParentPath(currentPath) : null;
 
-  const handleUseThisFolder = () => {
-    if (subdirs.length === 0) return;
-    const items: LocalWorkspace[] = subdirs.map((s) => ({
-      id: s.path,
-      name: s.name,
-      path: s.path,
-    }));
-    onAdd(items);
+  const handleAddThisFolder = () => {
+    if (!currentPath) return;
+    const name = currentPath.split("/").filter(Boolean).pop() ?? currentPath;
+    onAdd({ id: currentPath, name, path: currentPath });
     onClose();
   };
 
   return (
     <ModalBackdrop
       onClose={onClose}
-      aria-label={t(I18nKey.HOME$ADD_WORKSPACES_TITLE)}
+      aria-label={t(I18nKey.HOME$ADD_THIS_FOLDER)}
     >
       <div
         data-testid="folder-browser-modal"
@@ -160,7 +156,7 @@ export function FolderBrowserModal({
         {/* Title bar */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#727987]">
           <span className="text-sm font-semibold text-white">
-            {t(I18nKey.HOME$ADD_WORKSPACES_TITLE)}
+            {t(I18nKey.HOME$ADD_THIS_FOLDER)}
           </span>
         </div>
 
@@ -271,11 +267,11 @@ export function FolderBrowserModal({
           <BrandButton
             type="button"
             variant="primary"
-            onClick={handleUseThisFolder}
-            isDisabled={subdirs.length === 0}
-            testId="folder-browser-use"
+            onClick={handleAddThisFolder}
+            isDisabled={!currentPath}
+            testId="folder-browser-add"
           >
-            {t(I18nKey.HOME$USE_THIS_FOLDER)}
+            {t(I18nKey.HOME$ADD_THIS_FOLDER)}
           </BrandButton>
         </div>
       </div>

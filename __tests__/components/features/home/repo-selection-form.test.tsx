@@ -354,13 +354,13 @@ describe("RepositorySelectionForm", () => {
 
     expect(await screen.findByTestId("git-repo-dropdown")).toBeInTheDocument();
     expect(
-      screen.queryByTestId("workspace-launch-button"),
+      screen.queryByTestId("add-workspace-button"),
     ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("workspaces-tab"));
 
     expect(
-      await screen.findByTestId("workspace-launch-button"),
+      await screen.findByTestId("add-workspace-button"),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("git-repo-dropdown")).not.toBeInTheDocument();
   });
@@ -389,7 +389,7 @@ describe("RepositorySelectionForm", () => {
     await userEvent.click(screen.getByTestId("workspaces-tab"));
 
     expect(
-      await screen.findByTestId("workspace-launch-button"),
+      await screen.findByTestId("add-workspace-button"),
     ).toBeInTheDocument();
   });
 

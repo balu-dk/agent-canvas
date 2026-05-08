@@ -22620,5 +22620,25 @@
   },
   "EVENT_GROUP$COLLAPSE": {
     "en": "Collapse actions"
+  },
+  "HOME$ADD_FOLDER": {
+    "en": "+ Add Folder",
+    "zh-CN": "+ 添加文件夹",
+    "ja": "+ フォルダを追加"
+  },
+  "HOME$LOCAL_FOLDER_TOOLTIP": {
+    "en": "Local folder",
+    "zh-CN": "本地文件夹",
+    "ja": "ローカルフォルダ"
+  },
+  "HOME$ADD_THIS_FOLDER": {
+    "en": "Add this folder",
+    "zh-CN": "添加此文件夹",
+    "ja": "このフォルダを追加"
+  },
+  "HOME$REMOVE_WORKSPACE": {
+    "en": "Remove from list",
+    "zh-CN": "从列表移除",
+    "ja": "リストから削除"
   }
 }
