@@ -11284,14 +11284,14 @@
     "en": "Trigger",
     "ja": "トリガー"
   },
-  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_TITLE": {
-    "en": "Automations Backend Not Configured"
+  "AUTOMATIONS$BACKEND_UNAVAILABLE_TITLE": {
+    "en": "Automations Unavailable"
   },
-  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_MESSAGE": {
-    "en": "The automations backend is not running or not reachable. Please ensure the automation service is started on your host."
+  "AUTOMATIONS$BACKEND_UNAVAILABLE_MESSAGE": {
+    "en": "The automations backend is not available right now. Please try again later or check that the automation service is running."
   },
-  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_RETRY": {
-    "en": "Retry Connection"
+  "AUTOMATIONS$BACKEND_UNAVAILABLE_RETRY": {
+    "en": "Retry"
   },
   "SIDEBAR$CONVERSATIONS": {
     "en": "Conversations",

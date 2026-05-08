@@ -162,19 +162,23 @@ class AutomationService {
     const active = getActiveBackend().backend;
     const path = `${AUTOMATION_BASE_PATH}/health`;
 
-    if (active.kind === "cloud") {
-      // Cloud backends always have the automation service available
-      return { status: "ok" };
-    }
-
     try {
+      if (active.kind === "cloud") {
+        const response = await callCloudProxy<AutomationHealthResponse>({
+          backend: active,
+          method: "GET",
+          path,
+        });
+        return response;
+      }
+
       const { data } = await localAutomationAxios.get<AutomationHealthResponse>(
         path,
         { timeout: 5000 },
       );
       return data;
     } catch {
-      return { status: "error", message: "Automation backend is not available" };
+      return { status: "error" };
     }
   }
 }
