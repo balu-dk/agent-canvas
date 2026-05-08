@@ -4,7 +4,6 @@ import { I18nKey } from "#/i18n/declaration";
 import { useNavigation } from "#/context/navigation-context";
 import { usePaginatedConversations } from "#/hooks/query/use-paginated-conversations";
 import { useStartTasks } from "#/hooks/query/use-start-tasks";
-import { useInfiniteScroll } from "#/hooks/use-infinite-scroll";
 import { useDeleteConversation } from "#/hooks/mutation/use-delete-conversation";
 import { useUnifiedPauseConversation } from "#/hooks/mutation/use-unified-stop-conversation";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
@@ -106,13 +105,12 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
   const { mutate: pauseConversation } = useUnifiedPauseConversation();
   const { mutate: updateConversation } = useUpdateConversation();
 
-  // Set up infinite scroll
-  const scrollContainerRef = useInfiniteScroll({
-    hasNextPage: !!hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-    threshold: 200, // Load more when 200px from bottom
-  });
+  // The next page of conversations is loaded only via the explicit "Load
+  // more" link rendered at the end of the list — there is no scroll-driven
+  // pagination, which previously caused the panel to feel like it had stray
+  // scrollable space at the bottom.
+  const olderHidden = olderConversations.length > 0 && !showOlderConversations;
+  const showLoadMore = !!hasNextPage && !olderHidden;
 
   const handleDeleteProject = (conversationId: string, title: string) => {
     setConfirmDeleteModalVisible(true);
@@ -182,6 +180,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
       key={conversation.id}
       to={`/conversations/${conversation.id}`}
       onClick={onClose}
+      className="block"
     >
       <ConversationCard
         onDelete={() =>
@@ -211,89 +210,113 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
     </NavigationLink>
   );
 
+  // Standard layout: panel fills its slot in the sidebar; the inner scroll
+  // child fills the panel and scrolls when its content overflows. Modals are
+  // siblings of the scroll element and are `position: fixed`, so they don't
+  // participate in the panel's scroll geometry.
+  const showInitialSkeleton = isFetching && conversations.length === 0;
+  const showEmptyState =
+    !isFetching && conversations.length === 0 && !startTasks?.length;
+
   return (
     <div
-      ref={(node) => {
-        // TODO: Combine both refs somehow
-        if (ref.current !== node) ref.current = node;
-        if (scrollContainerRef.current !== node)
-          scrollContainerRef.current = node;
-      }}
+      ref={ref}
       data-testid="conversation-panel"
-      className="w-full h-full overflow-y-auto custom-scrollbar-always"
+      className="w-full h-full flex flex-col"
     >
-      {isFetching && conversations.length === 0 && (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <ConversationCardSkeleton key={index} />
-          ))}
-        </div>
-      )}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar-always">
+        {showInitialSkeleton && (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <ConversationCardSkeleton key={index} />
+            ))}
+          </div>
+        )}
 
-      {error && (
-        <div className="flex flex-col items-center justify-center h-full">
-          <p className="text-danger">{error.message}</p>
-        </div>
-      )}
-      {!isFetching && conversations?.length === 0 && !startTasks?.length && (
-        <div className="flex flex-col items-center justify-center h-full">
-          <p className="text-neutral-400">
-            {t(I18nKey.CONVERSATION$NO_CONVERSATIONS)}
-          </p>
-        </div>
-      )}
-      {/* Render in-progress start tasks first */}
-      {startTasks?.map((task) => (
-        <NavigationLink
-          key={task.id}
-          to={`/conversations/task-${task.id}`}
-          onClick={onClose}
-        >
-          <StartTaskCard task={task} />
-        </NavigationLink>
-      ))}
-      {/* Recent conversations (last_updated within the past hour) */}
-      {recentConversations.map(renderConversationCard)}
+        {error && (
+          <div className="flex flex-col items-center justify-center h-full">
+            <p className="text-danger">{error.message}</p>
+          </div>
+        )}
 
-      {/* Older conversations are hidden by default behind a count + toggle */}
-      {olderConversations.length > 0 && (
-        <div
-          data-testid="older-conversations-summary"
-          className="px-3 py-2 text-xs text-neutral-400 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#1f2228]"
-        >
-          <span>
-            {olderConversations.length}{" "}
-            {t(I18nKey.CONVERSATION$N_OLDER_CONVERSATIONS)}:
-          </span>
-          <button
-            type="button"
-            data-testid="toggle-older-conversations"
-            onClick={() => setShowOlderConversations((value) => !value)}
-            className="underline hover:text-white"
+        {showEmptyState && (
+          <div className="flex flex-col items-center justify-center h-full">
+            <p className="text-neutral-400">
+              {t(I18nKey.CONVERSATION$NO_CONVERSATIONS)}
+            </p>
+          </div>
+        )}
+
+        {/* Render in-progress start tasks first */}
+        {startTasks?.map((task) => (
+          <NavigationLink
+            key={task.id}
+            to={`/conversations/task-${task.id}`}
+            onClick={onClose}
+            className="block"
           >
-            {showOlderConversations
-              ? t(I18nKey.CONVERSATION$HIDE)
-              : t(I18nKey.CONVERSATION$SHOW_ALL)}
-          </button>
-          <button
-            type="button"
-            data-testid="delete-older-conversations"
-            onClick={() => setConfirmDeleteOlderVisible(true)}
-            className="underline hover:text-danger"
+            <StartTaskCard task={task} />
+          </NavigationLink>
+        ))}
+
+        {/* Recent conversations (last_updated within the past hour) */}
+        {recentConversations.map(renderConversationCard)}
+
+        {/* Older conversations are hidden by default behind a count + toggle */}
+        {olderConversations.length > 0 && (
+          <div
+            data-testid="older-conversations-summary"
+            className="px-3 py-2 text-xs text-neutral-400 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#1f2228]"
           >
-            {t(I18nKey.CONVERSATION$DELETE_ALL)}
-          </button>
-        </div>
-      )}
+            <span>
+              {olderConversations.length}{" "}
+              {t(I18nKey.CONVERSATION$N_OLDER_CONVERSATIONS)}:
+            </span>
+            <button
+              type="button"
+              data-testid="toggle-older-conversations"
+              onClick={() => setShowOlderConversations((value) => !value)}
+              className="underline hover:text-white"
+            >
+              {showOlderConversations
+                ? t(I18nKey.CONVERSATION$HIDE)
+                : t(I18nKey.CONVERSATION$SHOW_ALL)}
+            </button>
+            <button
+              type="button"
+              data-testid="delete-older-conversations"
+              onClick={() => setConfirmDeleteOlderVisible(true)}
+              className="underline hover:text-danger"
+            >
+              {t(I18nKey.CONVERSATION$DELETE_ALL)}
+            </button>
+          </div>
+        )}
 
-      {showOlderConversations && olderConversations.map(renderConversationCard)}
+        {showOlderConversations &&
+          olderConversations.map(renderConversationCard)}
 
-      {/* Loading indicator for fetching more conversations */}
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <LoadingSpinner size="small" />
-        </div>
-      )}
+        {/* Explicit "Load more" trigger. Only shown when more pages exist
+            *and* the older list is currently visible (or there are no older
+            conversations to begin with) — otherwise the next page would be
+            populated mostly with conversations the user has chosen to hide. */}
+        {showLoadMore && (
+          <div className="flex justify-center py-4">
+            {isFetchingNextPage ? (
+              <LoadingSpinner size="small" />
+            ) : (
+              <button
+                type="button"
+                data-testid="load-more-conversations"
+                onClick={() => fetchNextPage()}
+                className="text-xs text-neutral-400 underline hover:text-white"
+              >
+                {t(I18nKey.CONVERSATION$LOAD_MORE)}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {confirmDeleteModalVisible && (
         <ConfirmDeleteModal

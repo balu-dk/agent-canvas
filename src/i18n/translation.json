@@ -13028,6 +13028,9 @@
   "CONVERSATION$CONFIRM_DELETE_OLDER_DESC": {
     "en": "Are you sure you want to delete {{count}} older conversations? This action cannot be undone."
   },
+  "CONVERSATION$LOAD_MORE": {
+    "en": "Load more"
+  },
   "LANDING$SELECT_GIT_REPO": {
     "en": "Select a Git project",
     "ja": "Gitプロジェクトを選択",

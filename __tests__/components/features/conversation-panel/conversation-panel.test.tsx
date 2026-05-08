@@ -19,14 +19,16 @@ vi.mock("#/hooks/mutation/use-unified-stop-conversation", () => ({
 
 
 // Helper to create complete V1AppConversation mock data
+// Default timestamps use "now" so conversations are considered recent and
+// rendered eagerly by the panel (which hides items older than ~1h by default).
 const createMockConversation = (overrides: Partial<V1AppConversation> = {}): V1AppConversation => ({
   id: "test-id",
   title: "Test Conversation",
   selected_repository: null,
   git_provider: null,
   selected_branch: null,
-  updated_at: "2021-10-01T12:00:00Z",
-  created_at: "2021-10-01T12:00:00Z",
+  updated_at: new Date().toISOString(),
+  created_at: new Date().toISOString(),
   execution_status: V1ExecutionStatus.FINISHED,
   conversation_url: null,
   created_by_user_id: "user1",
@@ -74,9 +76,9 @@ describe("ConversationPanel", () => {
   });
 
   const mockConversations: V1AppConversation[] = [
-    createMockConversation({ id: "1", title: "Conversation 1", updated_at: "2021-10-01T12:00:00Z" }),
-    createMockConversation({ id: "2", title: "Conversation 2", updated_at: "2021-10-02T12:00:00Z" }),
-    createMockConversation({ id: "3", title: "Conversation 3", updated_at: "2021-10-03T12:00:00Z" }),
+    createMockConversation({ id: "1", title: "Conversation 1" }),
+    createMockConversation({ id: "2", title: "Conversation 2" }),
+    createMockConversation({ id: "3", title: "Conversation 3" }),
   ];
 
   beforeEach(() => {
@@ -166,9 +168,9 @@ describe("ConversationPanel", () => {
   it("should delete a conversation", async () => {
     const user = userEvent.setup();
     const mockData: V1AppConversation[] = [
-      createMockConversation({ id: "1", title: "Conversation 1", updated_at: "2021-10-01T12:00:00Z" }),
-      createMockConversation({ id: "2", title: "Conversation 2", updated_at: "2021-10-02T12:00:00Z" }),
-      createMockConversation({ id: "3", title: "Conversation 3", updated_at: "2021-10-03T12:00:00Z" }),
+      createMockConversation({ id: "1", title: "Conversation 1" }),
+      createMockConversation({ id: "2", title: "Conversation 2" }),
+      createMockConversation({ id: "3", title: "Conversation 3" }),
     ];
 
     const searchConversationsSpy = vi.spyOn(
@@ -797,5 +799,295 @@ describe("ConversationPanel", () => {
     expect(
       screen.queryByRole("button", { name: /confirm/i }),
     ).not.toBeInTheDocument();
+  });
+
+  describe("older conversations cutoff", () => {
+    const recentIso = () => new Date().toISOString();
+    const olderIso = () =>
+      new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    it("hides conversations older than 1h behind a summary line", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent",
+            updated_at: recentIso(),
+          }),
+          createMockConversation({
+            id: "old1",
+            title: "Old 1",
+            updated_at: olderIso(),
+          }),
+          createMockConversation({
+            id: "old2",
+            title: "Old 2",
+            updated_at: olderIso(),
+          }),
+        ],
+        next_page_id: null,
+      });
+
+      renderConversationPanel();
+
+      const cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(1);
+      expect(within(cards[0]).getByText("Recent")).toBeInTheDocument();
+
+      const summary = screen.getByTestId("older-conversations-summary");
+      expect(summary).toHaveTextContent("2");
+      expect(summary).toHaveTextContent("CONVERSATION$N_OLDER_CONVERSATIONS");
+      expect(
+        within(summary).getByTestId("toggle-older-conversations"),
+      ).toHaveTextContent("CONVERSATION$SHOW_ALL");
+      expect(
+        within(summary).getByTestId("delete-older-conversations"),
+      ).toHaveTextContent("CONVERSATION$DELETE_ALL");
+    });
+
+    it("does not render the summary when no conversations are older than 1h", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent1",
+            title: "Recent 1",
+            updated_at: recentIso(),
+          }),
+          createMockConversation({
+            id: "recent2",
+            title: "Recent 2",
+            updated_at: recentIso(),
+          }),
+        ],
+        next_page_id: null,
+      });
+
+      renderConversationPanel();
+
+      await screen.findAllByTestId("conversation-card");
+      expect(
+        screen.queryByTestId("older-conversations-summary"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("toggles older conversations visibility via the show-all link", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent",
+            updated_at: recentIso(),
+          }),
+          createMockConversation({
+            id: "old1",
+            title: "Old 1",
+            updated_at: olderIso(),
+          }),
+        ],
+        next_page_id: null,
+      });
+
+      renderConversationPanel();
+
+      let cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(1);
+
+      const toggle = screen.getByTestId("toggle-older-conversations");
+      expect(toggle).toHaveTextContent("CONVERSATION$SHOW_ALL");
+      await user.click(toggle);
+
+      cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(2);
+      expect(toggle).toHaveTextContent("CONVERSATION$HIDE");
+
+      await user.click(toggle);
+      cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(1);
+    });
+
+    it("delete-all confirms then deletes every older conversation", async () => {
+      const user = userEvent.setup();
+      const deleteSpy = vi
+        .spyOn(V1ConversationService, "deleteConversation")
+        .mockResolvedValue();
+
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent",
+            updated_at: recentIso(),
+          }),
+          createMockConversation({
+            id: "old1",
+            title: "Old 1",
+            updated_at: olderIso(),
+          }),
+          createMockConversation({
+            id: "old2",
+            title: "Old 2",
+            updated_at: olderIso(),
+          }),
+        ],
+        next_page_id: null,
+      });
+
+      renderConversationPanel();
+      await screen.findAllByTestId("conversation-card");
+
+      await user.click(screen.getByTestId("delete-older-conversations"));
+
+      // Confirmation modal opens with the count baked into the message
+      const confirmButton = await screen.findByRole("button", {
+        name: /confirm/i,
+      });
+      expect(confirmButton).toBeInTheDocument();
+
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(deleteSpy).toHaveBeenCalledTimes(2);
+      });
+      expect(deleteSpy).toHaveBeenCalledWith("old1");
+      expect(deleteSpy).toHaveBeenCalledWith("old2");
+    });
+  });
+
+  describe("active conversation highlight", () => {
+    it("marks the currently active conversation with data-active=true", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({ id: "1", title: "Conversation 1" }),
+          createMockConversation({ id: "2", title: "Conversation 2" }),
+          createMockConversation({ id: "3", title: "Conversation 3" }),
+        ],
+        next_page_id: null,
+      });
+
+      renderWithProviders(<RouterStub />, {
+        navigation: { conversationId: "2", currentPath: "/conversations/2" },
+      });
+
+      const cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(3);
+      expect(cards[0]).toHaveAttribute("data-active", "false");
+      expect(cards[1]).toHaveAttribute("data-active", "true");
+      expect(cards[2]).toHaveAttribute("data-active", "false");
+    });
+
+    it("renders no active card when no conversation is selected", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [createMockConversation({ id: "1", title: "Conversation 1" })],
+        next_page_id: null,
+      });
+
+      renderWithProviders(<RouterStub />, {
+        navigation: { conversationId: null, currentPath: "/" },
+      });
+
+      const cards = await screen.findAllByTestId("conversation-card");
+      expect(cards[0]).toHaveAttribute("data-active", "false");
+    });
+  });
+
+  describe("load-more link", () => {
+    const recentIso = () => new Date().toISOString();
+    const olderIso = () =>
+      new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    it("shows a load-more link when there is a next page and no older conversations are hidden", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent",
+            updated_at: recentIso(),
+          }),
+        ],
+        next_page_id: "page-2",
+      });
+
+      renderConversationPanel();
+
+      await screen.findAllByTestId("conversation-card");
+      const loadMore = await screen.findByTestId("load-more-conversations");
+      expect(loadMore).toHaveTextContent("CONVERSATION$LOAD_MORE");
+    });
+
+    it("hides the load-more link while older conversations are hidden", async () => {
+      vi.spyOn(V1ConversationService, "searchConversations").mockResolvedValue({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent",
+            updated_at: recentIso(),
+          }),
+          createMockConversation({
+            id: "old1",
+            title: "Old 1",
+            updated_at: olderIso(),
+          }),
+        ],
+        next_page_id: "page-2",
+      });
+
+      renderConversationPanel();
+
+      await screen.findAllByTestId("conversation-card");
+      // Older conversations are present and collapsed → no load-more.
+      expect(
+        screen.queryByTestId("load-more-conversations"),
+      ).not.toBeInTheDocument();
+
+      // After expanding "show all", the link reappears.
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId("toggle-older-conversations"));
+      expect(
+        await screen.findByTestId("load-more-conversations"),
+      ).toBeInTheDocument();
+    });
+
+    it("fetches the next page when the load-more link is clicked", async () => {
+      const user = userEvent.setup();
+      const searchSpy = vi
+        .spyOn(V1ConversationService, "searchConversations")
+        .mockResolvedValueOnce({
+          items: [
+            createMockConversation({
+              id: "recent",
+              title: "Recent",
+              updated_at: recentIso(),
+            }),
+          ],
+          next_page_id: "page-2",
+        })
+        .mockResolvedValueOnce({
+          items: [
+            createMockConversation({
+              id: "page2-1",
+              title: "Page 2 Conversation",
+              updated_at: recentIso(),
+            }),
+          ],
+          next_page_id: null,
+        });
+
+      renderConversationPanel();
+
+      const loadMore = await screen.findByTestId("load-more-conversations");
+      await user.click(loadMore);
+
+      await waitFor(() => {
+        expect(searchSpy).toHaveBeenCalledTimes(2);
+      });
+
+      // After the second page resolves, the link disappears (no more pages).
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId("load-more-conversations"),
+        ).not.toBeInTheDocument();
+      });
+    });
   });
 });

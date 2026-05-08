@@ -1,3 +1,5 @@
+import React from "react";
+import ReactDOM from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
@@ -40,6 +42,13 @@ interface ConversationNameContextMenuProps {
   onDownloadConversation?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   shareUrl?: string;
   position?: "top" | "bottom";
+  /**
+   * Element the menu should anchor against. When provided, the menu renders
+   * into a portal at the document body using fixed positioning so it cannot be
+   * clipped by ancestors with `overflow: hidden` (e.g. the chat panel that
+   * sits next to the right-side tabs panel).
+   */
+  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function ConversationNameContextMenu({
@@ -56,6 +65,7 @@ export function ConversationNameContextMenu({
   onDownloadConversation,
   shareUrl,
   position = "bottom",
+  anchorRef,
 }: ConversationNameContextMenuProps) {
   const isMobile = useBreakpoint();
 
@@ -63,6 +73,40 @@ export function ConversationNameContextMenu({
   const { backend } = useActiveBackend();
   const { data: conversation } = useActiveConversation();
   const ref = useClickOutsideElement<HTMLUListElement>(onClose);
+
+  // When anchored, render via a portal with fixed positioning computed from
+  // the anchor's bounding rect. This avoids being clipped by ancestors with
+  // `overflow: hidden`.
+  const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties>();
+  React.useLayoutEffect(() => {
+    if (!anchorRef?.current) return undefined;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // 4px gap roughly matching the previous `mt-2` spacing.
+      const gap = 8;
+      const style: React.CSSProperties = {
+        position: "fixed",
+        zIndex: 9999,
+      };
+      if (position === "top") {
+        style.bottom = window.innerHeight - rect.top + gap;
+      } else {
+        style.top = rect.bottom + gap;
+      }
+      style.left = rect.left;
+      setPortalStyle(style);
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef, position]);
   const hasTools = Boolean(onShowAgentTools || onShowSkills || onShowHooks);
   const hasInfo = Boolean(onDisplayCost);
   const hasControl = Boolean(onStop || onDelete);
@@ -74,13 +118,24 @@ export function ConversationNameContextMenu({
   const shouldShowPublicSharing =
     backend.kind === "cloud" && Boolean(onTogglePublic);
 
-  return (
+  const isPortaled = Boolean(anchorRef);
+  // When portaled the menu is positioned via inline `style` (fixed coords from
+  // the anchor rect), so we must drop the variant-driven absolute positioning
+  // that would otherwise pin it to its now-irrelevant offset parent.
+  const portalClassName = isPortaled
+    ? "!static !top-auto !bottom-auto !left-auto !right-auto !mt-0"
+    : "";
+
+  const menu = (
     <ContextMenu
       ref={ref}
       testId="conversation-name-context-menu"
       position={position}
       alignment="left"
-      className={isMobile ? "right-0 translate-x-[34%] left-auto" : ""}
+      className={cn(
+        isMobile ? "right-0 translate-x-[34%] left-auto" : "",
+        portalClassName,
+      )}
     >
       {onRename && (
         <ContextMenuListItem
@@ -242,4 +297,16 @@ export function ConversationNameContextMenu({
       )}
     </ContextMenu>
   );
+
+  if (isPortaled) {
+    if (typeof document === "undefined" || !portalStyle) {
+      return null;
+    }
+    return ReactDOM.createPortal(
+      <div style={portalStyle}>{menu}</div>,
+      document.body,
+    );
+  }
+
+  return menu;
 }
