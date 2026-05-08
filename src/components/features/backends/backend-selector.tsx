@@ -32,9 +32,7 @@ function parseOptionValue(value: string): {
 }
 
 function buildStatusPrefix(health: BackendHealth | undefined) {
-  return (
-    <BackendStatusDot isConnected={health?.isConnected ?? null} />
-  );
+  return <BackendStatusDot isConnected={health?.isConnected ?? null} />;
 }
 
 function buildOptions(

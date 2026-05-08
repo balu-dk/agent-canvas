@@ -19,27 +19,25 @@ export function BackendStatusDot({
 }: BackendStatusDotProps) {
   let color: string;
   let label: string;
+  let status: string;
   if (isConnected === true) {
     color = "bg-green-500";
     label = "Connected";
+    status = "connected";
   } else if (isConnected === false) {
     color = "bg-red-500";
     label = "Disconnected";
+    status = "disconnected";
   } else {
     color = "bg-neutral-500";
     label = "Checking connection";
+    status = "checking";
   }
 
   return (
     <span
       data-testid="backend-status-dot"
-      data-status={
-        isConnected === null
-          ? "checking"
-          : isConnected
-            ? "connected"
-            : "disconnected"
-      }
+      data-status={status}
       aria-label={label}
       title={label}
       role="status"
