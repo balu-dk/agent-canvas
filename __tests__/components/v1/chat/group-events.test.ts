@@ -10,6 +10,7 @@ import {
   ObservationEvent,
   SecurityRisk,
 } from "#/types/v1/core";
+import { TextContent } from "#/types/v1/core/base/common";
 import {
   ExecuteBashAction,
   FinishAction,
@@ -20,11 +21,14 @@ import {
   PlanningFileEditorObservation,
 } from "#/types/v1/core/base/observation";
 
-const makeBashAction = (id: string): ActionEvent<ExecuteBashAction> => ({
+const makeBashAction = (
+  id: string,
+  thought: TextContent[] = [],
+): ActionEvent<ExecuteBashAction> => ({
   id,
   timestamp: new Date().toISOString(),
   source: "agent",
-  thought: [],
+  thought,
   thinking_blocks: [],
   action: {
     kind: "ExecuteBashAction",
@@ -211,5 +215,104 @@ describe("groupEvents", () => {
     const grouped = groupEvents(events, 2);
     expect(grouped).toHaveLength(1);
     expect(grouped[0].kind).toBe("group");
+  });
+
+  it("hoists an action's thought into a separate item and starts a new group", () => {
+    // First three actions have no thought, then a fourth action carries a
+    // thought, then two more actions follow. The thought should break the
+    // first group and open a new one starting with the thought-bearing
+    // action.
+    const a1 = makeBashAction("a1");
+    const a2 = makeBashAction("a2");
+    const a3 = makeBashAction("a3");
+    const a4 = makeBashAction("a4", [
+      { type: "text", text: "Let me check tests for the new conversation button:" },
+    ]);
+    const a5 = makeBashAction("a5");
+    const a6 = makeBashAction("a6");
+
+    const events = [
+      makeBashObservation("o1", "a1"),
+      makeBashObservation("o2", "a2"),
+      makeBashObservation("o3", "a3"),
+      makeBashObservation("o4", "a4"),
+      makeBashObservation("o5", "a5"),
+      makeBashObservation("o6", "a6"),
+    ];
+    const allEvents = [a1, a2, a3, ...events.slice(0, 3), a4, a5, a6, ...events.slice(3)];
+
+    const result = groupEvents(events, undefined, allEvents);
+
+    // group(o1..o3), thought(a4), group(o4..o6)
+    expect(result).toHaveLength(3);
+    expect(result[0].kind).toBe("group");
+    expect(result[1].kind).toBe("thought");
+    expect(result[2].kind).toBe("group");
+
+    if (result[0].kind === "group") {
+      expect(result[0].events).toHaveLength(3);
+    }
+    if (result[1].kind === "thought") {
+      expect(result[1].action.id).toBe("a4");
+    }
+    if (result[2].kind === "group") {
+      expect(result[2].events).toHaveLength(3);
+    }
+  });
+
+  it("hoists thoughts attached to action events that haven't been observed yet", () => {
+    const events = [
+      makeBashAction("a1"),
+      makeBashAction("a2"),
+      makeBashAction("a3", [{ type: "text", text: "thinking out loud" }]),
+    ];
+
+    const result = groupEvents(events);
+
+    // a1 and a2 fall short of the min group size, so they emit as singles;
+    // the thought item is hoisted out before a3, leaving a3 as a single too.
+    expect(result.map((item) => item.kind)).toEqual([
+      "single",
+      "single",
+      "thought",
+      "single",
+    ]);
+  });
+
+  it("ignores empty thoughts", () => {
+    const events = [
+      makeBashAction("a1", [{ type: "text", text: "   " }]),
+      makeBashAction("a2"),
+      makeBashAction("a3"),
+    ];
+
+    const result = groupEvents(events);
+
+    // Whitespace-only thought should not break the group.
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("group");
+  });
+
+  it("does not hoist a ThinkAction's thought (it has its own rendering)", () => {
+    const events = [
+      makeBashAction("a1"),
+      makeBashAction("a2"),
+      makeBashAction("a3"),
+      makeThinkAction("t1"),
+      makeBashAction("a4"),
+      makeBashAction("a5"),
+      makeBashAction("a6"),
+    ];
+
+    const result = groupEvents(events);
+
+    // ThinkAction breaks the run as a single (it isn't groupable), but no
+    // additional "thought" item should be emitted for it because the
+    // ThinkAction's body already renders the thought.
+    expect(result.map((item) => item.kind)).toEqual([
+      "group",
+      "single",
+      "group",
+    ]);
   });
 });

@@ -1,9 +1,10 @@
-import { OpenHandsEvent } from "#/types/v1/core";
+import { ActionEvent, OpenHandsEvent } from "#/types/v1/core";
 import {
   isActionEvent,
   isObservationEvent,
   isPlanningFileEditorObservationEvent,
 } from "#/types/v1/type-guards";
+import { getThoughtSourceAction } from "./event-thought-helpers";
 
 /** Minimum run-length before consecutive actions get folded into a single
  *  collapsible group. Pairs are left ungrouped so short interactions still
@@ -42,6 +43,7 @@ export const isGroupableEvent = (event: OpenHandsEvent): boolean => {
 
 export type RenderedItem =
   | { kind: "single"; event: OpenHandsEvent; index: number }
+  | { kind: "thought"; action: ActionEvent; index: number }
   | { kind: "group"; events: OpenHandsEvent[]; startIndex: number };
 
 /**
@@ -49,10 +51,21 @@ export type RenderedItem =
  * `group` items. Anything that breaks the run, or runs shorter than
  * `EVENT_GROUP_MIN_SIZE`, is emitted as `single` items so they keep rendering
  * the way they always have.
+ *
+ * Whenever a groupable event carries an agent thought (either an
+ * `ActionEvent.thought` or the corresponding action of an
+ * `ObservationEvent`), the thought is hoisted out as its own `thought`
+ * `RenderedItem`, the current run is flushed, and a new run is started with
+ * the event itself. This keeps reasoning text in the main message stream
+ * instead of buried inside a collapsed action group.
+ *
+ * `allEvents` should be the full event history so observations can find
+ * their matching action; if omitted, it defaults to `events`.
  */
 export const groupEvents = (
   events: OpenHandsEvent[],
   minSize: number = EVENT_GROUP_MIN_SIZE,
+  allEvents: OpenHandsEvent[] = events,
 ): RenderedItem[] => {
   const items: RenderedItem[] = [];
   let run: { events: OpenHandsEvent[]; startIndex: number } | null = null;
@@ -75,6 +88,11 @@ export const groupEvents = (
 
   events.forEach((event, index) => {
     if (isGroupableEvent(event)) {
+      const thoughtAction = getThoughtSourceAction(event, allEvents);
+      if (thoughtAction) {
+        flushRun();
+        items.push({ kind: "thought", action: thoughtAction, index });
+      }
       if (!run) run = { events: [], startIndex: index };
       run.events.push(event);
     } else {
