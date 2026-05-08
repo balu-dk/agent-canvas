@@ -59,11 +59,11 @@ export function WorkspaceSelectionForm({
           className="flex flex-col gap-1 max-h-[180px] overflow-y-auto custom-scrollbar-always py-1"
           data-testid="workspace-list"
         >
-          {workspaces.map((ws) => {
+          {workspaces.map((workspace) => {
             const isLaunching =
-              isCreatingConversation && launchingPath === ws.path;
+              isCreatingConversation && launchingPath === workspace.path;
             return (
-              <li key={ws.path}>
+              <li key={workspace.path}>
                 <div
                   className={cn(
                     "group flex items-center gap-2 px-3 py-2 rounded-lg",
@@ -73,11 +73,11 @@ export function WorkspaceSelectionForm({
                 >
                   <button
                     type="button"
-                    data-testid={`workspace-item-${ws.name}`}
-                    onClick={() => handleLaunch(ws)}
+                    data-testid={`workspace-item-${workspace.name}`}
+                    onClick={() => handleLaunch(workspace)}
                     disabled={isCreatingConversation || isLoadingSettings}
                     className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer disabled:cursor-not-allowed text-left"
-                    title={`${ws.name}\n${ws.path}`}
+                    title={`${workspace.name}\n${workspace.path}`}
                   >
                     <FolderIcon
                       width={18}
@@ -87,25 +87,25 @@ export function WorkspaceSelectionForm({
                     <div className="flex flex-col min-w-0">
                       <span
                         className="text-sm text-white truncate"
-                        title={ws.name}
+                        title={workspace.name}
                       >
-                        {ws.name}
+                        {workspace.name}
                       </span>
                       <span className="text-[11px] text-[#71767F]">
                         {t(I18nKey.HOME$LOCAL_FOLDER_TOOLTIP)}
                       </span>
                       <span
                         className="text-xs text-[#A3A3A3] truncate"
-                        title={ws.path}
+                        title={workspace.path}
                       >
-                        {ws.path}
+                        {workspace.path}
                       </span>
                     </div>
                   </button>
                   <button
                     type="button"
-                    data-testid={`workspace-remove-${ws.name}`}
-                    onClick={() => removeWorkspace(ws.path)}
+                    data-testid={`workspace-remove-${workspace.name}`}
+                    onClick={() => removeWorkspace(workspace.path)}
                     className={cn(
                       "p-1 rounded opacity-0 group-hover:opacity-100",
                       "hover:bg-[#5C5D62] transition-opacity cursor-pointer",
@@ -142,7 +142,7 @@ export function WorkspaceSelectionForm({
       <FolderBrowserModal
         isOpen={isBrowserOpen}
         onClose={() => setIsBrowserOpen(false)}
-        onAdd={(item) => addWorkspaces([item])}
+        onAdd={(items) => addWorkspaces(items)}
       />
     </div>
   );
