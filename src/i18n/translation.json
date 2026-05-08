@@ -11284,6 +11284,15 @@
     "en": "Trigger",
     "ja": "トリガー"
   },
+  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_TITLE": {
+    "en": "Automations Backend Not Configured"
+  },
+  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_MESSAGE": {
+    "en": "The automations backend is not running or not reachable. Please ensure the automation service is started on your host."
+  },
+  "AUTOMATIONS$BACKEND_NOT_CONFIGURED_RETRY": {
+    "en": "Retry Connection"
+  },
   "SIDEBAR$CONVERSATIONS": {
     "en": "Conversations",
     "ja": "会話",

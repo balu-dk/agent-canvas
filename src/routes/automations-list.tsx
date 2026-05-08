@@ -6,11 +6,13 @@ import {
   useToggleAutomation,
   useDeleteAutomation,
 } from "#/hooks/query/use-automations";
+import { useAutomationHealth } from "#/hooks/query/use-automation-health";
 import { SearchInput } from "#/components/features/automations/search-input";
 import { AutomationGroup } from "#/components/features/automations/automation-group";
 import { AutomationCardSkeleton } from "#/components/features/automations/automation-card-skeleton";
 import { EmptyState } from "#/components/features/automations/empty-state";
 import { ErrorState } from "#/components/features/automations/error-state";
+import { BackendNotConfigured } from "#/components/features/automations/backend-not-configured";
 import { DeleteConfirmationModal } from "#/components/features/automations/delete-confirmation-modal";
 import { CreateInstructions } from "#/components/features/automations/create-instructions";
 
@@ -24,6 +26,14 @@ export default function AutomationsList() {
     id: string;
     name: string;
   } | null>(null);
+
+  const {
+    data: healthData,
+    isLoading: isHealthLoading,
+    refetch: refetchHealth,
+  } = useAutomationHealth();
+
+  const isBackendHealthy = healthData?.status === "ok";
 
   const { data, isLoading, isError, refetch } = useAutomations(limit, 0);
   const toggleMutation = useToggleAutomation();
@@ -67,6 +77,44 @@ export default function AutomationsList() {
   };
 
   const hasMore = data ? data.total > data.automations.length : false;
+
+  // Show loading state while checking health
+  if (isHealthLoading) {
+    return (
+      <div className="min-h-full bg-surface">
+        <div className="p-6 max-w-4xl mx-auto">
+          <h1 className="text-xl font-semibold text-content">
+            {t(I18nKey.AUTOMATIONS$TITLE)}
+          </h1>
+          <p className="mt-1 text-sm text-content-muted">
+            {t(I18nKey.AUTOMATIONS$SUBTITLE)}
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <AutomationCardSkeleton key={`skeleton-${String(i)}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show backend not configured state if health check failed
+  if (!isBackendHealthy) {
+    return (
+      <div className="min-h-full bg-surface">
+        <div className="p-6 max-w-4xl mx-auto">
+          <h1 className="text-xl font-semibold text-content">
+            {t(I18nKey.AUTOMATIONS$TITLE)}
+          </h1>
+          <p className="mt-1 text-sm text-content-muted">
+            {t(I18nKey.AUTOMATIONS$SUBTITLE)}
+          </p>
+          <BackendNotConfigured onRetry={refetchHealth} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-surface">

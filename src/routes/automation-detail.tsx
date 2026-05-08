@@ -6,6 +6,7 @@ import {
   useToggleAutomation,
   useDeleteAutomation,
 } from "#/hooks/query/use-automations";
+import { useAutomationHealth } from "#/hooks/query/use-automation-health";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useNavigation } from "#/context/navigation-context";
 import { BackLink } from "#/components/features/automations/detail/back-link";
@@ -18,12 +19,21 @@ import { ActivityLogSection } from "#/components/features/automations/detail/act
 import { DetailSkeleton } from "#/components/features/automations/detail/detail-skeleton";
 import { NotFoundState } from "#/components/features/automations/detail/not-found-state";
 import { ErrorState } from "#/components/features/automations/error-state";
+import { BackendNotConfigured } from "#/components/features/automations/backend-not-configured";
 import { DeleteConfirmationModal } from "#/components/features/automations/delete-confirmation-modal";
 
 export default function AutomationDetail() {
   const { automationId } = useParams();
   const { navigate } = useNavigation();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const {
+    data: healthData,
+    isLoading: isHealthLoading,
+    refetch: refetchHealth,
+  } = useAutomationHealth();
+
+  const isBackendHealthy = healthData?.status === "ok";
 
   // The automationId in the URL belongs to whichever backend was active
   // when the page first mounted. If the user switches backends, the id
@@ -47,6 +57,28 @@ export default function AutomationDetail() {
 
   const is404 =
     isError && isAxiosError(error) && error.response?.status === 404;
+
+  // Show loading state while checking health
+  if (isHealthLoading) {
+    return (
+      <div className="min-h-full bg-surface">
+        <div className="p-6 max-w-4xl mx-auto">
+          <DetailSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+  // Show backend not configured state if health check failed
+  if (!isBackendHealthy) {
+    return (
+      <div className="min-h-full bg-surface">
+        <div className="p-6 max-w-4xl mx-auto">
+          <BackendNotConfigured onRetry={refetchHealth} />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
