@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { createRoutesStub } from "react-router";
 import React from "react";
@@ -89,6 +89,10 @@ describe("ConversationPanel", () => {
       items: [...mockConversations],
       next_page_id: null,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("should render the conversations", async () => {
@@ -274,6 +278,78 @@ describe("ConversationPanel", () => {
     const newCards = await screen.findAllByTestId("conversation-card");
     expect(newCards).toHaveLength(3);
   });
+
+  it("keeps invalid timestamps recent and only shows load more after expanding older conversations", async () => {
+    const now = Date.now();
+    const minutesAgo = (minutes: number) =>
+      new Date(now - minutes * 60 * 1000).toISOString();
+
+    const user = userEvent.setup();
+    const searchConversationsSpy = vi.spyOn(
+      AgentServerConversationService,
+      "searchConversations",
+    );
+    searchConversationsSpy.mockReset();
+    searchConversationsSpy
+      .mockResolvedValueOnce({
+        items: [
+          createMockConversation({
+            id: "recent",
+            title: "Recent Conversation",
+            updated_at: minutesAgo(59),
+          }),
+          createMockConversation({
+            id: "invalid",
+            title: "Invalid Timestamp",
+            updated_at: "invalid-date",
+          }),
+          createMockConversation({
+            id: "missing",
+            title: "Missing Timestamp",
+            updated_at: undefined as unknown as string,
+          }),
+          createMockConversation({
+            id: "older",
+            title: "Older Conversation",
+            updated_at: minutesAgo(61),
+          }),
+        ],
+        next_page_id: "page-2",
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createMockConversation({
+            id: "paged",
+            title: "Paged Conversation",
+            updated_at: minutesAgo(30),
+          }),
+        ],
+        next_page_id: null,
+      });
+
+    renderConversationPanel();
+
+    expect(await screen.findByText("Recent Conversation")).toBeInTheDocument();
+    expect(screen.getByText("Invalid Timestamp")).toBeInTheDocument();
+    expect(screen.getByText("Missing Timestamp")).toBeInTheDocument();
+    expect(screen.queryByText("Older Conversation")).not.toBeInTheDocument();
+    expect(screen.getByTestId("older-conversations-summary")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("load-more-conversations"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("toggle-older-conversations"));
+
+    expect(await screen.findByText("Older Conversation")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("load-more-conversations"));
+
+    await waitFor(() => {
+      expect(searchConversationsSpy).toHaveBeenCalledWith(20, "page-2");
+    });
+    expect(await screen.findByText("Paged Conversation")).toBeInTheDocument();
+  });
+
 
   it("should cancel stopping a conversation", async () => {
     const user = userEvent.setup();

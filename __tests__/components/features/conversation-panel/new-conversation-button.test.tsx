@@ -172,4 +172,29 @@ describe("NewConversationButton", () => {
     await user.click(document.body);
     expect(screen.getByTestId("new-conversation-popover")).toBeInTheDocument();
   });
+
+  it("keeps the popover open when conversation creation fails", async () => {
+    const navigate = vi.fn();
+    const createSpy = vi
+      .spyOn(AgentServerConversationService, "createConversation")
+      .mockRejectedValue(new Error("create failed"));
+
+    const user = userEvent.setup();
+    renderWithProviders(<NewConversationButton />, {
+      navigation: { navigate, currentPath: "/conversations" },
+    });
+
+    await user.click(screen.getByTestId("new-conversation-button"));
+    await user.click(screen.getByTestId("launch-no-workspace"));
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("launch-no-workspace")).not.toBeDisabled();
+    });
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("new-conversation-popover")).toBeInTheDocument();
+  });
 });

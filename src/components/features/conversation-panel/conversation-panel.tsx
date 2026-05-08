@@ -30,6 +30,9 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const partitionByCutoff = <T extends { updated_at: string }>(
   items: readonly T[],
 ): { recent: T[]; older: T[] } => {
+  // The cutoff is intentionally relative to "now" each time the list is
+  // recomputed, so conversations naturally age into the older bucket as the
+  // conversations query refreshes.
   const cutoff = Date.now() - ONE_HOUR_MS;
   const recent: T[] = [];
   const older: T[] = [];
@@ -110,30 +113,33 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
   const olderHidden = olderConversations.length > 0 && !showOlderConversations;
   const showLoadMore = !!hasNextPage && !olderHidden;
 
-  const handleDeleteProject = (conversationId: string, title: string) => {
-    setConfirmDeleteModalVisible(true);
-    setSelectedConversationId(conversationId);
-    setSelectedConversationTitle(title);
-  };
+  const handleDeleteProject = React.useCallback(
+    (conversationId: string, title: string) => {
+      setConfirmDeleteModalVisible(true);
+      setSelectedConversationId(conversationId);
+      setSelectedConversationTitle(title);
+    },
+    [],
+  );
 
-  const handleStopConversation = (conversationId: string) => {
+  const handleStopConversation = React.useCallback((conversationId: string) => {
     setConfirmStopModalVisible(true);
     setSelectedConversationId(conversationId);
-  };
+  }, []);
 
-  const handleConversationTitleChange = async (
-    conversationId: string,
-    newTitle: string,
-  ) => {
-    updateConversation(
-      { conversationId, newTitle },
-      {
-        onSuccess: () => {
-          displaySuccessToast(t(I18nKey.CONVERSATION$TITLE_UPDATED));
+  const handleConversationTitleChange = React.useCallback(
+    (conversationId: string, newTitle: string) => {
+      updateConversation(
+        { conversationId, newTitle },
+        {
+          onSuccess: () => {
+            displaySuccessToast(t(I18nKey.CONVERSATION$TITLE_UPDATED));
+          },
         },
-      },
-    );
-  };
+      );
+    },
+    [t, updateConversation],
+  );
 
   const handleConfirmDelete = () => {
     if (selectedConversationId) {
@@ -178,41 +184,49 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
     }
   };
 
-  const renderConversationCard = (
-    conversation: (typeof conversations)[number],
-  ) => (
-    <NavigationLink
-      key={conversation.id}
-      to={`/conversations/${conversation.id}`}
-      onClick={onClose}
-      className="block"
-    >
-      <ConversationCard
-        onDelete={() =>
-          handleDeleteProject(conversation.id, conversation.title ?? "")
-        }
-        onStop={() => handleStopConversation(conversation.id)}
-        onChangeTitle={(title) =>
-          handleConversationTitleChange(conversation.id, title)
-        }
-        title={conversation.title ?? ""}
-        selectedRepository={{
-          selected_repository: conversation.selected_repository,
-          selected_branch: conversation.selected_branch,
-          git_provider: conversation.git_provider as Provider,
-        }}
-        lastUpdatedAt={conversation.updated_at}
-        createdAt={conversation.created_at}
-        executionStatus={conversation.execution_status}
-        conversationId={conversation.id}
-        contextMenuOpen={openContextMenuId === conversation.id}
-        onContextMenuToggle={(isOpen) =>
-          setOpenContextMenuId(isOpen ? conversation.id : null)
-        }
-        isActive={conversation.id === currentConversationId}
-        workspaceWorkingDir={conversation.workspace?.working_dir}
-      />
-    </NavigationLink>
+  const renderConversationCard = React.useCallback(
+    (conversation: (typeof conversations)[number]) => (
+      <NavigationLink
+        key={conversation.id}
+        to={`/conversations/${conversation.id}`}
+        onClick={onClose}
+        className="block"
+      >
+        <ConversationCard
+          onDelete={() =>
+            handleDeleteProject(conversation.id, conversation.title ?? "")
+          }
+          onStop={() => handleStopConversation(conversation.id)}
+          onChangeTitle={(title) =>
+            handleConversationTitleChange(conversation.id, title)
+          }
+          title={conversation.title ?? ""}
+          selectedRepository={{
+            selected_repository: conversation.selected_repository,
+            selected_branch: conversation.selected_branch,
+            git_provider: conversation.git_provider as Provider,
+          }}
+          lastUpdatedAt={conversation.updated_at}
+          createdAt={conversation.created_at}
+          executionStatus={conversation.execution_status}
+          conversationId={conversation.id}
+          contextMenuOpen={openContextMenuId === conversation.id}
+          onContextMenuToggle={(isOpen) =>
+            setOpenContextMenuId(isOpen ? conversation.id : null)
+          }
+          isActive={conversation.id === currentConversationId}
+          workspaceWorkingDir={conversation.workspace?.working_dir}
+        />
+      </NavigationLink>
+    ),
+    [
+      currentConversationId,
+      handleConversationTitleChange,
+      handleDeleteProject,
+      handleStopConversation,
+      onClose,
+      openContextMenuId,
+    ],
   );
 
   // Standard layout: panel fills its slot in the sidebar; the inner scroll

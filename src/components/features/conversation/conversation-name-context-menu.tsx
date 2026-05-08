@@ -84,7 +84,7 @@ export function ConversationNameContextMenu({
     const updatePosition = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
-      // 4px gap roughly matching the previous `mt-2` spacing.
+      // 8px gap roughly matching the previous `mt-2` spacing.
       const gap = 8;
       const style: React.CSSProperties = {
         position: "fixed",

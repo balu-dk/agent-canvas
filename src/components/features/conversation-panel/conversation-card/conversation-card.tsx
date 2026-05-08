@@ -36,8 +36,6 @@ export function ConversationCard({
   showOptions,
   title,
   selectedRepository,
-  // lastUpdatedAt is kept in props for backward compatibility
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   lastUpdatedAt,
   createdAt,
   conversationId,

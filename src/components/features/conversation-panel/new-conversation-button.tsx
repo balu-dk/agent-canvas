@@ -116,7 +116,7 @@ export function NewConversationButton() {
             "flex flex-col",
           )}
         >
-          <ul className="flex flex-col max-h-[280px] overflow-y-auto">
+          <ul className="flex flex-col max-h-[40vh] sm:max-h-[280px] overflow-y-auto">
             <li>
               <button
                 type="button"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getPathBasename } from "#/utils/path-utils";
+import { getPathBasename, stripWorkspacePrefix } from "#/utils/path-utils";
 
 describe("getPathBasename", () => {
   it("returns an empty string for empty or whitespace-only input", () => {
@@ -30,5 +30,23 @@ describe("getPathBasename", () => {
   it("preserves relative basenames", () => {
     expect(getPathBasename("repo")).toBe("repo");
     expect(getPathBasename("./repo")).toBe("repo");
+  });
+});
+
+describe("stripWorkspacePrefix", () => {
+  it("removes the /workspace/<name>/ prefix when present", () => {
+    expect(stripWorkspacePrefix("/workspace/repo/src/file.py")).toBe(
+      "src/file.py",
+    );
+    expect(
+      stripWorkspacePrefix("/workspace/my-project/components/Button.tsx"),
+    ).toBe("components/Button.tsx");
+  });
+
+  it("leaves non-workspace or incomplete paths unchanged", () => {
+    expect(stripWorkspacePrefix("/workspace")).toBe("/workspace");
+    expect(stripWorkspacePrefix("/workspace/repo")).toBe("/workspace/repo");
+    expect(stripWorkspacePrefix("relative/path.ts")).toBe("relative/path.ts");
+    expect(stripWorkspacePrefix("")).toBe("");
   });
 });

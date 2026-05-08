@@ -27,7 +27,7 @@ export function ConfirmDeleteModal({
   const { t } = useTranslation("openhands");
 
   let confirmationMessage: React.ReactNode;
-  if (description !== undefined) {
+  if (description != null) {
     confirmationMessage = description;
   } else if (conversationTitle) {
     confirmationMessage = (
