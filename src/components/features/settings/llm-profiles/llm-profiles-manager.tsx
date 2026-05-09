@@ -4,13 +4,13 @@ import { BrandButton } from "#/components/features/settings/brand-button";
 import { RenameProfileModal } from "./rename-profile-modal";
 import { DeleteProfileModal } from "./delete-profile-modal";
 import { ProfilesBody } from "./profiles-body";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
 import { I18nKey } from "#/i18n/declaration";
 
 interface LlmProfilesManagerProps {
   onAddProfile?: () => void;
-  onEditProfile?: (profile: LlmProfileSummary) => void;
+  onEditProfile?: (profile: ProfileInfo) => void;
 }
 
 export function LlmProfilesManager({
@@ -20,13 +20,13 @@ export function LlmProfilesManager({
   const { t } = useTranslation("openhands");
   const { data, isLoading, error } = useLlmProfiles();
   const [profileToRename, setProfileToRename] =
-    useState<LlmProfileSummary | null>(null);
+    useState<ProfileInfo | null>(null);
   const [profileToDelete, setProfileToDelete] =
-    useState<LlmProfileSummary | null>(null);
+    useState<ProfileInfo | null>(null);
 
   const profiles = data?.profiles ?? [];
 
-  const handleEdit = (profile: LlmProfileSummary) => {
+  const handleEdit = (profile: ProfileInfo) => {
     onEditProfile?.(profile);
   };
 

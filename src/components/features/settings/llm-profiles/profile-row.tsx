@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ProfileActionsMenu } from "./profile-actions-menu";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
 import ThreeDotsVerticalIcon from "#/icons/three-dots-vertical.svg?react";
 
 interface ProfileRowProps {
-  profile: LlmProfileSummary;
-  onEdit: (profile: LlmProfileSummary) => void;
-  onRename: (profile: LlmProfileSummary) => void;
-  onDelete: (profile: LlmProfileSummary) => void;
+  profile: ProfileInfo;
+  onEdit: (profile: ProfileInfo) => void;
+  onRename: (profile: ProfileInfo) => void;
+  onDelete: (profile: ProfileInfo) => void;
 }
 
 export function ProfileRow({

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfilesBody } from "#/components/features/settings/llm-profiles/profiles-body";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -20,7 +20,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-const mockProfiles: LlmProfileSummary[] = [
+const mockProfiles: ProfileInfo[] = [
   {
     name: "gpt-4-profile",
     model: "openai/gpt-4",

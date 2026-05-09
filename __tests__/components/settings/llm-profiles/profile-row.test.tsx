@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { ProfileRow } from "#/components/features/settings/llm-profiles/profile-row";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -19,7 +19,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-const mockProfile: LlmProfileSummary = {
+const mockProfile: ProfileInfo = {
   name: "gpt-4-profile",
   model: "openai/gpt-4",
   base_url: null,
@@ -54,7 +54,7 @@ describe("ProfileRow", () => {
   });
 
   it("does not display model when null", () => {
-    const profileWithoutModel: LlmProfileSummary = {
+    const profileWithoutModel: ProfileInfo = {
       ...mockProfile,
       model: null,
     };
@@ -86,7 +86,7 @@ describe("ProfileRow", () => {
   });
 
   it("does not show API key badge when api_key_set is false", () => {
-    const profileWithoutApiKey: LlmProfileSummary = {
+    const profileWithoutApiKey: ProfileInfo = {
       ...mockProfile,
       api_key_set: false,
     };

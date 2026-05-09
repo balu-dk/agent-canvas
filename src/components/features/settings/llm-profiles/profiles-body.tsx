@@ -1,16 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ProfileRow } from "./profile-row";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
 
 interface ProfilesBodyProps {
   isLoading: boolean;
   loadError: Error | null;
-  profiles: LlmProfileSummary[];
-  onEdit: (profile: LlmProfileSummary) => void;
-  onRename: (profile: LlmProfileSummary) => void;
-  onDelete: (profile: LlmProfileSummary) => void;
+  profiles: ProfileInfo[];
+  onEdit: (profile: ProfileInfo) => void;
+  onRename: (profile: ProfileInfo) => void;
+  onDelete: (profile: ProfileInfo) => void;
 }
 
 export function ProfilesBody({

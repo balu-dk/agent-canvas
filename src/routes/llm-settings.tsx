@@ -22,7 +22,7 @@ import { DEFAULT_SETTINGS } from "#/services/settings";
 import { useSaveLlmProfile } from "#/hooks/mutation/use-save-llm-profile";
 import { useRenameLlmProfile } from "#/hooks/mutation/use-rename-llm-profile";
 import ProfilesService, {
-  type LlmProfileSummary,
+  type ProfileInfo,
 } from "#/api/profiles-service/profiles-service.api";
 import {
   deriveProfileNameFromModel,
@@ -421,7 +421,7 @@ export function LlmSettingsScreen({
   }, []);
 
   // Handler for "Edit Profile" menu action
-  const handleEditProfile = React.useCallback((profile: LlmProfileSummary) => {
+  const handleEditProfile = React.useCallback((profile: ProfileInfo) => {
     setProfileName(profile.name);
     setOriginalProfileName(profile.name);
     setEditMode("edit");

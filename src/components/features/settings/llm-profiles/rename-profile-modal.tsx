@@ -4,14 +4,14 @@ import { BrandButton } from "#/components/features/settings/brand-button";
 import { ProfileNameInput } from "./profile-name-input";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ApiKeyModalBase } from "#/components/features/settings/api-key-modal-base";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { useRenameLlmProfile } from "#/hooks/mutation/use-rename-llm-profile";
 import { displayErrorToast, displaySuccessToast } from "#/utils/custom-toast-handlers";
 import { I18nKey } from "#/i18n/declaration";
 import { PROFILE_NAME_PATTERN } from "#/utils/derive-profile-name";
 
 interface RenameProfileModalProps {
-  profile: LlmProfileSummary | null;
+  profile: ProfileInfo | null;
   onClose: () => void;
 }
 

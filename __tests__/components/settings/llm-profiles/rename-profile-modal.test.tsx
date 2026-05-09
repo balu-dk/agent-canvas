@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RenameProfileModal } from "#/components/features/settings/llm-profiles/rename-profile-modal";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import ProfilesService from "#/api/profiles-service/profiles-service.api";
 
 vi.mock("react-i18next", () => ({
@@ -35,7 +35,7 @@ vi.mock("#/utils/custom-toast-handlers", () => ({
   displayErrorToast: vi.fn(),
 }));
 
-const mockProfile: LlmProfileSummary = {
+const mockProfile: ProfileInfo = {
   name: "old-profile-name",
   model: "openai/gpt-4",
   base_url: null,
@@ -45,7 +45,7 @@ const mockProfile: LlmProfileSummary = {
 describe("RenameProfileModal", () => {
   let queryClient: QueryClient;
 
-  const renderModal = (profile: LlmProfileSummary | null, onClose = vi.fn()) => {
+  const renderModal = (profile: ProfileInfo | null, onClose = vi.fn()) => {
     return render(
       <QueryClientProvider client={queryClient}>
         <RenameProfileModal profile={profile} onClose={onClose} />
@@ -174,7 +174,7 @@ describe("RenameProfileModal", () => {
       "old-profile-name",
     );
 
-    const newProfile: LlmProfileSummary = {
+    const newProfile: ProfileInfo = {
       ...mockProfile,
       name: "different-profile",
     };

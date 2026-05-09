@@ -16,10 +16,9 @@ import {
   type GetProfileOptions,
 } from "../typescript-client";
 
-// Re-export SDK types for backward compatibility with existing consumers.
-// LlmProfileSummary is an alias for SDK's ProfileInfo to match prior naming.
-export type LlmProfileSummary = ProfileInfo;
+// Re-export SDK types for consumers
 export type {
+  ProfileInfo,
   ProfileListResponse,
   ProfileDetailResponse,
   ProfileMutationResponse,

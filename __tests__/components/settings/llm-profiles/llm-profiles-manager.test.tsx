@@ -5,7 +5,7 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LlmProfilesManager } from "#/components/features/settings/llm-profiles/llm-profiles-manager";
 import ProfilesService, {
-  LlmProfileSummary,
+  ProfileInfo,
 } from "#/api/profiles-service/profiles-service.api";
 
 vi.mock("react-i18next", () => ({
@@ -40,7 +40,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("#/api/profiles-service/profiles-service.api");
 vi.mock("#/utils/custom-toast-handlers");
 
-const mockProfiles: LlmProfileSummary[] = [
+const mockProfiles: ProfileInfo[] = [
   {
     name: "gpt-4-profile",
     model: "openai/gpt-4",
@@ -60,7 +60,7 @@ describe("LlmProfilesManager", () => {
 
   const renderManager = (props: {
     onAddProfile?: () => void;
-    onEditProfile?: (profile: LlmProfileSummary) => void;
+    onEditProfile?: (profile: ProfileInfo) => void;
   } = {}) => {
     return render(
       <QueryClientProvider client={queryClient}>

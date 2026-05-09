@@ -2,13 +2,13 @@ import { useTranslation } from "react-i18next";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ApiKeyModalBase } from "#/components/features/settings/api-key-modal-base";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { useDeleteLlmProfile } from "#/hooks/mutation/use-delete-llm-profile";
 import { displayErrorToast, displaySuccessToast } from "#/utils/custom-toast-handlers";
 import { I18nKey } from "#/i18n/declaration";
 
 interface DeleteProfileModalProps {
-  profile: LlmProfileSummary | null;
+  profile: ProfileInfo | null;
   onClose: () => void;
 }
 

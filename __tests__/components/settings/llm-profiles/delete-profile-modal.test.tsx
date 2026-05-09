@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DeleteProfileModal } from "#/components/features/settings/llm-profiles/delete-profile-modal";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import ProfilesService from "#/api/profiles-service/profiles-service.api";
 import * as toastHandlers from "#/utils/custom-toast-handlers";
 
@@ -30,7 +30,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("#/api/profiles-service/profiles-service.api");
 vi.mock("#/utils/custom-toast-handlers");
 
-const mockProfile: LlmProfileSummary = {
+const mockProfile: ProfileInfo = {
   name: "profile-to-delete",
   model: "openai/gpt-4",
   base_url: null,
@@ -41,7 +41,7 @@ describe("DeleteProfileModal", () => {
   let queryClient: QueryClient;
 
   const renderModal = (
-    profile: LlmProfileSummary | null,
+    profile: ProfileInfo | null,
     onClose = vi.fn(),
   ) => {
     return render(

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
 import ThreeDotsVerticalIcon from "#/icons/three-dots-vertical.svg?react";
 import { ProfileListActionsMenu } from "./profile-list-actions-menu";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 
 interface ProfileListRowProps {
-  profile: LlmProfileSummary;
+  profile: ProfileInfo;
   isActive: boolean;
   isActivating: boolean;
   onActivate: () => void;

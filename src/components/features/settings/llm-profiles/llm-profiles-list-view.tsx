@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { RenameProfileModal } from "./rename-profile-modal";
 import { DeleteProfileModal } from "./delete-profile-modal";
-import { LlmProfileSummary } from "#/api/profiles-service/profiles-service.api";
+import { ProfileInfo } from "#/api/profiles-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
@@ -16,7 +16,7 @@ import {
 
 interface LlmProfilesListViewProps {
   onAddProfile: () => void;
-  onEditProfile: (profile: LlmProfileSummary) => void;
+  onEditProfile: (profile: ProfileInfo) => void;
 }
 
 export function LlmProfilesListView({
@@ -27,14 +27,14 @@ export function LlmProfilesListView({
   const { data, isLoading, error } = useLlmProfiles();
   const activateProfile = useActivateLlmProfile();
   const [profileToRename, setProfileToRename] =
-    useState<LlmProfileSummary | null>(null);
+    useState<ProfileInfo | null>(null);
   const [profileToDelete, setProfileToDelete] =
-    useState<LlmProfileSummary | null>(null);
+    useState<ProfileInfo | null>(null);
 
   const profiles = data?.profiles ?? [];
   const activeProfile = data?.active_profile ?? null;
 
-  const handleActivate = async (profile: LlmProfileSummary) => {
+  const handleActivate = async (profile: ProfileInfo) => {
     try {
       await activateProfile.mutateAsync(profile.name);
       displaySuccessToast(
@@ -45,7 +45,7 @@ export function LlmProfilesListView({
     }
   };
 
-  const handleEdit = (profile: LlmProfileSummary) => {
+  const handleEdit = (profile: ProfileInfo) => {
     onEditProfile(profile);
   };
 
