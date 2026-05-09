@@ -81,8 +81,10 @@ export function Sidebar() {
           "bg-base flex flex-col gap-3",
           // Mobile: top bar; Desktop: vertical column
           "h-[54px] md:h-full md:w-[300px] md:min-w-[300px]",
-          "px-3 py-2 md:px-3 md:pt-4 md:pb-3",
+          "px-3 py-2 md:px-3 md:pt-4",
           "flex-row md:flex-col",
+          (currentPath === "/" || currentPath.startsWith("/automations")) &&
+            "md:pt-6.5 md:pb-3",
         )}
       >
         <div className="flex items-center md:px-2 md:py-1">

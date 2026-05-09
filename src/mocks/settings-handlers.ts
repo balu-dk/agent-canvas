@@ -44,11 +44,7 @@ export const createMockWebClientConfig = (
   posthog_client_key: "test-posthog-key",
   feature_flags: {
     hide_llm_settings: false,
-    enable_jira: false,
-    enable_jira_dc: false,
-    enable_linear: false,
     hide_users_page: false,
-    hide_integrations_page: false,
     ...overrides.feature_flags,
   },
   providers_configured: [],
@@ -343,6 +339,12 @@ export const SETTINGS_HANDLERS = [
       uptime: 0,
       idle_time: 0,
       version: "1.18.1",
+      usable_tools: [
+        "terminal",
+        "file_editor",
+        "task_tracker",
+        "browser_tool_set",
+      ],
       agents: ["CodeActAgent"],
       default_agent: "CodeActAgent",
       models: MOCK_MODELS,
@@ -446,11 +448,7 @@ export const SETTINGS_HANDLERS = [
       posthog_client_key: "fake-posthog-client-key",
       feature_flags: {
         hide_llm_settings: false,
-        enable_jira: false,
-        enable_jira_dc: false,
-        enable_linear: false,
         hide_users_page: false,
-        hide_integrations_page: false,
       },
       providers_configured: [],
       maintenance_start_time: null,
@@ -498,7 +496,9 @@ export const SETTINGS_HANDLERS = [
     const exposeSecrets = request.headers.get("X-Expose-Secrets");
 
     // Build agent_settings, handling secrets based on header
-    const agentSettings = structuredClone(settings.agent_settings ?? {}) as Record<string, unknown>;
+    const agentSettings = structuredClone(
+      settings.agent_settings ?? {},
+    ) as Record<string, unknown>;
     const llm = agentSettings.llm as Record<string, unknown> | undefined;
     if (llm?.api_key) {
       if (exposeSecrets === "encrypted") {
@@ -512,8 +512,16 @@ export const SETTINGS_HANDLERS = [
       }
     }
 
-    const llmApiKeySet = !!settings.llm_api_key_set || !!(settings.agent_settings as Record<string, unknown> | undefined)?.llm &&
-      !!(((settings.agent_settings as Record<string, unknown>).llm as Record<string, unknown>)?.api_key);
+    const llmApiKeySet =
+      !!settings.llm_api_key_set ||
+      (!!(settings.agent_settings as Record<string, unknown> | undefined)
+        ?.llm &&
+        !!(
+          (settings.agent_settings as Record<string, unknown>).llm as Record<
+            string,
+            unknown
+          >
+        )?.api_key);
 
     return HttpResponse.json({
       agent_settings: agentSettings,
@@ -536,12 +544,17 @@ export const SETTINGS_HANDLERS = [
 
     if (!body.agent_settings_diff && !body.conversation_settings_diff) {
       return HttpResponse.json(
-        { error: "At least one of agent_settings_diff or conversation_settings_diff must be provided" },
-        { status: 400 }
+        {
+          error:
+            "At least one of agent_settings_diff or conversation_settings_diff must be provided",
+        },
+        { status: 400 },
       );
     }
 
-    const current = MOCK_USER_PREFERENCES.settings || structuredClone(MOCK_DEFAULT_USER_SETTINGS);
+    const current =
+      MOCK_USER_PREFERENCES.settings ||
+      structuredClone(MOCK_DEFAULT_USER_SETTINGS);
     const nextSettings: Settings = { ...current };
 
     if (body.agent_settings_diff) {
@@ -553,7 +566,11 @@ export const SETTINGS_HANDLERS = [
 
       // Sync llm_api_key_set
       const llm = merged.llm as Record<string, unknown> | undefined;
-      if (llm?.api_key && typeof llm.api_key === "string" && llm.api_key.trim().length > 0) {
+      if (
+        llm?.api_key &&
+        typeof llm.api_key === "string" &&
+        llm.api_key.trim().length > 0
+      ) {
         nextSettings.llm_api_key_set = true;
       }
     }

@@ -45,11 +45,7 @@ describe("settings route", () => {
     expect(
       getFirstAvailablePath({
         hide_llm_settings: true,
-        enable_jira: false,
-        enable_jira_dc: false,
-        enable_linear: false,
         hide_users_page: true,
-        hide_integrations_page: false,
       }),
     ).toBe("/settings/mcp");
   });
@@ -59,11 +55,7 @@ describe("settings route", () => {
       posthog_client_key: null,
       feature_flags: {
         hide_llm_settings: true,
-        enable_jira: false,
-        enable_jira_dc: false,
-        enable_linear: false,
         hide_users_page: true,
-        hide_integrations_page: false,
       },
       providers_configured: [],
       maintenance_start_time: null,
@@ -87,8 +79,6 @@ describe("settings route", () => {
     setRegisteredBackends([cloudBackend]);
     setActiveSelection({ backendId: cloudBackend.id });
 
-    // Integrations is now a top-level route that owns its own cloud guard,
-    // not a sub-page of /settings.
     const { clientLoader: integrationsLoader } = await import(
       "#/routes/git-settings"
     );
@@ -97,6 +87,30 @@ describe("settings route", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/conversations");
+  });
+
+  it("does not redirect unrelated removed nested paths through the settings loader", async () => {
+    vi.spyOn(OptionService, "getConfig").mockResolvedValue({
+      posthog_client_key: null,
+      feature_flags: {
+        hide_llm_settings: false,
+        hide_users_page: true,
+      },
+      providers_configured: [],
+      maintenance_start_time: null,
+      recaptcha_site_key: null,
+      faulty_models: [],
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    const result = await clientLoader({
+      request: new Request("http://localhost/settings/integrations"),
+      params: {},
+      context: {},
+    } as never);
+
+    expect(result).toBeNull();
   });
 
   it("renders the current OSS section title", () => {

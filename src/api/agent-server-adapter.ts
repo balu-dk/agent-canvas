@@ -1,7 +1,11 @@
 import { DEFAULT_SETTINGS } from "#/services/settings";
-import { Settings, SettingsValue } from "#/types/settings";
 import { ExecutionStatus } from "#/types/agent-server/core";
-import { getAgentServerWorkingDir } from "./agent-server-config";
+import { Settings, SettingsValue } from "#/types/settings";
+import { isAgentServerToolAvailable } from "./agent-server-compatibility";
+import {
+  getAgentServerWorkingDir,
+  shouldLoadPublicSkills,
+} from "./agent-server-config";
 import { getEffectiveLocalBackend } from "./backend-registry/active-store";
 import {
   GetHooksResponse,
@@ -190,7 +194,10 @@ function getConversationSecurityAnalyzer(conversationSettings: SettingsRecord) {
 
 function getAgentTools() {
   const tools = DEFAULT_TOOL_NAMES.map((name) => ({ name, params: {} }));
-  if (browserToolsEnabled()) {
+  if (
+    browserToolsEnabled() &&
+    isAgentServerToolAvailable(BROWSER_TOOL_SET_NAME)
+  ) {
     tools.push({ name: BROWSER_TOOL_SET_NAME, params: {} });
   }
   return tools;
@@ -287,6 +294,10 @@ function createAgentFromSettings(agentSettings: SettingsRecord) {
   return {
     kind: "Agent",
     ...agentSettings,
+    agent_context: {
+      load_public_skills: shouldLoadPublicSkills(),
+      load_user_skills: true,
+    },
   };
 }
 
@@ -529,7 +540,7 @@ export async function loadSkillsForConversation(
     conversation?.workspace?.working_dir ?? getAgentServerWorkingDir();
 
   const response = await createSkillsClient().getSkills({
-    load_public: true,
+    load_public: shouldLoadPublicSkills(),
     load_user: true,
     load_project: true,
     load_org: false,

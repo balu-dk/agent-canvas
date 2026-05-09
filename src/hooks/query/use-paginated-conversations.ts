@@ -30,8 +30,7 @@ export const usePaginatedConversations = (limit: number = 20) => {
       return result;
     },
     enabled: !!userIsAuthenticated,
-    getNextPageParam: (lastPage: AppConversationPage) =>
-      lastPage.next_page_id,
+    getNextPageParam: (lastPage: AppConversationPage) => lastPage.next_page_id,
     initialPageParam: undefined as string | undefined,
     // Poll every 10s so titles, execution status, and timestamps stay fresh
     // without requiring the user to refresh. React Query refetches in the

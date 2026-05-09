@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -24,10 +25,24 @@ const LOCAL_AGENT_SERVER_SUBDIRS = [
   "openhands-workspace",
 ];
 // Default secret key for local development (DO NOT use in production)
+// This is kept static because it's used for encrypting/decrypting persisted settings
 const DEFAULT_SECRET_KEY = "openhands-dev-secret-key-change-in-prod";
-// Default to main branch until settings persistence APIs are in a released version.
-// TODO: Once SDK PR #3060 is released, change this to null and let it use PyPI.
-const DEFAULT_GIT_REF = "main";
+// Default agent-server version (released PyPI version)
+// Set OH_AGENT_SERVER_GIT_REF to use a git branch/SHA instead
+const DEFAULT_AGENT_SERVER_VERSION = "1.21.1";
+
+/**
+ * Generate a cryptographically secure random API key.
+ * Returns a 64-character hex string (256-bit).
+ */
+export function generateRandomApiKey() {
+  return randomBytes(32).toString("hex");
+}
+
+// Auto-generate a random session API key for this dev session.
+// This ensures the agent-server API is authenticated even in local dev.
+// Set SESSION_API_KEY env var to use a consistent key across restarts.
+const DEFAULT_SESSION_API_KEY = generateRandomApiKey();
 
 function isEnoentError(error) {
   return Boolean(
@@ -71,10 +86,11 @@ export function formatMissingUvxGuidance(cwd = process.cwd()) {
  *   edits are picked up without a manual reinstall. The agent-server itself
  *   is rebuilt from local source on each invocation (--reinstall).
  * - OH_AGENT_SERVER_GIT_REF: Git commit SHA or branch name
- * - OH_AGENT_SERVER_VERSION: Specific PyPI version (e.g., "1.18.0")
+ * - OH_AGENT_SERVER_VERSION: Specific PyPI version (e.g., "1.21.1")
  *
- * If none are set, defaults to main branch until settings persistence APIs
- * are released. Set OH_AGENT_SERVER_VERSION to use a released version.
+ * If none are set, defaults to the released version specified by
+ * DEFAULT_AGENT_SERVER_VERSION. Set OH_AGENT_SERVER_GIT_REF to use a
+ * git branch or commit instead.
  *
  * @param {Record<string, string | undefined>} env
  * @returns {{ command: string, args: string[], source: string }}
@@ -124,42 +140,30 @@ export function buildAgentServerCommand(env = process.env) {
   } else if (version) {
     // Use specific PyPI version: uvx --from openhands-agent-server==version agent-server
     // The package name differs from the executable name, so we need --from syntax
+    // Pin all SDK packages to the same version for consistency
     uvxArgs.push(
       "--from",
       `${DEFAULT_AGENT_SERVER_PACKAGE}==${version}`,
       "--with",
-      "openhands-tools",
+      `openhands-tools==${version}`,
       "--with",
-      "openhands-workspace",
+      `openhands-workspace==${version}`,
       "agent-server",
     );
     source = `PyPI (${version})`;
-  } else if (DEFAULT_GIT_REF) {
-    // Default to git ref when no version specified (until APIs are released)
-    const baseGitUrl = `git+${AGENT_SERVER_GIT_REPO}@${DEFAULT_GIT_REF}`;
-    uvxArgs.push(
-      "--from",
-      `${baseGitUrl}#subdirectory=openhands-agent-server`,
-      "--with",
-      `${baseGitUrl}#subdirectory=openhands-tools`,
-      "--with",
-      `${baseGitUrl}#subdirectory=openhands-workspace`,
-      "agent-server",
-    );
-    source = `git (${DEFAULT_GIT_REF}, default)`;
   } else {
-    // Use latest released version: uvx --from openhands-agent-server agent-server
-    // The package name differs from the executable name, so we need --from syntax
+    // Default to released PyPI version
+    // Pin all SDK packages to the same version for consistency
     uvxArgs.push(
       "--from",
-      DEFAULT_AGENT_SERVER_PACKAGE,
+      `${DEFAULT_AGENT_SERVER_PACKAGE}==${DEFAULT_AGENT_SERVER_VERSION}`,
       "--with",
-      "openhands-tools",
+      `openhands-tools==${DEFAULT_AGENT_SERVER_VERSION}`,
       "--with",
-      "openhands-workspace",
+      `openhands-workspace==${DEFAULT_AGENT_SERVER_VERSION}`,
       "agent-server",
     );
-    source = "PyPI (latest)";
+    source = `PyPI (${DEFAULT_AGENT_SERVER_VERSION}, default)`;
   }
 
   return {
@@ -200,6 +204,16 @@ export function buildSafeDevConfig(cwd = process.cwd(), env = process.env) {
   const workspacesPath = path.join(stateDir, "workspaces");
   // Use provided secret key or default for local development
   const secretKey = env.OH_SECRET_KEY || DEFAULT_SECRET_KEY;
+  // Use provided session API key or auto-generated random key for this session
+  // Check multiple env vars that may be used:
+  // - SESSION_API_KEY: Common name
+  // - OH_SESSION_API_KEYS_0: Used by agent-server V1 config
+  // - VITE_SESSION_API_KEY: Used by frontend config
+  const sessionApiKey =
+    env.SESSION_API_KEY ||
+    env.OH_SESSION_API_KEYS_0 ||
+    env.VITE_SESSION_API_KEY ||
+    DEFAULT_SESSION_API_KEY;
 
   return {
     cwd,
@@ -214,6 +228,7 @@ export function buildSafeDevConfig(cwd = process.cwd(), env = process.env) {
     backendHost: `127.0.0.1:${backendPort}`,
     workingDir: env.VITE_WORKING_DIR || workspacesPath,
     secretKey,
+    sessionApiKey,
   };
 }
 
@@ -233,6 +248,8 @@ export function buildAgentServerEnv(config) {
     OH_BASH_EVENTS_DIR: config.bashEventsDir,
     OH_VSCODE_PORT: String(config.vscodePort),
     OH_SECRET_KEY: config.secretKey,
+    // Use OH_SESSION_API_KEYS_0 for agent-server V1 config format
+    OH_SESSION_API_KEYS_0: config.sessionApiKey,
   };
 }
 
@@ -343,6 +360,13 @@ async function main() {
     ? "custom (from OH_SECRET_KEY)"
     : "default (for local development)";
 
+  const sessionKeySource =
+    process.env.SESSION_API_KEY ||
+    process.env.OH_SESSION_API_KEYS_0 ||
+    process.env.VITE_SESSION_API_KEY
+      ? "custom (from env)"
+      : "auto-generated (random)";
+
   console.log("Starting isolated agent-server + frontend dev stack...");
   console.log(`- agent-server: ${agentServerCmd.source}`);
   console.log(`- backend: ${config.backendBaseUrl}`);
@@ -350,6 +374,7 @@ async function main() {
   console.log(`- working dir: ${config.workingDir}`);
   console.log(`- isolated state dir: ${config.stateDir}`);
   console.log(`- secret key: ${secretKeySource}`);
+  console.log(`- session API key: ${sessionKeySource}`);
   console.log("");
 
   const backend = spawnProcess(
@@ -420,6 +445,8 @@ async function main() {
       VITE_BACKEND_HOST: config.backendHost,
       VITE_BACKEND_BASE_URL: config.backendBaseUrl,
       VITE_WORKING_DIR: config.workingDir,
+      // Pass session API key so frontend can authenticate with agent-server
+      VITE_SESSION_API_KEY: config.sessionApiKey,
     },
   });
 

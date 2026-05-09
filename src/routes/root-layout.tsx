@@ -1,5 +1,10 @@
 import React from "react";
-import { useRouteError, isRouteErrorResponse, Outlet } from "react-router";
+import {
+  useRouteError,
+  isRouteErrorResponse,
+  Outlet,
+  useLocation,
+} from "react-router";
 import { useTranslation } from "react-i18next";
 import { I18nKey } from "#/i18n/declaration";
 import i18n from "#/i18n";
@@ -51,6 +56,7 @@ export function ErrorBoundary() {
 
 export default function MainApp() {
   const appTitle = useAppTitle();
+  const { pathname } = useLocation();
   const { data: settings } = useSettings();
   const { migrateUserConsent } = useMigrateUserConsent();
   const config = useConfig();
@@ -91,7 +97,11 @@ export default function MainApp() {
         data-testid="root-layout"
         className={cn(
           "h-screen lg:min-w-5xl flex flex-col md:flex-row bg-base overflow-hidden",
-          "p-0 md:pr-3",
+          pathname === "/" || pathname.startsWith("/automations")
+            ? "p-0"
+            : pathname.startsWith("/conversations")
+              ? "p-0 md:pr-3"
+              : "p-0 md:p-3 md:pl-0",
         )}
       >
         <title>{appTitle}</title>
