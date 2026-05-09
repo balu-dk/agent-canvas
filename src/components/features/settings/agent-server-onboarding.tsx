@@ -126,5 +126,3 @@ export function AgentServerConnectionForm({
     </form>
   );
 }
-
-
