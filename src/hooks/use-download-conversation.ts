@@ -1,7 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { usePostHog } from "posthog-js/react";
 import { useTranslation } from "react-i18next";
+import { getActiveBackend } from "#/api/backend-registry/active-store";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
+import ConversationService from "#/api/conversation-service/conversation-service.api";
+import { downloadTrajectory } from "#/utils/download-trajectory";
 import { downloadBlob } from "#/utils/utils";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { I18nKey } from "#/i18n/declaration";
@@ -14,9 +17,19 @@ export const useDownloadConversation = () => {
     mutationKey: ["conversations", "download"],
     mutationFn: async (conversationId: string) => {
       posthog.capture("download_trajectory_button_clicked");
-      const blob =
-        await AgentServerConversationService.downloadConversation(conversationId);
-      downloadBlob(blob, `conversation_${conversationId}.zip`);
+
+      if (getActiveBackend().backend.kind === "cloud") {
+        const blob =
+          await AgentServerConversationService.downloadConversation(
+            conversationId,
+          );
+        downloadBlob(blob, `conversation_${conversationId}.zip`);
+        return;
+      }
+
+      const { trajectory } =
+        await ConversationService.getTrajectory(conversationId);
+      await downloadTrajectory(conversationId, trajectory);
     },
     onError: () => {
       displayErrorToast(t(I18nKey.CONVERSATION$DOWNLOAD_ERROR));
