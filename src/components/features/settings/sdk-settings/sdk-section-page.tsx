@@ -123,6 +123,7 @@ export function SdkSectionPage({
   forceShowAdvancedView = false,
   allowAllView = true,
   testId = "sdk-section-settings-screen",
+  initialValuesOverride,
 }: {
   sectionKeys: string[];
   excludeKeys?: Set<string>;
@@ -147,6 +148,12 @@ export function SdkSectionPage({
   forceShowAdvancedView?: boolean;
   allowAllView?: boolean;
   testId?: string;
+  /**
+   * Override initial form values. When provided, these values are used
+   * instead of loading from settings. Pass an empty object `{}` for a
+   * blank form (e.g., when creating a new profile).
+   */
+  initialValuesOverride?: SettingsFormValues;
 }) {
   const { t } = useTranslation("openhands");
   const { mutate: saveSettings, isPending } = useSaveSettings(scope);
@@ -203,12 +210,16 @@ export function SdkSectionPage({
 
   const initialValues = React.useMemo(() => {
     if (!settings || !filteredSchema) return null;
+    // Use override if provided (e.g., empty object for "Add New Profile")
+    if (initialValuesOverride !== undefined) {
+      return initialValuesOverride;
+    }
     return buildInitialSettingsFormValues(
       settings,
       filteredSchema,
       settingsSource,
     );
-  }, [settings, filteredSchema, settingsSource]);
+  }, [settings, filteredSchema, settingsSource, initialValuesOverride]);
 
   const initialView = React.useMemo(() => {
     if (!settings || !filteredSchema) return null;
@@ -326,7 +337,11 @@ export function SdkSectionPage({
     );
   }
 
-  if (Object.keys(values).length === 0) return <LlmSettingsInputsSkeleton />;
+  // Show skeleton only when still loading initial values.
+  // If initialValuesOverride is provided (even if empty), we're ready to render.
+  const isValuesReady =
+    initialValuesOverride !== undefined || Object.keys(values).length > 0;
+  if (!isValuesReady) return <LlmSettingsInputsSkeleton />;
 
   return (
     <div data-testid={testId} className="h-full relative">

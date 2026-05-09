@@ -355,6 +355,10 @@ export function LlmSettingsScreen({
 
   // If we're in form mode, show the settings form
   if (editMode !== "none") {
+    // When adding a new profile, start with empty form values
+    // When editing an existing profile, load values from settings
+    const initialValuesOverride = editMode === "add" ? {} : undefined;
+
     return (
       <div data-testid="llm-settings-screen" className="flex flex-col gap-4">
         <div className="flex items-center justify-between mb-4">
@@ -384,6 +388,7 @@ export function LlmSettingsScreen({
           allowAllView
           onSaveSuccess={handleSaveSuccess}
           testId="llm-profile-form"
+          initialValuesOverride={initialValuesOverride}
         />
       </div>
     );
