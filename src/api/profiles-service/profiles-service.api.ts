@@ -1,96 +1,105 @@
-/**
- * ProfilesService provides a thin wrapper around the SDK's ProfilesClient,
- * creating a client per-call to pick up current backend configuration.
- *
- * Uses ProfilesClient from @openhands/typescript-client (PR #148).
- * All types are re-exported from the SDK for consumer convenience.
- */
-import {
-  createProfilesClient,
-  type ProfileInfo,
-  type ProfileListResponse,
-  type ProfileDetailResponse,
-  type ProfileMutationResponse,
-  type ActivateProfileResponse,
-  type SaveProfileRequest,
-  type ExposeSecretsMode,
-  type GetProfileOptions,
-} from "../typescript-client";
+import { openHands } from "../open-hands-axios";
 
-// Re-export SDK types for consumers
-export type {
-  ProfileInfo,
-  ProfileListResponse,
-  ProfileDetailResponse,
-  ProfileMutationResponse,
-  ActivateProfileResponse,
-  SaveProfileRequest,
-  ExposeSecretsMode,
-};
+export interface ProfileInfo {
+  name: string;
+  model: string | null;
+  base_url: string | null;
+  api_key_set: boolean;
+}
+
+export interface ProfileListResponse {
+  profiles: ProfileInfo[];
+  active_profile: string | null;
+}
+
+export interface ProfileDetailResponse {
+  name: string;
+  config: Record<string, unknown>;
+  api_key_set: boolean;
+}
+
+export interface ProfileMutationResponse {
+  name: string;
+  message: string;
+}
+
+export interface ActivateProfileResponse {
+  name: string;
+  message: string;
+  llm_applied: boolean;
+}
+
+export interface SaveProfileRequest {
+  llm: {
+    model: string;
+    base_url?: string | null;
+    api_key?: string | null;
+  } & Record<string, unknown>;
+  include_secrets?: boolean;
+}
+
+export type ExposeSecretsMode = "encrypted" | "plaintext";
+
+const profilePath = (name: string) =>
+  `/api/profiles/${encodeURIComponent(name)}`;
 
 class ProfilesService {
   static async listProfiles(): Promise<ProfileListResponse> {
-    const client = createProfilesClient();
-    try {
-      return await client.listProfiles();
-    } finally {
-      client.close();
-    }
+    const { data } = await openHands.get<ProfileListResponse>("/api/profiles");
+    return data;
   }
 
   static async getProfile(
     name: string,
     exposeSecrets?: ExposeSecretsMode,
   ): Promise<ProfileDetailResponse> {
-    const client = createProfilesClient();
-    try {
-      const options: GetProfileOptions = exposeSecrets ? { exposeSecrets } : {};
-      return await client.getProfile(name, options);
-    } finally {
-      client.close();
+    const headers: Record<string, string> = {};
+    if (exposeSecrets) {
+      headers["X-Expose-Secrets"] = exposeSecrets;
     }
+
+    const { data } = await openHands.get<ProfileDetailResponse>(
+      profilePath(name),
+      { headers },
+    );
+    return data;
   }
 
   static async saveProfile(
     name: string,
     request: SaveProfileRequest,
   ): Promise<ProfileMutationResponse> {
-    const client = createProfilesClient();
-    try {
-      return await client.saveProfile(name, request);
-    } finally {
-      client.close();
-    }
+    const { data } = await openHands.post<ProfileMutationResponse>(
+      profilePath(name),
+      request,
+    );
+    return data;
   }
 
   static async deleteProfile(name: string): Promise<ProfileMutationResponse> {
-    const client = createProfilesClient();
-    try {
-      return await client.deleteProfile(name);
-    } finally {
-      client.close();
-    }
+    const { data } = await openHands.delete<ProfileMutationResponse>(
+      profilePath(name),
+    );
+    return data;
   }
 
   static async renameProfile(
     name: string,
     newName: string,
   ): Promise<ProfileMutationResponse> {
-    const client = createProfilesClient();
-    try {
-      return await client.renameProfile(name, newName);
-    } finally {
-      client.close();
-    }
+    const { data } = await openHands.post<ProfileMutationResponse>(
+      `${profilePath(name)}/rename`,
+      { new_name: newName },
+    );
+    return data;
   }
 
   static async activateProfile(name: string): Promise<ActivateProfileResponse> {
-    const client = createProfilesClient();
-    try {
-      return await client.activateProfile(name);
-    } finally {
-      client.close();
-    }
+    const { data } = await openHands.post<ActivateProfileResponse>(
+      `${profilePath(name)}/activate`,
+      {},
+    );
+    return data;
   }
 }
 

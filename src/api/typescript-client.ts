@@ -1,6 +1,5 @@
 import {
   LLMMetadataClient,
-  ProfilesClient,
   ServerClient,
   SettingsClient,
   SkillsClient,
@@ -15,19 +14,6 @@ import { getBundledBackend } from "./backend-registry/bundled";
 import { getAgentServerWorkingDir } from "./agent-server-config";
 
 export type { ServerInfo } from "@openhands/typescript-client";
-
-// Re-export Profile types from the SDK for use in services and hooks
-export type {
-  ProfileInfo,
-  ProfileListResponse,
-  ProfileDetailResponse,
-  ProfileMutationResponse,
-  ActivateProfileResponse,
-  SaveProfileRequest,
-  ExposeSecretsMode,
-} from "@openhands/typescript-client";
-
-export type { GetProfileOptions } from "@openhands/typescript-client/clients";
 
 interface TypeScriptClientOverrides {
   host?: string;
@@ -119,13 +105,6 @@ export function createVSCodeClient(
 ): VSCodeClient {
   const { host, apiKey } = resolveClientOptions(overrides);
   return new VSCodeClient({ host, ...(apiKey ? { apiKey } : {}) });
-}
-
-export function createProfilesClient(
-  overrides?: TypeScriptClientOverrides,
-): ProfilesClient {
-  const { host, apiKey } = resolveClientOptions(overrides);
-  return new ProfilesClient({ host, ...(apiKey ? { apiKey } : {}) });
 }
 
 export function createHttpClient(
