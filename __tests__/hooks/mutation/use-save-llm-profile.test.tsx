@@ -86,7 +86,7 @@ describe("useSaveLlmProfile", () => {
     });
   });
 
-  it("invalidates LLM_PROFILES_QUERY_KEYS.all on success", async () => {
+  it("invalidates all relevant caches on success", async () => {
     vi.mocked(ProfilesService.saveProfile).mockResolvedValue({
       name: "test-profile",
       message: "Profile saved",
@@ -95,6 +95,7 @@ describe("useSaveLlmProfile", () => {
     // Pre-populate the profiles cache
     queryClient.setQueryData(LLM_PROFILES_QUERY_KEYS.all, { profiles: [] });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const invalidateCacheSpy = vi.spyOn(SettingsService, "invalidateCache");
 
     const { result } = renderHook(() => useSaveLlmProfile(), { wrapper });
 
@@ -105,28 +106,11 @@ describe("useSaveLlmProfile", () => {
       });
     });
 
+    // Verifies all three cache invalidations occur on success
+    expect(invalidateCacheSpy).toHaveBeenCalled();
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: LLM_PROFILES_QUERY_KEYS.all,
     });
-  });
-
-  it("invalidates settings queries on success", async () => {
-    vi.mocked(ProfilesService.saveProfile).mockResolvedValue({
-      name: "test-profile",
-      message: "Profile saved",
-    });
-
-    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useSaveLlmProfile(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        name: "test-profile",
-        request: { llm: { model: "openai/gpt-4" } },
-      });
-    });
-
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: SETTINGS_QUERY_KEYS.all,
     });
@@ -150,25 +134,5 @@ describe("useSaveLlmProfile", () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
     });
-  });
-
-  it("invalidates SettingsService cache on success", async () => {
-    vi.mocked(ProfilesService.saveProfile).mockResolvedValue({
-      name: "test-profile",
-      message: "Profile saved",
-    });
-
-    const invalidateCacheSpy = vi.spyOn(SettingsService, "invalidateCache");
-
-    const { result } = renderHook(() => useSaveLlmProfile(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        name: "test-profile",
-        request: { llm: { model: "openai/gpt-4" } },
-      });
-    });
-
-    expect(invalidateCacheSpy).toHaveBeenCalled();
   });
 });

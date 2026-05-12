@@ -4,6 +4,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { useActivateLlmProfile } from "#/hooks/mutation/use-activate-llm-profile";
 import ProfilesService from "#/api/profiles-service/profiles-service.api";
 import SettingsService from "#/api/settings-service/settings-service.api";
+import {
+  LLM_PROFILES_QUERY_KEYS,
+  SETTINGS_QUERY_KEYS,
+} from "#/hooks/query/query-keys";
 
 vi.mock("#/api/profiles-service/profiles-service.api", () => ({
   default: {
@@ -17,7 +21,7 @@ describe("useActivateLlmProfile", () => {
     SettingsService.invalidateCache();
   });
 
-  it("calls activateProfile and invalidates settings cache on success", async () => {
+  it("calls activateProfile and invalidates all relevant caches on success", async () => {
     const mockActivateProfile = vi.mocked(ProfilesService.activateProfile);
     mockActivateProfile.mockResolvedValue({
       name: "my-profile",
@@ -33,6 +37,8 @@ describe("useActivateLlmProfile", () => {
         mutations: { retry: false },
       },
     });
+
+    const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
 
     const { result } = renderHook(() => useActivateLlmProfile(), {
       wrapper: ({ children }) => (
@@ -53,11 +59,17 @@ describe("useActivateLlmProfile", () => {
     // Verify activateProfile was called with the correct name
     expect(mockActivateProfile).toHaveBeenCalledWith("my-profile");
 
-    // Verify SettingsService.invalidateCache was called
-    // This ensures getSettingsForConversation will fetch fresh settings
+    // Verify all cache invalidations occur on success
     expect(invalidateCacheSpy).toHaveBeenCalled();
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: LLM_PROFILES_QUERY_KEYS.all,
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: SETTINGS_QUERY_KEYS.all,
+    });
 
     invalidateCacheSpy.mockRestore();
+    invalidateQueriesSpy.mockRestore();
   });
 
   it("does not invalidate cache on activation failure", async () => {

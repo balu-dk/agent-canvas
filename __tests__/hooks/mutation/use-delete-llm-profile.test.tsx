@@ -59,6 +59,7 @@ describe("useDeleteLlmProfile", () => {
       profiles: [{ name: "deleted-profile", model: "gpt-4", base_url: null, api_key_set: true }],
     });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const invalidateCacheSpy = vi.spyOn(SettingsService, "invalidateCache");
 
     const { result } = renderHook(() => useDeleteLlmProfile(), { wrapper });
 
@@ -66,25 +67,11 @@ describe("useDeleteLlmProfile", () => {
       await result.current.mutateAsync("deleted-profile");
     });
 
+    // Verifies all three cache invalidations occur on success
+    expect(invalidateCacheSpy).toHaveBeenCalled();
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: LLM_PROFILES_QUERY_KEYS.all,
     });
-  });
-
-  it("invalidates settings queries on success", async () => {
-    vi.mocked(ProfilesService.deleteProfile).mockResolvedValue({
-      name: "test-profile",
-      message: "Profile deleted",
-    });
-
-    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useDeleteLlmProfile(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync("test-profile");
-    });
-
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: SETTINGS_QUERY_KEYS.all,
     });
@@ -105,22 +92,5 @@ describe("useDeleteLlmProfile", () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
     });
-  });
-
-  it("invalidates SettingsService cache on success", async () => {
-    vi.mocked(ProfilesService.deleteProfile).mockResolvedValue({
-      name: "test-profile",
-      message: "Profile deleted",
-    });
-
-    const invalidateCacheSpy = vi.spyOn(SettingsService, "invalidateCache");
-
-    const { result } = renderHook(() => useDeleteLlmProfile(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync("test-profile");
-    });
-
-    expect(invalidateCacheSpy).toHaveBeenCalled();
   });
 });

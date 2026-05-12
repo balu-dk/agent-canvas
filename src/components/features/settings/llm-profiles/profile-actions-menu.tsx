@@ -32,7 +32,14 @@ export function ProfileActionsMenu({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      // Don't close if clicking inside menu or on the trigger button
+      // This prevents the toggle-reopen issue when clicking trigger to close
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        if (triggerRef?.current?.contains(target)) {
+          // Click on trigger - let the toggle handler in parent handle it
+          return;
+        }
         // Restore focus to trigger button when closing
         triggerRef?.current?.focus();
         onClose();

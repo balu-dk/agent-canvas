@@ -40,6 +40,13 @@ export function DeleteProfileModal({
     }
   };
 
+  // Handle close only if not pending to prevent inconsistent state
+  const handleClose = () => {
+    if (!deleteProfile.isPending) {
+      onClose();
+    }
+  };
+
   const footer = (
     <>
       <BrandButton
@@ -61,7 +68,7 @@ export function DeleteProfileModal({
         type="button"
         variant="secondary"
         className="grow"
-        onClick={onClose}
+        onClick={handleClose}
         isDisabled={deleteProfile.isPending}
       >
         {t(I18nKey.BUTTON$CANCEL)}
@@ -74,7 +81,7 @@ export function DeleteProfileModal({
       isOpen
       title={t(I18nKey.SETTINGS$PROFILE_DELETE_TITLE)}
       footer={footer}
-      onClose={onClose}
+      onClose={handleClose}
       initialFocusRef={cancelButtonRef}
     >
       <p className="text-sm break-all">
