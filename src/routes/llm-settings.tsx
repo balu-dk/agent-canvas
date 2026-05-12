@@ -353,6 +353,8 @@ function LlmSettingsLocalView({
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(false);
   // Force form re-render when switching profiles
   const [formKey, setFormKey] = React.useState(0);
+  // Track latest edit request to ignore stale responses (prevents race condition)
+  const latestEditRequestRef = React.useRef(0);
 
   const defaultModel = String(
     (DEFAULT_SETTINGS.agent_settings?.llm as Record<string, unknown>)?.model ??
@@ -677,6 +679,9 @@ function LlmSettingsLocalView({
   // Handler for "Edit Profile" menu action - fetches profile config for form
   const handleEditProfile = React.useCallback(
     async (profile: ProfileInfo) => {
+      // Track this request to ignore stale responses from concurrent edits
+      const requestId = ++latestEditRequestRef.current;
+
       setProfileName(profile.name);
       setOriginalProfileName(profile.name);
       setIsLoadingProfile(true);
@@ -685,6 +690,9 @@ function LlmSettingsLocalView({
       try {
         // Fetch the profile config (without secrets - they are not displayed in form)
         const profileData = await ProfilesService.getProfile(profile.name);
+
+        // Ignore stale response if user clicked a different profile while loading
+        if (requestId !== latestEditRequestRef.current) return;
 
         // Convert profile config to form values format (llm.model, llm.base_url, etc.)
         const formValues: SettingsFormValues = {};
@@ -699,6 +707,9 @@ function LlmSettingsLocalView({
         setEditProfileConfig(formValues);
         setFormKey((prev) => prev + 1);
       } catch (error) {
+        // Ignore stale error if user clicked a different profile while loading
+        if (requestId !== latestEditRequestRef.current) return;
+
         console.error("Failed to load profile for editing:", error);
         displayErrorToast(t(I18nKey.ERROR$FAILED_TO_LOAD_PROFILE_TRY_AGAIN));
         // Reset back to list view on error
@@ -707,7 +718,10 @@ function LlmSettingsLocalView({
         setOriginalProfileName(null);
         setEditProfileConfig(null);
       } finally {
-        setIsLoadingProfile(false);
+        // Only clear loading if this is still the latest request
+        if (requestId === latestEditRequestRef.current) {
+          setIsLoadingProfile(false);
+        }
       }
     },
     [t],
