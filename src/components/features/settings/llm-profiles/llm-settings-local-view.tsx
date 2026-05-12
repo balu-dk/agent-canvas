@@ -1,0 +1,269 @@
+import React, { useState, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { LlmProfilesManager } from "./llm-profiles-manager";
+import { ProfileNameInput } from "./profile-name-input";
+import { BrandButton } from "#/components/features/settings/brand-button";
+import { LlmSettingsScreen } from "#/routes/llm-settings";
+import { useSaveLlmProfile } from "#/hooks/mutation/use-save-llm-profile";
+import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
+import ProfilesService, {
+  ProfileInfo,
+} from "#/api/profiles-service/profiles-service.api";
+import {
+  displayErrorToast,
+  displaySuccessToast,
+} from "#/utils/custom-toast-handlers";
+import { I18nKey } from "#/i18n/declaration";
+import { deriveProfileNameFromModel } from "#/utils/derive-profile-name";
+import { SdkSectionSaveControl } from "../sdk-settings/sdk-section-page";
+import { SettingsFormValues } from "#/utils/sdk-settings-schema";
+import { ArrowLeft } from "lucide-react";
+
+type ViewMode = "list" | "create" | "edit";
+
+interface EditingProfile {
+  profile: ProfileInfo;
+  initialValues: SettingsFormValues;
+}
+
+export function LlmSettingsLocalView() {
+  const { t } = useTranslation("openhands");
+  const saveProfile = useSaveLlmProfile();
+  const { data: profilesData } = useLlmProfiles();
+
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [profileName, setProfileName] = useState("");
+  const [editingProfile, setEditingProfile] = useState<EditingProfile | null>(
+    null,
+  );
+  const [saveControl, setSaveControl] = useState<SdkSectionSaveControl | null>(
+    null,
+  );
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Get existing profile names for validation
+  const existingNames = useMemo(
+    () => new Set(profilesData?.profiles.map((p) => p.name) ?? []),
+    [profilesData],
+  );
+
+  // Validate profile name
+  const isNameValid = useMemo(() => {
+    if (!profileName.trim()) return false;
+    // Check pattern
+    const pattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+    if (!pattern.test(profileName)) return false;
+    // In create mode, check for duplicates
+    if (viewMode === "create" && existingNames.has(profileName)) return false;
+    // In edit mode, name can match current profile name
+    if (
+      viewMode === "edit" &&
+      profileName !== editingProfile?.profile.name &&
+      existingNames.has(profileName)
+    ) {
+      return false;
+    }
+    return true;
+  }, [profileName, viewMode, existingNames, editingProfile?.profile.name]);
+
+  const handleAddProfile = useCallback(() => {
+    setProfileName("");
+    setEditingProfile(null);
+    setViewMode("create");
+  }, []);
+
+  const handleEditProfile = useCallback(
+    async (profile: ProfileInfo) => {
+      try {
+        // Fetch profile details with encrypted secrets to preserve API key
+        const detail = await ProfilesService.getProfile(
+          profile.name,
+          "encrypted",
+        );
+        // Profile config contains llm settings as nested object
+        const llmConfig = (detail.config?.llm ?? {}) as Record<string, unknown>;
+        const initialValues: SettingsFormValues = {
+          "llm.model": (llmConfig.model as string) ?? "",
+          "llm.api_key": (llmConfig.api_key as string) ?? "",
+          "llm.base_url": (llmConfig.base_url as string) ?? "",
+        };
+        setEditingProfile({ profile, initialValues });
+        setProfileName(profile.name);
+        setViewMode("edit");
+      } catch (error) {
+        console.error("Failed to fetch profile details:", error);
+        displayErrorToast(t(I18nKey.ERROR$GENERIC));
+      }
+    },
+    [t],
+  );
+
+  const handleBackToList = useCallback(() => {
+    setViewMode("list");
+    setEditingProfile(null);
+    setProfileName("");
+    setSaveControl(null);
+  }, []);
+
+  const handleSaveControlChange = useCallback(
+    (control: SdkSectionSaveControl) => {
+      setSaveControl(control);
+
+      // Auto-derive profile name from model in create mode
+      if (viewMode === "create" && !profileName) {
+        const modelValue = control.values["llm.model"];
+        if (typeof modelValue === "string" && modelValue) {
+          const derived = deriveProfileNameFromModel(modelValue);
+          // Only set if it won't conflict
+          if (!existingNames.has(derived)) {
+            setProfileName(derived);
+          }
+        }
+      }
+    },
+    [viewMode, profileName, existingNames],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!saveControl || !isNameValid) return;
+
+    const values = saveControl.values;
+    const model =
+      typeof values["llm.model"] === "string" ? values["llm.model"] : "";
+    const apiKey =
+      typeof values["llm.api_key"] === "string" ? values["llm.api_key"] : "";
+    const baseUrl =
+      typeof values["llm.base_url"] === "string" ? values["llm.base_url"] : "";
+
+    if (!model) {
+      displayErrorToast(t(I18nKey.SETTINGS$MODEL_REQUIRED));
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Build the LLM config object
+      const llmConfig: Record<string, unknown> = { model };
+
+      // Only include api_key if user entered one (preserve existing if editing)
+      if (apiKey) {
+        llmConfig.api_key = apiKey;
+      } else if (
+        viewMode === "edit" &&
+        editingProfile?.initialValues["llm.api_key"]
+      ) {
+        // Preserve existing encrypted key when editing and no new key provided
+        llmConfig.api_key = editingProfile.initialValues["llm.api_key"];
+      }
+
+      // Only include base_url if set
+      if (baseUrl) {
+        llmConfig.base_url = baseUrl;
+      }
+
+      await saveProfile.mutateAsync({
+        name: profileName.trim(),
+        request: {
+          llm: llmConfig as {
+            model: string;
+            api_key?: string;
+            base_url?: string;
+          },
+          include_secrets: true,
+        },
+      });
+
+      displaySuccessToast(
+        viewMode === "create"
+          ? t(I18nKey.SETTINGS$PROFILE_CREATED, { name: profileName })
+          : t(I18nKey.SETTINGS$PROFILE_UPDATED, { name: profileName }),
+      );
+      handleBackToList();
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+      displayErrorToast(t(I18nKey.ERROR$GENERIC));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    saveControl,
+    isNameValid,
+    profileName,
+    viewMode,
+    editingProfile,
+    saveProfile,
+    t,
+    handleBackToList,
+  ]);
+
+  // List view: show profiles manager
+  if (viewMode === "list") {
+    return (
+      <LlmProfilesManager
+        onAddProfile={handleAddProfile}
+        onEditProfile={handleEditProfile}
+      />
+    );
+  }
+
+  // Create/Edit view: show form with profile name input
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header with back button */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleBackToList}
+          className="p-2 rounded-lg hover:bg-tertiary text-neutral-400 hover:text-white transition-colors"
+          aria-label={t(I18nKey.BUTTON$BACK)}
+          data-testid="back-to-profiles"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h2 className="text-base font-semibold text-white">
+          {viewMode === "create"
+            ? t(I18nKey.SETTINGS$CREATE_PROFILE)
+            : t(I18nKey.SETTINGS$EDIT_PROFILE)}
+        </h2>
+      </div>
+
+      {/* Profile name input */}
+      <ProfileNameInput
+        testId="profile-name-input"
+        value={profileName}
+        onChange={setProfileName}
+        isRequired
+      />
+
+      {/* LLM Settings Form */}
+      <LlmSettingsScreen
+        embedded
+        hideSaveButton
+        initialValueOverrides={editingProfile?.initialValues}
+        onSaveControlChange={handleSaveControlChange}
+      />
+
+      {/* Action buttons */}
+      <div className="flex justify-end gap-3 pt-4 border-t border-tertiary">
+        <BrandButton
+          testId="cancel-profile-btn"
+          type="button"
+          variant="tertiary"
+          onClick={handleBackToList}
+        >
+          {t(I18nKey.BUTTON$CANCEL)}
+        </BrandButton>
+        <BrandButton
+          testId="save-profile-btn"
+          type="button"
+          variant="primary"
+          onClick={handleSave}
+          isDisabled={!isNameValid || isSaving || !saveControl}
+          aria-busy={isSaving}
+        >
+          {isSaving ? t(I18nKey.STATUS$SAVING) : t(I18nKey.BUTTON$SAVE)}
+        </BrandButton>
+      </div>
+    </div>
+  );
+}

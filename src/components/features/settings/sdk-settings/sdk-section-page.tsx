@@ -115,6 +115,8 @@ export interface SdkSectionSaveControl {
   isSaving: boolean;
   /** At least one field is dirty (or `extraDirty` was passed in). */
   isDirty: boolean;
+  /** Current form values (for custom save flows). */
+  values: SettingsFormValues;
 }
 
 /**
@@ -412,8 +414,9 @@ export function SdkSectionPage({
       save: stableSave,
       isSaving: isPending,
       isDirty: saveControlIsDirty,
+      values,
     });
-  }, [isPending, saveControlIsDirty]);
+  }, [isPending, saveControlIsDirty, values]);
 
   if (isLoading || isFetching || isSchemaLoading) {
     return <LlmSettingsInputsSkeleton />;

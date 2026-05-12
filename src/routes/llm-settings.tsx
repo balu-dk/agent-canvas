@@ -11,6 +11,7 @@ import {
   SdkSectionPage,
   SdkSectionSaveControl,
 } from "#/components/features/settings/sdk-settings/sdk-section-page";
+import { LlmSettingsLocalView } from "#/components/features/settings/llm-profiles";
 import { I18nKey } from "#/i18n/declaration";
 import { Settings, SettingsSchema, SettingsScope } from "#/types/settings";
 import { extractModelAndProvider } from "#/utils/extract-model-and-provider";
@@ -301,4 +302,11 @@ export function LlmSettingsScreen({
   );
 }
 
-export default LlmSettingsScreen;
+/**
+ * Default export for the route renders the integrated profiles + settings view.
+ * The LlmSettingsScreen component is also exported for embedded use cases
+ * (e.g., onboarding, profile editing forms).
+ */
+export default function LlmSettingsRoute() {
+  return <LlmSettingsLocalView />;
+}
