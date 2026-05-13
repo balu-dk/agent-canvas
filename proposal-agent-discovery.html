@@ -18,7 +18,7 @@
     background: var(--bg); color: var(--text);
     line-height: 1.7; padding: 2rem 1rem;
   }
-  .container { max-width: 980px; margin: 0 auto; }
+  .container { max-width: 1060px; margin: 0 auto; }
   h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
   h1 span { color: var(--accent); }
   .subtitle { color: var(--text-dim); font-size: 1rem; margin-bottom: 0.5rem; }
@@ -62,11 +62,25 @@
   .tag.sdk    { background: rgba(86,212,221,0.15); color: var(--cyan); }
   .tag.fe     { background: rgba(88,166,255,0.15); color: var(--accent); }
   .tag.before { background: rgba(248,81,73,0.12); color: var(--red); }
+  .tag.pr421  { background: rgba(210,153,34,0.12); color: var(--yellow); }
   .tag.after  { background: rgba(63,185,80,0.12); color: var(--green); }
 
+  .cols3 { display: flex; gap: 0.8rem; margin: 1.2rem 0; }
+  .cols3 > div { flex: 1; min-width: 0; }
   .vs { display: flex; gap: 1rem; margin: 1.2rem 0; }
   .vs > div { flex: 1; }
-  @media (max-width: 700px) { .vs { flex-direction: column; } }
+  @media (max-width: 860px) { .cols3 { flex-direction: column; } .vs { flex-direction: column; } }
+
+  /* ─── Flow step boxes ─── */
+  .flow-row { display: flex; gap: 0.3rem; align-items: center; margin: 0.5rem 0; flex-wrap: wrap; }
+  .flow-step {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.3rem 0.55rem;
+    font-size: 0.72rem; text-align: center; white-space: nowrap;
+  }
+  .flow-step.changed { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); color: var(--green); font-weight: 600; }
+  .flow-step.new-step { border-color: var(--purple); box-shadow: 0 0 0 1px var(--purple); color: var(--purple); font-weight: 600; }
+  .flow-arrow { color: var(--text-dim); font-size: 0.85rem; }
 
   /* ─── Mockup chrome ─── */
   .mockup {
@@ -200,7 +214,7 @@
 <div class="container">
 
 <h1>Proposal — <span>Auto-Discover Agent Conversations</span></h1>
-<p class="subtitle">Replace the hard-coded "Choose Agent" step with dynamic discovery from connected backends</p>
+<p class="subtitle">Replace the hard-coded "Choose Agent" step with dynamic agent discovery from connected backends</p>
 
 <div class="prereq">
   Builds on top of
@@ -210,39 +224,126 @@
 </div>
 
 <!-- ================================================================== -->
-<h2><span class="num">1</span> Problem</h2>
+<h2><span class="num">1</span> Three-Stage Onboarding Evolution</h2>
 
-<div class="vs">
-  <div class="card">
-    <h3><span class="tag before">Current</span> Hard-coded agent list</h3>
-    <ul>
-      <li>Onboarding Step 0 shows three agents: <strong>OpenHands</strong> (enabled), Claude Code & Codex (disabled with "coming soon")</li>
-      <li>The list is a static <code>AGENT_OPTIONS</code> array in <code>choose-agent-step.tsx</code></li>
-      <li>Adding a new agent = code change + redeploy</li>
-      <li>Each backend already knows what agent it runs (<code>/server_info</code> returns <code>title</code>), but we never ask</li>
-      <li>No way to see which agent a conversation belongs to</li>
+<p>The onboarding flow has been changing incrementally. Here's how the three versions compare, step by step:</p>
+
+<!-- ─── Three-column flow comparison ─── -->
+<div class="cols3">
+  <!-- Column 1: Current (main) -->
+  <div class="card" style="border-color: rgba(248,81,73,0.3);">
+    <h3><span class="tag before">Current</span> main branch</h3>
+    <div class="flow-row">
+      <div class="flow-step">Step 0<br><strong>Choose Agent</strong><br><span style="font-size:0.65rem;color:var(--text-dim);">Static list:<br>OH / CC / Codex</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 1<br><strong>Check Backend</strong><br><span style="font-size:0.65rem;color:var(--text-dim);">Verify single<br>connection</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 2<br><strong>Setup LLM</strong></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 3<br><strong>Say Hello</strong></div>
+    </div>
+    <ul style="font-size:0.78rem; margin-top:0.6rem;">
+      <li>Agent list is hard-coded (CC &amp; Codex disabled)</li>
+      <li>Only one backend; fails if Docker absent</li>
+      <li>No agent tags on conversations</li>
     </ul>
   </div>
+
+  <!-- Column 2: PR #421 -->
+  <div class="card" style="border-color: rgba(210,153,34,0.3);">
+    <h3><span class="tag pr421">PR #421</span> multi-select backend</h3>
+    <div class="flow-row">
+      <div class="flow-step">Step 0<br><strong>Choose Agent</strong><br><span style="font-size:0.65rem;color:var(--text-dim);">Still static<br>(unchanged)</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step changed">Step 1<br><strong>Choose Backend</strong><br><span style="font-size:0.65rem;">Multi-select<br>Local + Docker</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 2<br><strong>Setup LLM</strong></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 3<br><strong>Say Hello</strong></div>
+    </div>
+    <ul style="font-size:0.78rem; margin-top:0.6rem;">
+      <li>Agent list still hard-coded</li>
+      <li><strong>Step 1 replaced:</strong> pick Local + Docker side-by-side</li>
+      <li>Setup server starts Docker on demand</li>
+      <li><code>npm run dev</code> always works (no Docker needed)</li>
+    </ul>
+  </div>
+
+  <!-- Column 3: This proposal -->
   <div class="card" style="border-color: rgba(63,185,80,0.3);">
-    <h3><span class="tag after">Proposed</span> Auto-discovered from backends</h3>
-    <ul>
-      <li>After selecting backends (Step 1 from PR #421), canvas queries each one for agent info</li>
-      <li>Agents are listed dynamically — if a backend is connected, its agent appears</li>
-      <li>No code change needed when a new agent type is supported</li>
-      <li>Conversations are tagged with their agent, visible in sidebar</li>
-      <li>CLI-started sessions can be discovered and resumed in the canvas</li>
+    <h3><span class="tag after">This proposal</span> agent discovery</h3>
+    <div class="flow-row">
+      <div class="flow-step new-step">Step 0<br><strong>Available Agents</strong><br><span style="font-size:0.65rem;">Auto-discovered<br>from backends</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step changed">Step 1<br><strong>Choose Backend</strong><br><span style="font-size:0.65rem;">From PR #421<br>(unchanged)</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 2<br><strong>Setup LLM</strong></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Step 3<br><strong>Say Hello</strong></div>
+    </div>
+    <ul style="font-size:0.78rem; margin-top:0.6rem;">
+      <li><strong>Step 0 replaced:</strong> queries each backend for agent info</li>
+      <li>No code change when new agent type is added</li>
+      <li>Conversations tagged with agent in sidebar</li>
+      <li>CLI sessions discoverable &amp; resumable</li>
     </ul>
   </div>
 </div>
 
-<!-- ================================================================== -->
-<h2><span class="num">2</span> User Experience Changes</h2>
+<div class="callout">
+  <strong>What changes here vs. PR #421:</strong> PR #421 only touched <strong>Step 1</strong> (Check Backend &rarr; Choose Backend).
+  This proposal touches <strong>Step 0</strong> (Choose Agent &rarr; Available Agents), plus adds agent tags to the conversation
+  sidebar and session discovery. Step 1 from PR #421 stays exactly the same.
+</div>
 
-<h3>2a. Onboarding: "Choose Agent" becomes dynamic</h3>
+<!-- ─── Diff table ─── -->
+<table>
+  <tr>
+    <th>Step</th>
+    <th><span class="tag before">Current</span></th>
+    <th><span class="tag pr421">After PR #421</span></th>
+    <th><span class="tag after">After this proposal</span></th>
+  </tr>
+  <tr>
+    <td><strong>0</strong></td>
+    <td>Choose Agent — static <code>AGENT_OPTIONS[]</code></td>
+    <td>Choose Agent — <em>unchanged</em></td>
+    <td style="color:var(--green);"><strong>Available Agents</strong> — dynamic, from <code>/api/agents</code></td>
+  </tr>
+  <tr>
+    <td><strong>1</strong></td>
+    <td>Check Backend — verify single connection</td>
+    <td style="color:var(--yellow);"><strong>Choose Backend</strong> — multi-select Local + Docker</td>
+    <td>Choose Backend — <em>unchanged from PR #421</em></td>
+  </tr>
+  <tr>
+    <td><strong>2</strong></td>
+    <td>Setup LLM</td>
+    <td>Setup LLM — <em>unchanged</em></td>
+    <td>Setup LLM — <em>unchanged</em></td>
+  </tr>
+  <tr>
+    <td><strong>3</strong></td>
+    <td>Say Hello</td>
+    <td>Say Hello — <em>unchanged</em></td>
+    <td>Say Hello — <em>unchanged</em></td>
+  </tr>
+  <tr>
+    <td><strong>Sidebar</strong></td>
+    <td>Conversations without agent info</td>
+    <td><em>unchanged</em></td>
+    <td style="color:var(--green);"><strong>Agent tags</strong> on each conversation + CLI session resume</td>
+  </tr>
+</table>
+
+<!-- ================================================================== -->
+<h2><span class="num">2</span> Step 0 Mockup — Before / After</h2>
 
 <div class="vs">
   <div>
-    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.5rem;"><span class="tag before">Before</span> Static radio list</p>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.5rem;">
+      <span class="tag before">Current</span> + <span class="tag pr421">PR #421</span> &mdash; Same static radio list
+    </p>
     <div class="mockup" style="max-width:400px;">
       <div class="mockup-bar">
         <span class="mockup-dot" style="background:#ff5f57;"></span>
@@ -283,7 +384,7 @@
     </div>
   </div>
   <div>
-    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.5rem;"><span class="tag after">After</span> Auto-discovered from backends</p>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.5rem;"><span class="tag after">This proposal</span> Auto-discovered from backends</p>
     <div class="mockup" style="max-width:400px;">
       <div class="mockup-bar">
         <span class="mockup-dot" style="background:#ff5f57;"></span>
@@ -339,7 +440,7 @@
 </div>
 
 <!-- ──────────────────────────────────────────────── -->
-<h3>2b. Conversation sidebar: agent tags</h3>
+<h3>Conversation sidebar: agent tags</h3>
 
 <p>Each conversation displays a small tag showing which agent + backend it's running on. This matters when multiple agents are available simultaneously.</p>
 
@@ -391,7 +492,7 @@
 </div>
 
 <!-- ──────────────────────────────────────────────── -->
-<h3>2c. Session discovery: resume CLI-started sessions</h3>
+<h3>Session discovery: resume CLI-started sessions</h3>
 
 <p>If a user ran <code>openhands</code> from the terminal and later opens the canvas, we can discover and resume those sessions:</p>
 
