@@ -385,8 +385,8 @@ export function ChatInterface() {
   return (
     <ScrollProvider value={scrollProviderValue}>
       <div
-        data-testid="chat-interface"
         className="h-full flex flex-col justify-between pl-0 md:pl-4 pr-0 md:pr-4 relative"
+        data-testid="chat-interface"
       >
         {!hasSubstantiveAgentActions &&
           !hasPendingUserMessages &&
