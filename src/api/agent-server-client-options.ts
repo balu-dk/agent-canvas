@@ -1,5 +1,8 @@
 import { buildHttpBaseUrl } from "#/utils/websocket-url";
-import { getAgentServerWorkingDir } from "./agent-server-config";
+import {
+  getAgentServerWorkingDir,
+  resolveAgentServerRuntimeBaseUrl,
+} from "./agent-server-config";
 import { getEffectiveLocalBackend } from "./backend-registry/active-store";
 import type { Backend } from "./backend-registry/types";
 
@@ -20,7 +23,7 @@ export interface AgentServerClientOptions {
 }
 
 function normalizeHost(host: string): string {
-  return host.replace(/\/+$/, "");
+  return resolveAgentServerRuntimeBaseUrl(host).replace(/\/+$/, "");
 }
 
 function resolveHost(

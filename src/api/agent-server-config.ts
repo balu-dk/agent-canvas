@@ -115,6 +115,13 @@ function resolveAgentServerBaseUrl(baseUrl: string | null): string | null {
   return baseUrl;
 }
 
+export function resolveAgentServerRuntimeBaseUrl(baseUrl: string): string {
+  const normalizedUrl = normalizeBaseUrl(baseUrl);
+  if (!normalizedUrl) return baseUrl;
+
+  return resolveAgentServerBaseUrl(normalizedUrl) ?? normalizedUrl;
+}
+
 export function getAgentServerFormDefaults(): AgentServerFormDefaults {
   return {
     baseUrl: getConfiguredBaseUrl() ?? "",
@@ -133,8 +140,8 @@ export function saveAgentServerConfig(config: AgentServerFormDefaults): void {
 }
 
 export function getAgentServerBaseUrl(): string {
-  const configuredUrl = resolveAgentServerBaseUrl(getConfiguredBaseUrl());
-  if (configuredUrl) return configuredUrl;
+  const configuredUrl = getConfiguredBaseUrl();
+  if (configuredUrl) return resolveAgentServerRuntimeBaseUrl(configuredUrl);
 
   if (typeof window !== "undefined") {
     return window.location.origin;
