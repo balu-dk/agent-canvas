@@ -741,6 +741,22 @@ export const SETTINGS_HANDLERS = [
     }),
   ),
 
+  // Create or update a profile (POST /api/profiles/:name).
+  // MSW path params capture a single segment, so /activate and /rename
+  // sub-paths are handled by their own handlers below without overlap.
+  http.post("*/api/profiles/:name", async ({ request, params }) => {
+    const name = params.name as string;
+    const body = (await request.json()) as { llm?: { model?: string } } | null;
+    const model = body?.llm?.model ?? null;
+    const existing = MOCK_PROFILES.findIndex((p) => p.name === name);
+    if (existing >= 0) {
+      MOCK_PROFILES[existing] = { ...MOCK_PROFILES[existing], model };
+    } else {
+      MOCK_PROFILES.push({ name, is_active: false, model });
+    }
+    return HttpResponse.json({ name, message: "Profile saved" });
+  }),
+
   http.post("*/api/profiles/:name/activate", async ({ params }) => {
     const name = params.name as string;
     MOCK_PROFILES = MOCK_PROFILES.map((p) => ({

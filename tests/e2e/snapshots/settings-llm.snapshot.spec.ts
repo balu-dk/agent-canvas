@@ -17,9 +17,11 @@ import { test, expect, Page } from "@playwright/test";
  *   4. `settings-llm-rename-modal.png` — Rename modal open for first profile
  *   5. `settings-llm-delete-modal.png` — Delete confirmation modal open for second profile
  *
- * MSW state note: module-level MSW handler state (MOCK_PROFILES) is reset between
- * tests via beforeEach.  Tests 1 and 2 do NOT depend on profile state, so they
- * run fine with the default two profiles seeded by settings-handlers.ts.
+ * MSW state note: Playwright gives each test a fresh browser context by default,
+ * so MOCK_PROFILES module-level state re-initialises to the two seeded defaults
+ * automatically before every test — no explicit beforeEach reset is needed.
+ * Tests 3-5 also only open modals without submitting them, so MOCK_PROFILES is
+ * never mutated within a test run.
  */
 
 async function dismissConsentModal(page: Page) {
