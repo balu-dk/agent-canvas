@@ -1,11 +1,15 @@
 import { SettingsClient } from "@openhands/typescript-client/clients";
-import { DEFAULT_SETTINGS } from "#/services/settings";
+import { CURATED_DEFAULT_SKILLS, DEFAULT_SETTINGS } from "#/services/settings";
 import { Settings, SettingsSchema, SettingsValue } from "#/types/settings";
 import {
   extractAppPreferences,
   readStoredAppPreferences,
   writeStoredAppPreferences,
 } from "../app-preferences-store";
+import {
+  readStoredSkillsPreferences,
+  writeStoredSkillsPreferences,
+} from "../skills-preferences-store";
 import { getActiveBackend } from "../backend-registry/active-store";
 import {
   fetchCloudConversationSettingsSchema,
@@ -32,6 +36,7 @@ export interface SettingsUpdateRequest {
   agent_settings_diff?: Record<string, SettingsValue>;
   conversation_settings_diff?: Record<string, SettingsValue>;
   disabled_skills?: string[];
+  default_skills?: string[];
 }
 
 /**
@@ -137,10 +142,24 @@ const syncDerivedSettings = (settings: Partial<Settings>): Settings => {
   // server response carries them and overrides the local cache.
   const storedAppPrefs = readStoredAppPreferences();
 
+  // Skills-specific preferences (default_skills) are always stored in
+  // localStorage so they survive page reloads on both local and cloud backends.
+  // If the server response carries a `default_skills` value (cloud mode), it
+  // takes precedence over the localStorage copy.
+  const storedSkillsPrefs = readStoredSkillsPreferences();
+
+  // First-run seeding: if no default_skills are stored anywhere, seed with
+  // the curated defaults so new users get a useful starting set.
+  const defaultSkillsResolved =
+    settings.default_skills ??
+    storedSkillsPrefs.default_skills ??
+    CURATED_DEFAULT_SKILLS;
+
   const merged = {
     ...deepClone(DEFAULT_SETTINGS),
     ...storedAppPrefs,
     ...settings,
+    default_skills: defaultSkillsResolved,
     provider_tokens_set: {
       ...(DEFAULT_SETTINGS.provider_tokens_set ?? {}),
       ...(settings.provider_tokens_set ?? {}),
@@ -353,6 +372,14 @@ class SettingsService {
       payload.disabled_skills = disabledSkills;
     }
 
+    // default_skills is persisted in localStorage for all backends and
+    // forwarded to the cloud API in cloud mode.
+    const defaultSkills = rest.default_skills as string[] | undefined;
+    if (Array.isArray(defaultSkills)) {
+      writeStoredSkillsPreferences({ default_skills: defaultSkills });
+      payload.default_skills = defaultSkills;
+    }
+
     const isCloud = getActiveBackend().backend.kind === "cloud";
 
     // The backend applies ``agent_settings_diff`` by deep-merging it into the
@@ -417,6 +444,7 @@ class SettingsService {
         !!payload.agent_settings_diff ||
         !!payload.conversation_settings_diff ||
         payload.disabled_skills !== undefined ||
+        payload.default_skills !== undefined ||
         hasAppPreferences;
       if (!hasCloudWork) {
         return true;
@@ -455,11 +483,12 @@ class SettingsService {
       }
     } else {
       // The local agent-server PATCH /api/settings rejects unknown fields and
-      // requires at least one of the two diff fields. Strip disabled_skills
-      // and skip the request entirely if no diffs remain. App preferences
-      // are persisted to localStorage above and never sent to this endpoint.
+      // requires at least one of the two diff fields. Strip skills fields and
+      // skip the request entirely if no diffs remain. App preferences and
+      // skills preferences are persisted to localStorage above.
       const localPayload = { ...payload };
       delete localPayload.disabled_skills;
+      delete localPayload.default_skills;
       const hasLocalDiffs =
         !!localPayload.agent_settings_diff ||
         !!localPayload.conversation_settings_diff;

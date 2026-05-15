@@ -15,6 +15,10 @@ import {
   AUTOMATION_HANDLERS,
   resetAutomationMockData,
 } from "./automation-handlers";
+import {
+  SKILLS_HANDLERS,
+  resetInstalledSkillsMockData,
+} from "./skills-handlers";
 
 export const handlers = [
   ...FILE_SERVICE_HANDLERS,
@@ -27,10 +31,12 @@ export const handlers = [
   ...FEEDBACK_HANDLERS,
   ...ANALYTICS_HANDLERS,
   ...AUTOMATION_HANDLERS,
+  ...SKILLS_HANDLERS,
 ];
 
 export {
   MOCK_DEFAULT_USER_SETTINGS,
   resetTestHandlersMockSettings,
   resetAutomationMockData,
+  resetInstalledSkillsMockData,
 };

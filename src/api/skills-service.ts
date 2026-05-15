@@ -1,3 +1,10 @@
+import type {
+  InstalledSkillInfo,
+  InstalledSkillSummary,
+  MarketplaceResponse,
+  SkillActionResponse,
+  ToggleSkillResponse,
+} from "@openhands/typescript-client";
 import { SkillsClient } from "@openhands/typescript-client/clients";
 import { SkillInfo } from "#/types/settings";
 import { getAgentServerWorkingDir } from "./agent-server-config";
@@ -6,6 +13,10 @@ import { fetchCloudSkills } from "./cloud/skills-service.api";
 import { getAgentServerClientOptions } from "./agent-server-client-options";
 
 class SkillsService {
+  private static client(): SkillsClient {
+    return new SkillsClient(getAgentServerClientOptions());
+  }
+
   static async getSkills(): Promise<SkillInfo[]> {
     if (getActiveBackend().backend.kind === "cloud") {
       return fetchCloudSkills();
@@ -15,9 +26,7 @@ class SkillsService {
     // sees the available catalog even on a fresh dev environment with no local
     // user/project skills. Conversation creation paths still gate on
     // shouldLoadPublicSkills() to keep new-conversation latency low.
-    const response = await new SkillsClient(
-      getAgentServerClientOptions(),
-    ).getSkills({
+    const response = await SkillsService.client().getSkills({
       load_public: true,
       load_user: true,
       load_project: true,
@@ -26,6 +35,30 @@ class SkillsService {
     });
 
     return (response.skills ?? []) as SkillInfo[];
+  }
+
+  static async listInstalledSkills(): Promise<InstalledSkillSummary[]> {
+    const response = await SkillsService.client().listInstalledSkills();
+    return response.skills;
+  }
+
+  static async installSkill(source: string): Promise<InstalledSkillInfo> {
+    return SkillsService.client().installSkill({ source });
+  }
+
+  static async uninstallSkill(name: string): Promise<SkillActionResponse> {
+    return SkillsService.client().uninstallSkill(name);
+  }
+
+  static async toggleInstalledSkill(
+    name: string,
+    enabled: boolean,
+  ): Promise<ToggleSkillResponse> {
+    return SkillsService.client().toggleSkill(name, enabled);
+  }
+
+  static async getMarketplace(): Promise<MarketplaceResponse> {
+    return SkillsService.client().getMarketplace();
   }
 }
 

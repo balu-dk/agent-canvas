@@ -2,6 +2,13 @@ import { Settings } from "#/types/settings";
 
 export const LATEST_SETTINGS_VERSION = 5;
 
+/** Curated skills enabled by default for new users. */
+export const CURATED_DEFAULT_SKILLS: string[] = [
+  "github",
+  "code-review",
+  "docker",
+];
+
 export const DEFAULT_SETTINGS: Settings = {
   llm_model: "openhands/claude-opus-4-5-20251101",
   llm_base_url: "",
@@ -24,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   search_api_key: "",
   is_new_user: true,
   disabled_skills: [],
+  default_skills: CURATED_DEFAULT_SKILLS,
   mcp_config: {
     sse_servers: [],
     stdio_servers: [],

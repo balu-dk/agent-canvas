@@ -16,6 +16,8 @@ interface SkillCardProps {
   skill: SkillInfo;
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
+  isDefault?: boolean;
+  isInstalled?: boolean;
 }
 
 const DESCRIPTION_CLAMP_THRESHOLD = 220;
@@ -30,7 +32,13 @@ function hasExpandableMetadata(skill: SkillInfo): boolean {
   );
 }
 
-export function SkillCard({ skill, enabled, onToggle }: SkillCardProps) {
+export function SkillCard({
+  skill,
+  enabled,
+  onToggle,
+  isDefault = false,
+  isInstalled = false,
+}: SkillCardProps) {
   const { t } = useTranslation("openhands");
   const [showFullDescription, setShowFullDescription] = React.useState(false);
   const [detailsOpen, setDetailsOpen] = React.useState(false);
@@ -69,6 +77,24 @@ export function SkillCard({ skill, enabled, onToggle }: SkillCardProps) {
           </span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {isDefault && (
+            <span
+              data-testid={`skill-default-badge-${skill.name}`}
+              className="inline-flex items-center gap-1 rounded-full border border-[rgba(234,179,8,0.35)] bg-[rgba(234,179,8,0.12)] px-2 py-0.5 text-[11px] font-medium text-yellow-300"
+            >
+              <span className="size-1.5 rounded-full bg-yellow-300" />
+              {t(I18nKey.SETTINGS$SKILLS_DEFAULT_BADGE)}
+            </span>
+          )}
+          {isInstalled && (
+            <span
+              data-testid={`skill-installed-badge-${skill.name}`}
+              className="inline-flex items-center gap-1 rounded-full border border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.12)] px-2 py-0.5 text-[11px] font-medium text-green-300"
+            >
+              <span className="size-1.5 rounded-full bg-green-300" />
+              {t(I18nKey.SETTINGS$SKILLS_INSTALLED_BADGE)}
+            </span>
+          )}
           <SkillTypeBadge type={skill.type} />
           {skill.version && (
             <span

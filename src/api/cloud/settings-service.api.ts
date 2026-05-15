@@ -48,6 +48,7 @@ type CloudSettingsResponse = {
   provider_tokens_set?: Partial<Record<Provider, string | null>>;
   mcp_config?: MCPConfig;
   disabled_skills?: string[];
+  default_skills?: string[];
   agent_settings?: Record<string, SettingsValue> | null;
   conversation_settings?: Record<string, SettingsValue> | null;
   agent_settings_schema?: unknown;
@@ -150,6 +151,7 @@ export async function saveCloudSettings(diff: {
   agent_settings_diff?: Record<string, SettingsValue>;
   conversation_settings_diff?: Record<string, SettingsValue>;
   disabled_skills?: string[];
+  default_skills?: string[];
   app_preferences?: StoredAppPreferences;
 }): Promise<void> {
   const backend = getActiveCloudBackend();
@@ -169,6 +171,9 @@ export async function saveCloudSettings(diff: {
   // Use !== undefined so re-enabling every skill (empty array) round-trips.
   if (diff.disabled_skills !== undefined) {
     body.disabled_skills = diff.disabled_skills;
+  }
+  if (diff.default_skills !== undefined) {
+    body.default_skills = diff.default_skills;
   }
   // Flat top-level app-preference fields (language, git_user_name, …).
   // The cloud POST /api/v1/settings stores these directly; see
