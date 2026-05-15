@@ -1,6 +1,6 @@
 # OpenHands Agent Canvas (Alpha)
 
-OpenHands Agent Canvas is a batteries included, open source AI coding platform that you can self-host on your local machine, in Docker, and on VMs. By default, Agent Canvas deploys a frontend Web UI and local [OpenHands Agent Server](https://github.com/OpenHands/software-agent-sdk/tree/main/openhands-agent-server/openhands/agent_server) to enable immediate use.
+OpenHands Agent Canvas is an open source AI coding application that you can self-host on your local machine, in Docker, and on VMs. By default, Agent Canvas deploys a frontend Web UI and local [OpenHands Agent Server](https://github.com/OpenHands/software-agent-sdk/tree/main/openhands-agent-server/openhands/agent_server) to enable immediate use.
 
 The Agent Canvas frontend Web UI lets you manage multiple agents. You can:
 
