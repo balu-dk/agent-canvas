@@ -1,0 +1,18 @@
+{
+  "name": "agent-canvas-defaults",
+  "description": "Curated default skills for agent-canvas",
+  "skills": [
+    {
+      "name": "github",
+      "source": "https://github.com/OpenHands/extensions/tree/main/skills/github"
+    },
+    {
+      "name": "code-review",
+      "source": "https://github.com/OpenHands/extensions/tree/main/skills/code-review"
+    },
+    {
+      "name": "docker",
+      "source": "https://github.com/OpenHands/extensions/tree/main/skills/docker"
+    }
+  ]
+}

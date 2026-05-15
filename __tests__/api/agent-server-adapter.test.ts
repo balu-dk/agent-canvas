@@ -117,6 +117,7 @@ describe("buildStartConversationRequest", () => {
     expect(payload.agent.agent_context).toEqual({
       load_public_skills: true,
       load_user_skills: true,
+      marketplace_path: `${window.location.origin}/default-skills-marketplace.json`,
     });
     expect(payload.agent.agent).toBeUndefined();
     expect(payload.workspace.working_dir).toBe(

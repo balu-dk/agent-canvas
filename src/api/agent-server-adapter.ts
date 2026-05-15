@@ -1,5 +1,6 @@
 import { SkillsClient } from "@openhands/typescript-client/clients";
 import { DEFAULT_SETTINGS } from "#/services/settings";
+import { DEFAULT_MARKETPLACE_PATH } from "#/services/default-skills";
 import { ExecutionStatus } from "#/types/agent-server/core";
 import { Settings, SettingsValue } from "#/types/settings";
 import { isAgentServerToolAvailable } from "./agent-server-compatibility";
@@ -314,12 +315,20 @@ function buildConfiguredAgentSettings(settings: Settings): SettingsRecord {
 }
 
 function createAgentFromSettings(agentSettings: SettingsRecord) {
+  const loadPublic = shouldLoadPublicSkills();
   return {
     kind: "Agent",
     ...agentSettings,
     agent_context: {
-      load_public_skills: shouldLoadPublicSkills(),
+      load_public_skills: loadPublic,
       load_user_skills: true,
+      // When public skills are enabled, scope them to the curated list instead
+      // of loading all 44+ skills from the OpenHands/extensions marketplace.
+      ...(loadPublic
+        ? {
+            marketplace_path: `${window.location.origin}${DEFAULT_MARKETPLACE_PATH}`,
+          }
+        : {}),
     },
   };
 }
@@ -548,14 +557,20 @@ export async function loadSkillsForConversation(
   const projectDir =
     conversation?.workspace?.working_dir ?? getAgentServerWorkingDir();
 
+  const loadPublic = shouldLoadPublicSkills();
   const response = await new SkillsClient(
     getAgentServerClientOptions(),
   ).getSkills({
-    load_public: shouldLoadPublicSkills(),
+    load_public: loadPublic,
     load_user: true,
     load_project: true,
     load_org: false,
     project_dir: projectDir,
+    ...(loadPublic
+      ? {
+          marketplace_path: `${window.location.origin}${DEFAULT_MARKETPLACE_PATH}`,
+        }
+      : {}),
   });
 
   return { skills: response.skills ?? [] };

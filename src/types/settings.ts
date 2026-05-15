@@ -131,7 +131,6 @@ export type Settings = {
   is_new_user?: boolean;
   mcp_config?: MCPConfig;
   disabled_skills?: string[];
-  default_skills?: string[];
   max_budget_per_task: number | null;
   email?: string;
   email_verified?: boolean;

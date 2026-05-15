@@ -1,6 +1,5 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCcw } from "lucide-react";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { useInstallSkill } from "#/hooks/mutation/use-install-skill";
 import { useUninstallSkill } from "#/hooks/mutation/use-uninstall-skill";
@@ -18,8 +17,7 @@ import {
 } from "#/utils/custom-toast-handlers";
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
 import type { SkillInfo } from "#/types/settings";
-import { CURATED_DEFAULT_SKILLS } from "#/services/settings";
-import { cn } from "#/utils/utils";
+import { DEFAULT_SKILL_NAMES } from "#/services/default-skills";
 
 function matchesSearch(skill: SkillInfo, query: string): boolean {
   if (!query) return true;
@@ -49,18 +47,16 @@ function SkillsSettingsScreen() {
     useInstalledSkills();
 
   const [disabledSet, setDisabledSet] = React.useState<Set<string>>(new Set());
-  const [defaultSet, setDefaultSet] = React.useState<Set<string>>(new Set());
   const [hasHydratedInitialSettings, setHasHydratedInitialSettings] =
     React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState<SkillTypeFilter>("all");
   const [marketplaceSource, setMarketplaceSource] = React.useState("");
 
-  // Sync local state with server settings when data first arrives
+  // Sync local disabled state with server settings when data first arrives
   React.useEffect(() => {
     if (!settings || hasHydratedInitialSettings) return;
     setDisabledSet(new Set(settings.disabled_skills ?? []));
-    setDefaultSet(new Set(settings.default_skills ?? CURATED_DEFAULT_SKILLS));
     setHasHydratedInitialSettings(true);
   }, [settings, hasHydratedInitialSettings]);
 
@@ -76,30 +72,11 @@ function SkillsSettingsScreen() {
     });
   };
 
-  const handleDefaultToggle = (skillName: string) => {
-    setDefaultSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(skillName)) {
-        next.delete(skillName);
-      } else {
-        next.add(skillName);
-      }
-      return next;
-    });
-  };
-
-  const handleResetToRecommended = () => {
-    setDefaultSet(new Set(CURATED_DEFAULT_SKILLS));
-  };
-
-  // Auto-save disabled_skills and default_skills once initial settings load.
+  // Auto-save disabled_skills once initial settings load.
   React.useEffect(() => {
     if (!hasHydratedInitialSettings) return;
     saveSettings(
-      {
-        disabled_skills: Array.from(disabledSet),
-        default_skills: Array.from(defaultSet),
-      },
+      { disabled_skills: Array.from(disabledSet) },
       {
         onError: (error) => {
           const errorMessage = retrieveAxiosErrorMessage(error);
@@ -107,7 +84,7 @@ function SkillsSettingsScreen() {
         },
       },
     );
-  }, [disabledSet, defaultSet, hasHydratedInitialSettings, saveSettings, t]);
+  }, [disabledSet, hasHydratedInitialSettings, saveSettings, t]);
 
   const handleInstall = () => {
     const source = marketplaceSource.trim();
@@ -174,72 +151,6 @@ function SkillsSettingsScreen() {
               {t(I18nKey.SETTINGS$SKILLS_PAGE_DESCRIPTION)}
             </div>
           </div>
-
-          {/* ── Default Skills ───────────────────────────────────────── */}
-          <section
-            data-testid="default-skills-section"
-            className="flex flex-col gap-4 rounded-2xl border border-tertiary bg-base-secondary p-5"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <h3 className="text-base font-semibold text-foreground">
-                  {t(I18nKey.SETTINGS$SKILLS_DEFAULT_TITLE)}
-                </h3>
-                <p className="text-sm text-tertiary-light">
-                  {t(I18nKey.SETTINGS$SKILLS_DEFAULT_DESCRIPTION)}
-                </p>
-              </div>
-              <button
-                type="button"
-                data-testid="reset-to-recommended-button"
-                onClick={handleResetToRecommended}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-tertiary bg-transparent px-3 py-1.5 text-xs font-medium text-tertiary-light transition-colors hover:border-white/40 hover:text-white cursor-pointer"
-              >
-                <RotateCcw className="size-3.5" aria-hidden />
-                {t(I18nKey.SETTINGS$SKILLS_RESET_TO_RECOMMENDED)}
-              </button>
-            </div>
-
-            {isLoading ? (
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className="h-7 w-20 rounded-full bg-tertiary animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div
-                data-testid="default-skills-chips"
-                className="flex flex-wrap gap-2"
-              >
-                {(skills ?? []).map((skill) => {
-                  const isInDefault = defaultSet.has(skill.name);
-                  return (
-                    <button
-                      key={skill.name}
-                      type="button"
-                      data-testid={`default-skill-chip-${skill.name}`}
-                      aria-pressed={isInDefault}
-                      onClick={() => handleDefaultToggle(skill.name)}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
-                        isInDefault
-                          ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20"
-                          : "border-tertiary bg-transparent text-tertiary-light hover:border-white/40 hover:text-white",
-                      )}
-                    >
-                      {isInDefault && (
-                        <span className="size-1.5 rounded-full bg-yellow-300" />
-                      )}
-                      {skill.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
 
           {/* ── Installed Skills ─────────────────────────────────────── */}
           {!installedLoading &&
@@ -369,7 +280,7 @@ function SkillsSettingsScreen() {
                         onToggle={(enabled) =>
                           handleToggle(skill.name, enabled)
                         }
-                        isDefault={defaultSet.has(skill.name)}
+                        isDefault={DEFAULT_SKILL_NAMES.includes(skill.name)}
                         isInstalled={installedSkillNames.has(skill.name)}
                       />
                     ))}

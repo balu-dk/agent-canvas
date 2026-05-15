@@ -20,3 +20,4 @@ dist/
 ralph/
 .vercel
 *.tgz
+coverage/

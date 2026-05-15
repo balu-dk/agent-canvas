@@ -194,119 +194,12 @@ describe("SkillsSettingsScreen", () => {
     expect(screen.getByTestId("skills-no-match")).toBeInTheDocument();
   });
 
-  // ── default_skills section ─────────────────────────────────────────────────
+  // ── DEFAULT badge (driven by static DEFAULT_SKILL_NAMES list) ────────────
 
-  it("renders the Default Skills section", async () => {
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue([]);
-
-    renderSkillsSettingsScreen();
-
-    const section = await screen.findByTestId("default-skills-section");
-    expect(section).toBeInTheDocument();
-  });
-
-  it("renders Reset to recommended button", async () => {
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue([]);
-
-    renderSkillsSettingsScreen();
-
-    expect(
-      await screen.findByTestId("reset-to-recommended-button"),
-    ).toBeInTheDocument();
-  });
-
-  it("shows chips for each available skill", async () => {
-    const skills = [
-      buildSkill({ name: "github" }),
-      buildSkill({ name: "docker" }),
-    ];
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue(skills);
-
-    renderSkillsSettingsScreen();
-
-    await screen.findByTestId("default-skill-chip-github");
-    expect(screen.getByTestId("default-skill-chip-docker")).toBeInTheDocument();
-  });
-
-  it("marks curated defaults as pressed chips", async () => {
-    const { CURATED_DEFAULT_SKILLS } = await import("#/services/settings");
-    const skills = CURATED_DEFAULT_SKILLS.map((name) => buildSkill({ name }));
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue(skills);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ default_skills: [...CURATED_DEFAULT_SKILLS] }),
-    );
-
-    renderSkillsSettingsScreen();
-
-    for (const name of CURATED_DEFAULT_SKILLS) {
-      const chip = await screen.findByTestId(`default-skill-chip-${name}`);
-      expect(chip).toHaveAttribute("aria-pressed", "true");
-    }
-  });
-
-  it("chip click toggles default state off then on", async () => {
-    const user = userEvent.setup();
-    const { CURATED_DEFAULT_SKILLS } = await import("#/services/settings");
-    const githubSkill = buildSkill({ name: "github" });
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue([githubSkill]);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ default_skills: ["github"] }),
-    );
-
-    renderSkillsSettingsScreen();
-
-    const chip = await screen.findByTestId("default-skill-chip-github");
-    expect(chip).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(chip);
-
-    expect(chip).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(chip);
-
-    expect(chip).toHaveAttribute("aria-pressed", "true");
-
-    // Suppress unused import warning
-    void CURATED_DEFAULT_SKILLS;
-  });
-
-  it("clicking Reset sets default chips back to curated list", async () => {
-    const user = userEvent.setup();
-    const { CURATED_DEFAULT_SKILLS } = await import("#/services/settings");
-    const skills = [
-      buildSkill({ name: "github" }),
-      buildSkill({ name: "linear" }),
-    ];
-    vi.spyOn(SkillsService, "getSkills").mockResolvedValue(skills);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ default_skills: ["linear"] }),
-    );
-
-    renderSkillsSettingsScreen();
-
-    // Initially only linear is default
-    const linearChip = await screen.findByTestId("default-skill-chip-linear");
-    expect(linearChip).toHaveAttribute("aria-pressed", "true");
-    const githubChip = screen.getByTestId("default-skill-chip-github");
-    expect(githubChip).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(screen.getByTestId("reset-to-recommended-button"));
-
-    // After reset, github (a curated default) should be pressed
-    if (CURATED_DEFAULT_SKILLS.includes("github")) {
-      expect(screen.getByTestId("default-skill-chip-github")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-    }
-  });
-
-  it("skill card shows DEFAULT badge when skill is in default set", async () => {
+  it("skill card shows DEFAULT badge for a skill in the system-curated list", async () => {
+    // "github" is in DEFAULT_SKILL_NAMES
     const skill = buildSkill({ name: "github" });
     vi.spyOn(SkillsService, "getSkills").mockResolvedValue([skill]);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ default_skills: ["github"] }),
-    );
 
     renderSkillsSettingsScreen();
 
@@ -316,12 +209,10 @@ describe("SkillsSettingsScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("skill card does NOT show DEFAULT badge when skill is not in default set", async () => {
+  it("skill card does NOT show DEFAULT badge for a skill outside the curated list", async () => {
+    // "linear" is not in DEFAULT_SKILL_NAMES
     const skill = buildSkill({ name: "linear" });
     vi.spyOn(SkillsService, "getSkills").mockResolvedValue([skill]);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ default_skills: [] }),
-    );
 
     renderSkillsSettingsScreen();
 
@@ -338,7 +229,7 @@ describe("SkillsSettingsScreen", () => {
 
     renderSkillsSettingsScreen();
 
-    await screen.findByTestId("default-skills-section");
+    await screen.findByTestId("install-skill-section");
     expect(
       screen.queryByTestId("installed-skills-section"),
     ).not.toBeInTheDocument();
