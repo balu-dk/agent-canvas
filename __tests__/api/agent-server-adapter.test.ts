@@ -120,6 +120,29 @@ describe("buildStartConversationRequest", () => {
     expect(payload.initial_message.content[0]?.text).toBe("hello");
   });
 
+  it("forwards the switch-LLM setting to SDK agent settings", () => {
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          enable_switch_llm_tool: true,
+          llm: { model: "nested-model" },
+        },
+      },
+    }) as {
+      agent?: unknown;
+      agent_settings: {
+        enable_switch_llm_tool?: boolean;
+        include_default_tools?: unknown;
+      };
+    };
+
+    expect(payload.agent).toBeUndefined();
+    expect(payload.agent_settings.enable_switch_llm_tool).toBe(true);
+    expect(payload.agent_settings.include_default_tools).toBeUndefined();
+  });
+
   it("omits browser_tool_set when the server does not advertise browser support", () => {
     mockIsAgentServerToolAvailable.mockReturnValue(false);
 

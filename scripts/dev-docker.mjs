@@ -62,6 +62,7 @@ import {
   logService,
   logSuccess,
   main,
+  registerShutdownHook,
   spawnService,
 } from "./dev-with-automation.mjs";
 import { validateLocalAgentServerPath } from "./dev-safe.mjs";
@@ -74,9 +75,9 @@ const CONTAINER_LOCAL_SDK_DIR = "/agent-server-src";
 const AGENT_SERVER_REPO = "ghcr.io/openhands/agent-server";
 // Default tag used when OH_AGENT_SERVER_GIT_REF is not set.
 // Should match DEFAULT_AGENT_SERVER_VERSION in dev-safe.mjs for consistency.
-// Format: {version}-python (e.g., 1.22.0-python) for released versions.
+// Format: {version}-python (e.g., 1.22.1-python) for released versions.
 // Note: The SDK build script strips the "v" prefix from semver release tags.
-const DEFAULT_AGENT_SERVER_TAG = "1.22.0-python";
+const DEFAULT_AGENT_SERVER_TAG = "1.22.1-python";
 const CONTAINER_NAME = "agent-canvas-dev-agent-server";
 
 // Keep the in-container home at the path advertised by the agent-server
@@ -260,6 +261,9 @@ function startAgentServerDocker(config) {
 
   // Best-effort cleanup of any leftover container from a previous run.
   spawnSync("docker", ["rm", "-f", CONTAINER_NAME], { stdio: "ignore" });
+  registerShutdownHook(() => {
+    spawnSync("docker", ["rm", "-f", CONTAINER_NAME], { stdio: "ignore" });
+  });
 
   const home = homedir();
   const userSpec = getHostDockerUserSpec();
