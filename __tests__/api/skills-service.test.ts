@@ -41,12 +41,11 @@ afterEach(() => {
 });
 
 describe("SkillsService.getSkills against the agent-server backend", () => {
-  it("always requests load_public:true so the full public catalog is shown on the Skills settings page", async () => {
-    vi.stubEnv("VITE_LOAD_PUBLIC_SKILLS", "");
+  it("scopes public skill loading to the curated default marketplace manifest", async () => {
     mockGetSkills.mockResolvedValue({
       skills: [
         {
-          name: "alpha",
+          name: "github",
           type: "knowledge",
           content: "...",
           triggers: [],
@@ -57,18 +56,18 @@ describe("SkillsService.getSkills against the agent-server backend", () => {
       sources: { sandbox: 0, sdk_base: 1, org: 0, project: 0 },
     });
 
-    // Act
     const skills = await SkillsService.getSkills();
 
-    // Assert: the request opts the user into public skills regardless of the
-    // perf-oriented VITE_LOAD_PUBLIC_SKILLS gate, and the page receives them.
+    // load_public:true is always set alongside marketplace_path to scope
+    // loading to only the curated defaults — never the full 44+ cache.
     expect(mockGetSkills).toHaveBeenCalledTimes(1);
     expect(mockGetSkills.mock.calls[0]?.[0]).toMatchObject({
       load_public: true,
       load_user: true,
       load_project: true,
       load_org: false,
+      marketplace_path: `${window.location.origin}/default-skills-marketplace.json`,
     });
-    expect(skills.map((s) => s.name)).toEqual(["alpha"]);
+    expect(skills.map((s) => s.name)).toEqual(["github"]);
   });
 });

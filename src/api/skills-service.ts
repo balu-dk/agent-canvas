@@ -7,6 +7,7 @@ import type {
 } from "@openhands/typescript-client";
 import { SkillsClient } from "@openhands/typescript-client/clients";
 import { SkillInfo } from "#/types/settings";
+import { DEFAULT_MARKETPLACE_PATH } from "#/services/default-skills";
 import { getAgentServerWorkingDir } from "./agent-server-config";
 import { getActiveBackend } from "./backend-registry/active-store";
 import { fetchCloudSkills } from "./cloud/skills-service.api";
@@ -28,6 +29,7 @@ class SkillsService {
       load_project: true,
       load_org: false,
       project_dir: getAgentServerWorkingDir(),
+      marketplace_path: `${window.location.origin}${DEFAULT_MARKETPLACE_PATH}`,
     });
 
     return (response.skills ?? []) as SkillInfo[];

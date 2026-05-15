@@ -1,6 +1,7 @@
 import { SkillsClient } from "@openhands/typescript-client/clients";
 import type { SkillInfo as SdkSkillInfo } from "@openhands/typescript-client";
 import { DEFAULT_SETTINGS } from "#/services/settings";
+import { DEFAULT_MARKETPLACE_PATH } from "#/services/default-skills";
 import { ExecutionStatus } from "#/types/agent-server/core";
 import { Settings, SettingsValue } from "#/types/settings";
 import { isAgentServerToolAvailable } from "./agent-server-compatibility";
@@ -16,6 +17,10 @@ import {
 import { getAgentServerClientOptions } from "./agent-server-client-options";
 import SettingsService from "./settings-service/settings-service.api";
 import { getStoredConversationMetadata } from "./conversation-metadata-store";
+
+/** Absolute URL to the curated default-skills manifest served as a static asset. */
+const defaultMarketplaceUrl = () =>
+  `${window.location.origin}${DEFAULT_MARKETPLACE_PATH}`;
 
 export interface DirectConversationInfo {
   id: string;
@@ -543,6 +548,7 @@ export async function buildStartConversationRequestWithEncryptedSettings(options
         load_project: true,
         load_org: false,
         project_dir: options.workingDir ?? getAgentServerWorkingDir(),
+        marketplace_path: defaultMarketplaceUrl(),
       })
       .catch(() => ({ skills: [] as SdkSkillInfo[] })),
   ]);
@@ -580,6 +586,7 @@ export async function loadSkillsForConversation(
     load_project: true,
     load_org: false,
     project_dir: projectDir,
+    marketplace_path: defaultMarketplaceUrl(),
   });
 
   return { skills: response.skills ?? [] };
