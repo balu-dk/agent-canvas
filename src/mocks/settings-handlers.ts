@@ -1,23 +1,8 @@
 import { http, delay, HttpResponse } from "msw";
 import { WebClientConfig } from "#/api/option-service/option.types";
+import type { SaveProfileRequest } from "#/api/profiles-service/profiles-service.api";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { Settings, SettingsValue } from "#/types/settings";
-
-export let MOCK_PROFILES: Array<{
-  name: string;
-  is_active: boolean;
-  model?: string | null;
-}> = [
-  { name: "gpt-4o-default", is_active: true, model: null },
-  { name: "claude-haiku-fast", is_active: false, model: null },
-];
-
-export const resetMockProfiles = () => {
-  MOCK_PROFILES = [
-    { name: "gpt-4o-default", is_active: true, model: null },
-    { name: "claude-haiku-fast", is_active: false, model: null },
-  ];
-};
 
 /** Simple recursive merge — objects merge, scalars overwrite. */
 function deepMerge(
@@ -325,8 +310,102 @@ const MOCK_USER_PREFERENCES: {
   settings: structuredClone(MOCK_DEFAULT_USER_SETTINGS),
 };
 
+interface MockLlmProfile {
+  name: string;
+  config: Record<string, SettingsValue>;
+  api_key_set: boolean;
+}
+
+const MOCK_LLM_PROFILES: {
+  profiles: Map<string, MockLlmProfile>;
+  activeProfile: string | null;
+} = {
+  profiles: new Map(),
+  activeProfile: null,
+};
+
+const getProfileNameParam = (value: unknown): string =>
+  decodeURIComponent(
+    Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""),
+  );
+
+const profileToListItem = (profile: MockLlmProfile) => ({
+  name: profile.name,
+  model: typeof profile.config.model === "string" ? profile.config.model : null,
+  base_url:
+    typeof profile.config.base_url === "string"
+      ? profile.config.base_url
+      : null,
+  api_key_set: profile.api_key_set,
+});
+
+const applyProfileToMockSettings = (profile: MockLlmProfile) => {
+  const current =
+    MOCK_USER_PREFERENCES.settings ||
+    structuredClone(MOCK_DEFAULT_USER_SETTINGS);
+
+  MOCK_USER_PREFERENCES.settings = {
+    ...current,
+    agent_settings: {
+      ...(current.agent_settings ?? {}),
+      llm: structuredClone(profile.config),
+    },
+    llm_api_key_set: profile.api_key_set,
+  };
+};
+
+const buildProfileDetail = (
+  profile: MockLlmProfile,
+  exposeSecrets: string | null,
+) => {
+  const config = structuredClone(profile.config);
+
+  if (profile.api_key_set && "api_key" in config) {
+    if (exposeSecrets === "encrypted") {
+      config.api_key = `gAAAAA_mock_encrypted_${profile.name}`;
+    } else if (exposeSecrets === "plaintext") {
+      // Keep the mock plaintext value.
+    } else {
+      config.api_key = null;
+    }
+  }
+
+  return {
+    name: profile.name,
+    config,
+    api_key_set: profile.api_key_set,
+  };
+};
+
+const saveMockProfile = (name: string, request: SaveProfileRequest) => {
+  const llm = structuredClone(
+    (request.llm ?? {}) as Record<string, SettingsValue>,
+  );
+
+  if (typeof llm.model !== "string" || llm.model.trim().length === 0) {
+    return null;
+  }
+
+  const profile: MockLlmProfile = {
+    name,
+    config: llm,
+    api_key_set:
+      typeof llm.api_key === "string" && llm.api_key.trim().length > 0,
+  };
+
+  MOCK_LLM_PROFILES.profiles.set(name, profile);
+
+  if (MOCK_LLM_PROFILES.activeProfile === name) {
+    applyProfileToMockSettings(profile);
+  }
+
+  return profile;
+};
+
 export const resetTestHandlersMockSettings = () => {
   MOCK_USER_PREFERENCES.settings = structuredClone(MOCK_DEFAULT_USER_SETTINGS);
+  MOCK_LLM_PROFILES.profiles.clear();
+  MOCK_LLM_PROFILES.activeProfile = null;
 };
 
 // Mock model data used by provider/model endpoints
@@ -501,6 +580,130 @@ export const SETTINGS_HANDLERS = [
   http.get("*/api/options/security-analyzers", async () =>
     HttpResponse.json(["llm", "none"]),
   ),
+
+  http.get("*/api/profiles", async () =>
+    HttpResponse.json({
+      profiles: Array.from(MOCK_LLM_PROFILES.profiles.values()).map(
+        profileToListItem,
+      ),
+      active_profile: MOCK_LLM_PROFILES.activeProfile,
+    }),
+  ),
+
+  http.get("*/api/profiles/:name", async ({ params, request }) => {
+    const name = getProfileNameParam(params.name);
+    const profile = MOCK_LLM_PROFILES.profiles.get(name);
+
+    if (!profile) {
+      return HttpResponse.json(
+        { detail: `Profile '${name}' not found` },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json(
+      buildProfileDetail(profile, request.headers.get("X-Expose-Secrets")),
+    );
+  }),
+
+  http.post("*/api/profiles/:name", async ({ params, request }) => {
+    const name = getProfileNameParam(params.name);
+    const body = (await request.json()) as SaveProfileRequest | null;
+
+    if (!body) {
+      return HttpResponse.json({ detail: "Empty body" }, { status: 400 });
+    }
+
+    const profile = saveMockProfile(name, body);
+    if (!profile) {
+      return HttpResponse.json(
+        { detail: "Profile requires llm.model" },
+        { status: 400 },
+      );
+    }
+
+    return HttpResponse.json(
+      { name: profile.name, message: `Profile '${profile.name}' saved` },
+      { status: 201 },
+    );
+  }),
+
+  http.delete("*/api/profiles/:name", async ({ params }) => {
+    const name = getProfileNameParam(params.name);
+    MOCK_LLM_PROFILES.profiles.delete(name);
+
+    if (MOCK_LLM_PROFILES.activeProfile === name) {
+      MOCK_LLM_PROFILES.activeProfile = null;
+    }
+
+    return HttpResponse.json({
+      name,
+      message: `Profile '${name}' deleted`,
+    });
+  }),
+
+  http.post("*/api/profiles/:name/rename", async ({ params, request }) => {
+    const name = getProfileNameParam(params.name);
+    const body = (await request.json()) as { new_name?: string } | null;
+    const newName = body?.new_name?.trim() ?? "";
+    const profile = MOCK_LLM_PROFILES.profiles.get(name);
+
+    if (!profile) {
+      return HttpResponse.json(
+        { detail: `Profile '${name}' not found` },
+        { status: 404 },
+      );
+    }
+
+    if (!newName) {
+      return HttpResponse.json(
+        { detail: "new_name is required" },
+        { status: 400 },
+      );
+    }
+
+    if (newName !== name && MOCK_LLM_PROFILES.profiles.has(newName)) {
+      return HttpResponse.json(
+        { detail: `Profile '${newName}' already exists` },
+        { status: 409 },
+      );
+    }
+
+    MOCK_LLM_PROFILES.profiles.delete(name);
+    const renamedProfile = { ...profile, name: newName };
+    MOCK_LLM_PROFILES.profiles.set(newName, renamedProfile);
+
+    if (MOCK_LLM_PROFILES.activeProfile === name) {
+      MOCK_LLM_PROFILES.activeProfile = newName;
+      applyProfileToMockSettings(renamedProfile);
+    }
+
+    return HttpResponse.json({
+      name: newName,
+      message: `Profile '${name}' renamed to '${newName}'`,
+    });
+  }),
+
+  http.post("*/api/profiles/:name/activate", async ({ params }) => {
+    const name = getProfileNameParam(params.name);
+    const profile = MOCK_LLM_PROFILES.profiles.get(name);
+
+    if (!profile) {
+      return HttpResponse.json(
+        { detail: `Profile '${name}' not found` },
+        { status: 404 },
+      );
+    }
+
+    MOCK_LLM_PROFILES.activeProfile = name;
+    applyProfileToMockSettings(profile);
+
+    return HttpResponse.json({
+      name,
+      message: `Profile '${name}' activated and applied to current settings`,
+      llm_applied: true,
+    });
+  }),
 
   http.get("*/api/v1/web-client/config", () => {
     const config: WebClientConfig = {
@@ -727,62 +930,5 @@ export const SETTINGS_HANDLERS = [
     }
 
     return HttpResponse.json(null, { status: 400 });
-  }),
-
-  http.get("*/api/profiles", async () =>
-    HttpResponse.json({
-      profiles: MOCK_PROFILES.map((p) => ({
-        name: p.name,
-        model: p.model ?? null,
-        base_url: null,
-        api_key_set: false,
-      })),
-      active_profile: MOCK_PROFILES.find((p) => p.is_active)?.name ?? null,
-    }),
-  ),
-
-  // Create or update a profile (POST /api/profiles/:name).
-  // MSW path params capture a single segment, so /activate and /rename
-  // sub-paths are handled by their own handlers below without overlap.
-  http.post("*/api/profiles/:name", async ({ request, params }) => {
-    const name = params.name as string;
-    const body = (await request.json()) as { llm?: { model?: string } } | null;
-    const model = body?.llm?.model ?? null;
-    const existing = MOCK_PROFILES.findIndex((p) => p.name === name);
-    if (existing >= 0) {
-      MOCK_PROFILES[existing] = { ...MOCK_PROFILES[existing], model };
-    } else {
-      MOCK_PROFILES.push({ name, is_active: false, model });
-    }
-    return HttpResponse.json({ name, message: "Profile saved" });
-  }),
-
-  http.post("*/api/profiles/:name/activate", async ({ params }) => {
-    const name = params.name as string;
-    MOCK_PROFILES = MOCK_PROFILES.map((p) => ({
-      ...p,
-      is_active: p.name === name,
-    }));
-    return HttpResponse.json({
-      name,
-      message: "Profile activated",
-      llm_applied: true,
-    });
-  }),
-
-  http.post("*/api/profiles/:name/rename", async ({ request, params }) => {
-    const body = (await request.json()) as { new_name?: string } | null;
-    const oldName = params.name as string;
-    const newName = body?.new_name ?? oldName;
-    MOCK_PROFILES = MOCK_PROFILES.map((p) =>
-      p.name === oldName ? { ...p, name: newName } : p,
-    );
-    return HttpResponse.json({ name: newName, message: "Profile renamed" });
-  }),
-
-  http.delete("*/api/profiles/:name", async ({ params }) => {
-    const name = params.name as string;
-    MOCK_PROFILES = MOCK_PROFILES.filter((p) => p.name !== name);
-    return HttpResponse.json({ name, message: "Profile deleted" });
   }),
 ];

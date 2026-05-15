@@ -6,7 +6,6 @@ import {
   SETTINGS_HANDLERS,
   MOCK_DEFAULT_USER_SETTINGS,
   resetTestHandlersMockSettings,
-  resetMockProfiles,
 } from "./settings-handlers";
 import { CONVERSATION_HANDLERS } from "./conversation-handlers";
 import { AUTH_HANDLERS } from "./auth-handlers";
@@ -34,5 +33,4 @@ export {
   MOCK_DEFAULT_USER_SETTINGS,
   resetTestHandlersMockSettings,
   resetAutomationMockData,
-  resetMockProfiles,
 };
