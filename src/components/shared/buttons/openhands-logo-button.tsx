@@ -9,22 +9,39 @@ import { StyledTooltip } from "#/components/shared/buttons/styled-tooltip";
    const { t } = useTranslation("openhands");
    const tooltipText = t(I18nKey.BRANDING$OPENHANDS);
    const ariaLabel = t(I18nKey.BRANDING$OPENHANDS_LOGO); */
-export function OpenHandsLogoButton() {
+
+interface OpenHandsLogoButtonProps {
+  /* rbren branch: compact mode skips the "rbren's mod" wordmark next to the
+     logo. Used by the collapsed 64px sidebar rail where there's no room. */
+  compact?: boolean;
+}
+
+export function OpenHandsLogoButton({
+  compact = false,
+}: OpenHandsLogoButtonProps = {}) {
   const tooltipText = "rbren's mod";
   const ariaLabel = "rbren's mod logo";
 
   return (
     <StyledTooltip content={tooltipText}>
       <NavigationLink to="/conversations" aria-label={ariaLabel}>
-        {/* rbren branch: tint logo with Toffee Brown (#9D684B), the
-            rbren-earth theme's primary accent. Targets only the
-            originally-white SVG paths so the transparent face cut-out
-            stays transparent. */}
-        <OpenHandsLogo
-          width={46}
-          height={30}
-          className="[&_path[fill='white']]:fill-[#9D684B]"
-        />
+        <span className="flex items-center gap-2">
+          {/* rbren branch: tint logo with var(--oh-muted), matching the
+              inactive color of the sidebar nav icons (Code / Customize /
+              Automate). Targets only originally-white SVG paths so the
+              transparent face cut-out stays transparent. */}
+          <OpenHandsLogo
+            width={46}
+            height={30}
+            className="[&_path[fill='white']]:fill-[var(--oh-muted)]"
+          />
+          {/* rbren branch: wordmark shown next to the logo in expanded mode. */}
+          {!compact && (
+            <span className="text-sm font-medium text-[var(--oh-muted)] whitespace-nowrap">
+              rbren&apos;s mod
+            </span>
+          )}
+        </span>
       </NavigationLink>
     </StyledTooltip>
   );

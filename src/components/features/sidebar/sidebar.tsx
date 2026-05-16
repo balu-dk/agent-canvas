@@ -191,7 +191,9 @@ export function Sidebar() {
                   showCollapsedExpandButton && "opacity-0",
                 )}
               >
-                <OpenHandsLogoButton />
+                {/* rbren branch: pass compact so the wordmark is hidden in
+                    the collapsed 64px rail. */}
+                <OpenHandsLogoButton compact />
               </div>
               <button
                 type="button"
