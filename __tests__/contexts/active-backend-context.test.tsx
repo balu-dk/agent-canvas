@@ -83,6 +83,35 @@ describe("ActiveBackendProvider", () => {
     ]);
   });
 
+  it("serializes concurrent backend additions", async () => {
+    const { result } = renderHook(() => useActiveBackendContext(), {
+      wrapper: makeWrapper(),
+    });
+
+    await act(async () => {
+      await Promise.all([
+        result.current.addBackend({
+          name: "Local A",
+          host: "http://localhost:9000",
+          apiKey: "key-a",
+          kind: "local",
+        }),
+        result.current.addBackend({
+          name: "Local B",
+          host: "http://localhost:9001",
+          apiKey: "key-b",
+          kind: "local",
+        }),
+      ]);
+    });
+
+    expect(result.current.backends.map((backend) => backend.name)).toEqual([
+      DEFAULT_LOCAL_BACKEND_NAME,
+      "Local A",
+      "Local B",
+    ]);
+  });
+
   it("setActive switches the active backend without touching unrelated React Query cache entries", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(["dummy"], { value: 1 });
