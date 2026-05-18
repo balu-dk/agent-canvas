@@ -20,7 +20,7 @@ import {
   getProcessTreeSpawnOptions,
   isProcessRunning,
   signalProcessTree,
-} from "./dev-process-utils.mjs";
+} from "./launch-process-utils.mjs";
 
 const DEFAULT_BACKEND_PORT = 18000;
 const DEFAULT_VITE_PORT = 3001;
@@ -50,8 +50,7 @@ export function generateRandomApiKey() {
 }
 
 // Where the auto-generated default session API key is persisted so it stays
-// stable across `npm run dev` / `npm run dev:dangerously-dockerless` /
-// `npm run dev:docker` restarts. Keeping the key stable means the value
+// stable across Docker and dockerless `npm run dev` restarts. Keeping the key stable means the value
 // baked into the frontend (VITE_SESSION_API_KEY) and the persisted
 // backend-registry entry (`openhands-backends` localStorage) stay in sync
 // without users needing to set anything in `.env`.
@@ -268,7 +267,7 @@ export function formatMissingUvxGuidance(cwd = process.cwd()) {
     `See the local Quickstart for details: ${readmePath}`,
     "",
     "Other options:",
-    "- npm run dev:frontend   # use an already running backend",
+    "- npm run dev -- --frontend-only   # use an already running backend",
     "- npm run dev:mock       # run the frontend with mock APIs",
   ].join("\n");
 }
@@ -442,7 +441,7 @@ function parsePort(value, fallback) {
  * - Ports are already known to be available (e.g., specified via env vars)
  * - You're building config objects for downstream use, not starting services
  *
- * For scripts that actually start services (dev-safe.mjs main, dev-with-automation.mjs),
+ * For scripts that actually start services (launch-safe.mjs main, launch-automation.mjs),
  * use {@link buildSafeDevConfigAsync} instead to handle port conflicts gracefully.
  *
  * @param {string} cwd - Current working directory
@@ -625,7 +624,7 @@ export function buildAgentServerEnv(config) {
  * container and reaches host services via "host.docker.internal".
  *
  * @param {object} options
- * @param {string} [options.mode] - Human-readable dev mode label (e.g. "dev:safe").
+ * @param {string} [options.mode] - Human-readable dev mode label (e.g. "npm run dev -- --no-automation --sandbox none").
  * @param {string} [options.agentHostAlias="localhost"] - Hostname the agent
  *   uses to reach services running on the host machine.
  * @param {number} [options.agentServerPort] - Port the agent-server listens on.
@@ -683,11 +682,15 @@ export function buildRuntimeServicesInfo(options) {
   };
 
   if (ingressPort !== undefined) {
+    const hasAutomationRoute =
+      automation?.port !== undefined && automation.port !== null;
     services.ingress = {
-      description:
-        "Unified entry point. Routes /api/automation/* to the automation " +
-        "backend, /api/* and /sockets to the agent-server, and /* to the " +
-        "frontend.",
+      description: hasAutomationRoute
+        ? "Unified entry point. Routes /api/automation/* to the automation " +
+          "backend, /api/* and /sockets to the agent-server, and /* to the " +
+          "frontend."
+        : "Unified entry point. Routes /api/* and /sockets to the agent-server, " +
+          "and /* to the frontend.",
       url_from_agent: `http://${agentHostAlias}:${ingressPort}`,
     };
   }
@@ -731,27 +734,37 @@ export function buildRuntimeServicesInfo(options) {
 
 export function buildNpmScriptCommand(
   scriptName,
+  scriptArgs = [],
   platform = process.platform,
   env = process.env,
   nodeExecPath = process.execPath,
 ) {
+  if (!Array.isArray(scriptArgs)) {
+    nodeExecPath = env ?? process.execPath;
+    env = platform ?? process.env;
+    platform = scriptArgs ?? process.platform;
+    scriptArgs = [];
+  }
+
+  const npmArgs = ["run", scriptName, ...scriptArgs];
+
   if (env.npm_execpath) {
     return {
       command: env.npm_node_execpath || nodeExecPath,
-      args: [env.npm_execpath, "run", scriptName],
+      args: [env.npm_execpath, ...npmArgs],
     };
   }
 
   if (platform === "win32") {
     return {
       command: env.ComSpec || "cmd.exe",
-      args: ["/d", "/s", "/c", "npm", "run", scriptName],
+      args: ["/d", "/s", "/c", "npm", ...npmArgs],
     };
   }
 
   return {
     command: "npm",
-    args: ["run", scriptName],
+    args: npmArgs,
   };
 }
 
@@ -818,10 +831,67 @@ function spawnProcess(command, args, options = {}) {
   return child;
 }
 
-async function main() {
-  console.log("Starting isolated agent-server + frontend dev stack...");
-  validateFrontendDependencies();
-  console.log("Frontend dependencies found.");
+function parseLaunchSafeArgs(argv = process.argv.slice(2)) {
+  return {
+    backendOnly:
+      argv.includes("--backend-only") || argv.includes("--server-only"),
+    frontendOnly: argv.includes("--frontend-only"),
+    frontendRequireSessionKey: argv.includes("--frontend-require-session-key"),
+    help: argv.includes("--help") || argv.includes("-h"),
+  };
+}
+
+function showLaunchSafeHelp() {
+  console.log(`
+Agent Canvas server development launcher
+
+USAGE:
+  npm run dev -- --no-automation --sandbox none [-- options]
+  npm run dev -- --backend-only --sandbox none [-- options]
+
+OPTIONS:
+  --backend-only                 Start only the agent-server
+  --frontend-only                Start only the frontend
+  --frontend-require-session-key Do not inject the generated session key into the frontend
+  -h, --help                     Show this help
+`);
+}
+
+export async function main() {
+  const args = parseLaunchSafeArgs();
+
+  if (args.help) {
+    showLaunchSafeHelp();
+    return;
+  }
+
+  if (args.frontendOnly) {
+    console.log("Starting frontend-only dev server...");
+    validateFrontendDependencies();
+    const frontendCommand = buildNpmScriptCommand("dev", [
+      "--",
+      "--frontend-only",
+    ]);
+    const frontend = spawnProcess(
+      frontendCommand.command,
+      frontendCommand.args,
+      { cwd: process.cwd() },
+    );
+    frontend.once("exit", (code) => {
+      process.exitCode = code ?? 0;
+    });
+    return;
+  }
+
+  console.log(
+    args.backendOnly
+      ? "Starting isolated agent-server only..."
+      : "Starting isolated agent-server + frontend dev stack...",
+  );
+  if (!args.backendOnly) {
+    validateFrontendDependencies();
+    console.log("Frontend dependencies found.");
+  }
   console.log("Allocating ports...");
 
   // Use async config builder with dynamic port allocation
@@ -937,9 +1007,26 @@ async function main() {
     throw error;
   }
 
-  const frontendCommand = buildNpmScriptCommand("dev:frontend");
+  if (args.backendOnly) {
+    console.log(`agent-server is ready at ${config.backendBaseUrl}.`);
+    backend.once("exit", (code) => {
+      if (!shuttingDown) {
+        console.error(
+          `agent-server exited unexpectedly with code ${code ?? 0}`,
+        );
+        shutdown();
+        process.exitCode = code ?? 1;
+      }
+    });
+    return;
+  }
+
+  const frontendCommand = buildNpmScriptCommand("dev", [
+    "--",
+    "--frontend-only",
+  ]);
   const runtimeServicesInfo = buildRuntimeServicesInfo({
-    mode: "dev:safe",
+    mode: "npm run dev -- --no-automation --sandbox none",
     agentServerPort: config.backendPort,
   });
   frontend = spawnProcess(frontendCommand.command, frontendCommand.args, {
@@ -949,8 +1036,11 @@ async function main() {
       VITE_BACKEND_HOST: config.backendHost,
       VITE_BACKEND_BASE_URL: config.backendBaseUrl,
       VITE_WORKING_DIR: config.workingDir,
-      // Pass session API key so frontend can authenticate with agent-server
-      VITE_SESSION_API_KEY: config.sessionApiKey,
+      // Pass session API key so frontend can authenticate with agent-server,
+      // unless the caller explicitly wants to provide it themselves.
+      ...(args.frontendRequireSessionKey
+        ? {}
+        : { VITE_SESSION_API_KEY: config.sessionApiKey }),
       // Inform the frontend (and downstream, the agent's system prompt) about
       // which services are available in this dev stack.
       VITE_RUNTIME_SERVICES_INFO: JSON.stringify(runtimeServicesInfo),

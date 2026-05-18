@@ -58,7 +58,7 @@ EXAMPLES:
   # Use local SDK checkout for development
   PROJECTS_PATH=/path/to/projects OH_AGENT_SERVER_LOCAL_PATH=/path/to/sdk npx @openhands/agent-canvas
 
-For more options, see: node scripts/dev-docker.mjs --help
+For more options, see: npm run dev --help
 `);
   process.exit(0);
 }
@@ -77,12 +77,12 @@ this is a packaging error. If running from source:
   process.exit(1);
 }
 
-// Import dev-docker's dependencies and run with static mode
+// Import Docker launcher dependencies and run with static mode
 let main, checkDockerPrereqs, startAgentServerDocker, CONTAINER_WORKSPACES_DIR;
 try {
-  ({ main } = await import("../scripts/dev-with-automation.mjs"));
+  ({ main } = await import("../scripts/launch-automation.mjs"));
   ({ checkDockerPrereqs, startAgentServerDocker, CONTAINER_WORKSPACES_DIR } =
-    await import("../scripts/dev-docker.mjs"));
+    await import("../scripts/launch-docker.mjs"));
 } catch (err) {
   console.error("Failed to load required scripts. Try reinstalling:");
   console.error("  npm install -g @openhands/agent-canvas@latest");

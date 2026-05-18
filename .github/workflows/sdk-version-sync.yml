@@ -4,16 +4,16 @@ on:
   pull_request:
     paths:
       # Only run on PRs that touch version-related files
-      - "scripts/dev-safe.mjs"
-      - "scripts/dev-with-automation.mjs"
+      - "scripts/launch-safe.mjs"
+      - "scripts/launch-automation.mjs"
       - "scripts/check-sdk-version-sync.mjs"
       - ".github/workflows/sdk-version-sync.yml"
   push:
     branches:
       - main
     paths:
-      - "scripts/dev-safe.mjs"
-      - "scripts/dev-with-automation.mjs"
+      - "scripts/launch-safe.mjs"
+      - "scripts/launch-automation.mjs"
       - "scripts/check-sdk-version-sync.mjs"
       - ".github/workflows/sdk-version-sync.yml"
 

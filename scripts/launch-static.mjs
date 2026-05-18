@@ -8,7 +8,7 @@
  * bottleneck. The static build collapses the frontend into ~50 hashed
  * chunks that all 304 cleanly on reload.
  *
- * Architecture (identical to dev-with-automation, only the frontend differs):
+ * Architecture (identical to launch-automation, only the frontend differs):
  *   ┌──────────────────────────────────────────────────────────────────────────┐
  *   │              http://localhost:8000 (Ingress Proxy)                       │
  *   │              /api/automation/* → Automation Backend                      │
@@ -24,12 +24,12 @@
  *   └─────────────┘    └───────────────┘         └──────────────────┘
  *
  * Usage:
- *   npm run dev:dangerously-dockerless
- *   npm run dev:dangerously-dockerless -- --port 12000
- *   npm run dev:dangerously-dockerless -- --skip-build  # reuse an existing build/
- *   npm run dev:dangerously-dockerless -- --automation-ref feat/my-branch
+ *   npm run dev -- --sandbox none --static
+ *   npm run dev -- --sandbox none --static --port 12000
+ *   npm run dev -- --sandbox none --static --skip-build  # reuse an existing build/
+ *   npm run dev -- --sandbox none --static --automation-ref feat/my-branch
  *
- * Environment variables (all optional, same as dev:automation):
+ * Environment variables (all optional, same as npm run dev):
  *   - PORT: Ingress port (default: 8000)
  *   - OH_AUTOMATION_GIT_REF: Git ref for automation (default: main)
  *   - OH_AGENT_SERVER_GIT_REF: Git ref for agent-server
@@ -50,13 +50,13 @@ import {
   formatMissingUvxGuidance,
   isPortBusy,
   releaseStaleConversationLeases,
-} from "./dev-safe.mjs";
+} from "./launch-safe.mjs";
 import {
   getProcessTreeSpawnOptions,
   isProcessRunning,
   signalProcessTree,
-} from "./dev-process-utils.mjs";
-import { buildAutomationCommand, buildConfig } from "./dev-with-automation.mjs";
+} from "./launch-process-utils.mjs";
+import { buildAutomationCommand, buildConfig } from "./launch-automation.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
@@ -145,7 +145,7 @@ frontend via scripts/static-server.mjs. Use this when a remote or flaky network
 makes Vite's per-module requests painful (e.g. ngrok or plane wifi).
 
 USAGE:
-  npm run dev:dangerously-dockerless [-- options]
+  npm run dev -- --sandbox none --static [-- options]
 
 OPTIONS:
   -p, --port <port>           Ingress port (default: 8000)
@@ -210,12 +210,16 @@ const processes = new Map();
 let shuttingDown = false;
 
 function spawnService(name, command, args, options = {}) {
-  const proc = spawn(command, args, getProcessTreeSpawnOptions({
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, ...options.env },
-    cwd: options.cwd,
-    shell: process.platform === "win32",
-  }));
+  const proc = spawn(
+    command,
+    args,
+    getProcessTreeSpawnOptions({
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...options.env },
+      cwd: options.cwd,
+      shell: process.platform === "win32",
+    }),
+  );
 
   const color = options.color || c.reset;
 
@@ -357,7 +361,7 @@ function startAutomationBackend(config) {
 
 function startStaticServer(config) {
   // Reuse `vitePort` as the upstream port name so the ingress route table
-  // below stays identical to dev-with-automation.mjs.
+  // below stays identical to launch-automation.mjs.
   logService("static", `Starting on port ${config.vitePort}...`, c.magenta);
 
   // Mirror the proxy targets that vite.config.ts exposes in dev mode so that
@@ -512,7 +516,7 @@ function printBanner(config) {
     `${c.dim}Frontend served from: ${join(config.canvasPath, "build")}${c.reset}`,
   );
   console.log(
-    `${c.dim}Edit sources, then re-run \`npm run dev:dangerously-dockerless\` to rebuild.${c.reset}`,
+    `${c.dim}Edit sources, then re-run \`npm run dev -- --sandbox none --static\` to rebuild.${c.reset}`,
   );
   console.log(`${c.dim}Press Ctrl+C to stop${c.reset}`);
   console.log("");
@@ -522,7 +526,7 @@ function printBanner(config) {
 // Main
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function main() {
+export async function main() {
   const args = parseArgs();
   const config = await buildConfig(args);
 
@@ -566,7 +570,7 @@ async function main() {
     logError(
       `Port ${config.agentServerPort} is already in use — another ` +
         `agent-server is running. Stop it (e.g. quit \`npm run dev\`) ` +
-        `before running dev:dangerously-dockerless.`,
+        `before running npm run dev -- --sandbox none --static.`,
     );
     process.exit(1);
   }

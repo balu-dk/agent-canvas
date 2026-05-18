@@ -18,7 +18,7 @@ export interface AutomationHealthResponse {
 }
 
 // Local automation calls go to the automation sidecar that
-// `scripts/dev-with-automation.mjs` mounts behind the local agent-server.
+// `scripts/launch-automation.mjs` mounts behind the local agent-server.
 // That sidecar authenticates via its own `VITE_AUTOMATION_API_KEY` Bearer
 // token — NOT the agent-server's `X-Session-API-Key` — so we cannot reuse
 // the default local agent-server client for these calls.

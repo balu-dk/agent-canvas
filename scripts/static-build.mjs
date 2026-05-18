@@ -9,8 +9,8 @@ import {
   logService,
   logStep,
   logSuccess,
-} from "./dev-with-automation.mjs";
-import { buildNpmScriptCommand } from "./dev-safe.mjs";
+} from "./launch-automation.mjs";
+import { buildNpmScriptCommand } from "./launch-safe.mjs";
 
 export function buildFrontend(config, args = {}) {
   const buildDir = join(config.canvasPath, "build");
@@ -47,10 +47,11 @@ export function buildFrontend(config, args = {}) {
       // Bake the automation backend API key so the static frontend can talk
       // to /api/automation through the ingress.
       VITE_AUTOMATION_API_KEY: config.localApiKey,
-      // Bake the same session key the agent-server accepts. Without this,
-      // a fresh browser session seeds the Local backend with an empty key and
-      // all authenticated agent-server calls fail with 401.
-      VITE_SESSION_API_KEY: config.sessionApiKey,
+      // Bake the same session key the agent-server accepts unless the caller
+      // explicitly wants to provide it at runtime.
+      ...(config.frontendRequireSessionKey
+        ? {}
+        : { VITE_SESSION_API_KEY: config.sessionApiKey }),
       // Bake a description of the runtime services in this dev stack so the
       // frontend can populate the agent's <RUNTIME_SERVICES> system-prompt
       // block when creating a conversation.

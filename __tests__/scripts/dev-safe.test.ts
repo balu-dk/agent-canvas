@@ -1,5 +1,5 @@
 // @vitest-environment node
-// These tests load `scripts/dev-safe.mjs`, which constructs file:// URLs
+// These tests load `scripts/launch-safe.mjs`, which constructs file:// URLs
 // relative to its own location via `new URL("../tools", import.meta.url)`.
 // jsdom's URL constructor ignores file:// base URLs (it falls back to its
 // document base, e.g. http://localhost:3000/), breaking that resolution;
@@ -29,7 +29,7 @@ import {
   findFreePorts,
   getOrCreatePersistedSessionApiKey,
   resetPersistedSessionApiKeyCache,
-} from "../../scripts/dev-safe.mjs";
+} from "../../scripts/launch-safe.mjs";
 import {
   mkdtempSync,
   mkdirSync,
@@ -306,7 +306,7 @@ describe("formatMissingUvxGuidance", () => {
     expect(guidance).toContain(
       "https://docs.astral.sh/uv/getting-started/installation/",
     );
-    expect(guidance).toContain("npm run dev:frontend");
+    expect(guidance).toContain("npm run dev -- --frontend-only");
     expect(guidance).toContain("npm run dev:mock");
   });
 });
@@ -561,7 +561,7 @@ describe("buildSafeDevConfig", () => {
     expect(readFileSync(keyPath, "utf8").trim()).toBe(config.sessionApiKey);
   });
 
-  it("reuses the same key across config builds, simulating dev:docker / dev:dangerously-dockerless restarts", () => {
+  it("reuses the same key across config builds, simulating npm run dev / npm run dev -- --sandbox none --static restarts", () => {
     const keyPath = tempKeyPath();
 
     const first = buildSafeDevConfig("/workspace/project/agent-canvas", {
@@ -653,7 +653,8 @@ describe("getOrCreatePersistedSessionApiKey", () => {
 describe("buildNpmScriptCommand", () => {
   it("reuses npm's own CLI path when available", () => {
     const command = buildNpmScriptCommand(
-      "dev:frontend",
+      "dev",
+      ["--", "--frontend-only"],
       "win32",
       {
         npm_execpath: "C:\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
@@ -667,37 +668,54 @@ describe("buildNpmScriptCommand", () => {
       args: [
         "C:\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
         "run",
-        "dev:frontend",
+        "dev",
+        "--",
+        "--frontend-only",
       ],
     });
   });
 
   it("runs npm directly on POSIX platforms", () => {
-    const command = buildNpmScriptCommand("dev:frontend", "linux", {});
+    const command = buildNpmScriptCommand(
+      "dev",
+      ["--", "--frontend-only"],
+      "linux",
+      {},
+    );
 
     expect(command).toEqual({
       command: "npm",
-      args: ["run", "dev:frontend"],
+      args: ["run", "dev", "--", "--frontend-only"],
     });
   });
 
   it("runs npm through cmd.exe on Windows", () => {
-    const command = buildNpmScriptCommand("dev:frontend", "win32", {
-      ComSpec: "C:\\Windows\\System32\\cmd.exe",
-    });
+    const command = buildNpmScriptCommand(
+      "dev",
+      ["--", "--frontend-only"],
+      "win32",
+      {
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+      },
+    );
 
     expect(command).toEqual({
       command: "C:\\Windows\\System32\\cmd.exe",
-      args: ["/d", "/s", "/c", "npm", "run", "dev:frontend"],
+      args: ["/d", "/s", "/c", "npm", "run", "dev", "--", "--frontend-only"],
     });
   });
 
   it("falls back to cmd.exe when ComSpec is unavailable on Windows", () => {
-    const command = buildNpmScriptCommand("dev:frontend", "win32", {});
+    const command = buildNpmScriptCommand(
+      "dev",
+      ["--", "--frontend-only"],
+      "win32",
+      {},
+    );
 
     expect(command).toEqual({
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "npm", "run", "dev:frontend"],
+      args: ["/d", "/s", "/c", "npm", "run", "dev", "--", "--frontend-only"],
     });
   });
 });
@@ -706,7 +724,7 @@ describe("dev-safe CLI startup", () => {
   it("exits promptly when uvx is missing", async () => {
     // Skip this test if uvx is globally installed via /usr/local/bin symlink
     // that may still be accessible even with a stripped PATH
-    const child = spawn(process.execPath, ["scripts/dev-safe.mjs"], {
+    const child = spawn(process.execPath, ["scripts/launch-safe.mjs"], {
       cwd: repoRoot,
       env: {
         // Use empty PATH to ensure uvx is not found
@@ -772,11 +790,11 @@ interface RuntimeServicesInfoShape {
 describe("buildRuntimeServicesInfo", () => {
   it("describes only the agent-server in a minimal dev-safe stack", () => {
     const info = buildRuntimeServicesInfo({
-      mode: "dev:safe",
+      mode: "npm run dev -- --no-automation --sandbox none",
       agentServerPort: 18000,
     }) as RuntimeServicesInfoShape;
     expect(info).toEqual({
-      mode: "dev:safe",
+      mode: "npm run dev -- --no-automation --sandbox none",
       agent_host_alias: "localhost",
       services: {
         agent_server: {
@@ -789,7 +807,7 @@ describe("buildRuntimeServicesInfo", () => {
 
   it("includes ingress, frontend (vite), and automation entries when ports are provided", () => {
     const info = buildRuntimeServicesInfo({
-      mode: "dev:automation",
+      mode: "npm run dev",
       agentServerPort: 18000,
       ingressPort: 8000,
       frontendPort: 3001,
@@ -812,7 +830,7 @@ describe("buildRuntimeServicesInfo", () => {
 
   it("uses host.docker.internal as the agent host alias in docker mode", () => {
     const info = buildRuntimeServicesInfo({
-      mode: "dev:docker",
+      mode: "npm run dev",
       agentHostAlias: "host.docker.internal",
       agentServerPort: 8000,
       ingressPort: 8000,
@@ -860,7 +878,7 @@ describe("buildRuntimeServicesInfo", () => {
 
   it("omits the automation entry when none is provided", () => {
     const info = buildRuntimeServicesInfo({
-      mode: "dev:safe",
+      mode: "npm run dev -- --no-automation --sandbox none",
       agentServerPort: 18000,
       ingressPort: 8000,
     }) as RuntimeServicesInfoShape;
@@ -871,7 +889,7 @@ describe("buildRuntimeServicesInfo", () => {
     // A bare `{}` previously slipped through and produced
     // `http://localhost:undefined`; require the port explicitly.
     const info = buildRuntimeServicesInfo({
-      mode: "dev:safe",
+      mode: "npm run dev -- --no-automation --sandbox none",
       agentServerPort: 18000,
       automation: {},
     }) as RuntimeServicesInfoShape;
@@ -881,16 +899,16 @@ describe("buildRuntimeServicesInfo", () => {
   it("throws when agentServerPort is missing", () => {
     expect(() =>
       buildRuntimeServicesInfo({
-        mode: "dev:safe",
+        mode: "npm run dev -- --no-automation --sandbox none",
       }),
     ).toThrow(/agentServerPort is required/);
   });
 
   it("accepts the legacy vitePort alias for frontendPort", () => {
-    // dev-safe.mjs's `main()` and some external callers still pass the
+    // launch-safe.mjs's `main()` and some external callers still pass the
     // older option name; keep them working for one release.
     const info = buildRuntimeServicesInfo({
-      mode: "dev:safe",
+      mode: "npm run dev -- --no-automation --sandbox none",
       agentServerPort: 18000,
       vitePort: 3001,
     }) as RuntimeServicesInfoShape;

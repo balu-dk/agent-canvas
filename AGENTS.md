@@ -21,15 +21,15 @@
 
 ## Runtime Services in Dev Stacks
 
-- When the agent-canvas dev launchers (`npm run dev:safe` / `dev:automation` / `dev:docker` / the published `agent-canvas` binary) start a stack, they set a `VITE_RUNTIME_SERVICES_INFO` env var on the frontend describing which services are running and how the agent should reach them. The frontend forwards this verbatim as `AgentContext.system_message_suffix` on every `POST /api/conversations`, so conversations land with a `<RUNTIME_SERVICES>` block appended to the system prompt.
+- When the agent-canvas dev launchers (`npm run dev`, `npm run dev -- --sandbox none`, `npm run dev -- --no-automation`, or the published `agent-canvas` binary) start a stack, they set a `VITE_RUNTIME_SERVICES_INFO` env var on the frontend describing which services are running and how the agent should reach them. The frontend forwards this verbatim as `AgentContext.system_message_suffix` on every `POST /api/conversations`, so conversations land with a `<RUNTIME_SERVICES>` block appended to the system prompt.
 - The block lists URLs **from the agent's point of view**:
   - The Agent Server is always reachable as `http://localhost:<port>` from inside the sandbox — but that is _you_, not the automation backend.
-  - Host-side services (ingress, Vite, automation) are reachable as `http://localhost:<port>` in dockerless modes and `http://host.docker.internal:<port>` in `dev:docker`.
+  - Host-side services (ingress, Vite, automation) are reachable as `http://localhost:<port>` in dockerless modes and `http://host.docker.internal:<port>` in `npm run dev`.
 - Agents should treat the `<RUNTIME_SERVICES>` block as authoritative: don't hardcode `localhost:8000` for "the automation server", and don't probe random ports trying to discover services. If the block says automation is not running, skip `/api/automation` calls; otherwise use the listed `url_from_agent` + `api_prefix` (default `/api/automation`) and the `X-API-Key: $OPENHANDS_AUTOMATION_API_KEY` header.
 - The launcher → frontend → suffix plumbing is:
-  - `scripts/dev-safe.mjs::buildRuntimeServicesInfo()` — pure helper that constructs the info object.
-  - `scripts/dev-with-automation.mjs::buildAutomationRuntimeServicesInfo()` — wraps it with automation details; called from both Vite spawn (`startVite`) and the static build (`static-build.mjs`).
-  - `scripts/dev-docker.mjs` and `bin/agent-canvas.mjs` pass `agentHostAlias: "host.docker.internal"` to `main()` because the agent-server runs in a container in those modes.
+  - `scripts/launch-safe.mjs::buildRuntimeServicesInfo()` — pure helper that constructs the info object.
+  - `scripts/launch-automation.mjs::buildAutomationRuntimeServicesInfo()` — wraps it with automation details; called from both Vite spawn (`startVite`) and the static build (`static-build.mjs`).
+  - `scripts/launch-docker.mjs` and `bin/agent-canvas.mjs` pass `agentHostAlias: "host.docker.internal"` to `main()` because the agent-server runs in a container in those modes.
   - `src/api/agent-server-adapter.ts::buildRuntimeServicesSystemSuffix()` reads `VITE_RUNTIME_SERVICES_INFO` and renders the `<RUNTIME_SERVICES>` markdown block; `createAgentFromSettings()` attaches it to `agent_context.system_message_suffix` when present.
 
 ### `VITE_RUNTIME_SERVICES_INFO` shape
@@ -38,7 +38,7 @@ The env var is a JSON string of:
 
 ```json
 {
-  "mode": "dev:docker",
+  "mode": "npm run dev",
   "agent_host_alias": "host.docker.internal",
   "services": {
     "agent_server": {
@@ -66,13 +66,13 @@ The env var is a JSON string of:
 }
 ```
 
-All keys under `services` are optional and omitted when the corresponding service isn't running. `frontend.kind` is `"vite"` for dev launchers running the Vite dev server and `"static"` for stacks serving a pre-built `build/` directory (`dev:docker`, `dev:dangerously-dockerless`, the published `agent-canvas` binary). `services.vite` is accepted as a legacy alias for `services.frontend` by the renderer.
+All keys under `services` are optional and omitted when the corresponding service isn't running. `frontend.kind` is `"vite"` for dev launchers running the Vite dev server and `"static"` for stacks serving a pre-built `build/` directory (`npm run dev`, `npm run dev -- --sandbox none --static`, the published `agent-canvas` binary). `services.vite` is accepted as a legacy alias for `services.frontend` by the renderer.
 
-### Example `<RUNTIME_SERVICES>` block (dev:docker with automation)
+### Example `<RUNTIME_SERVICES>` block (npm run dev with automation)
 
 ```
 <RUNTIME_SERVICES>
-You are running inside an agent-canvas dev stack started in 'dev:docker' mode.
+You are running inside an agent-canvas dev stack started in 'npm run dev' mode.
 The following services are reachable from your sandbox. URLs are written
 from your point of view (i.e., as you should curl/fetch them).
 
@@ -130,7 +130,7 @@ you are running inside of — NOT the automation backend.
 - `npm run test:e2e:live` loads `.env` through Node's `--env-file-if-exists` flag and invokes `tests/e2e/live/scripts/run-live-e2e.mjs`. The runner validates the required local environment, explains missing credentials/prerequisites, and then runs `playwright test --config=playwright.live.config.ts`. Use `npm run test:e2e:live -- --check` to validate local setup without running the test, and pass Playwright flags after `--` (for example `npm run test:e2e:live -- --headed`).
 - Local live E2E requires one LLM credential: `LIVE_E2E_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `LLM_API_KEY`. Optional overrides are `LIVE_E2E_LLM_BASE_URL`, `LIVE_E2E_LLM_MODEL`, `LIVE_E2E_SESSION_API_KEY`, `LIVE_E2E_BACKEND_URL`, and `LIVE_E2E_FRONTEND_PORT`. The local runner prints which variables are missing without printing secret values.
 - Live-test-only helpers belong under `tests/e2e/live/utils/`. The current helper module is `tests/e2e/live/utils/agent-server-conversation.ts`; do not put live-only helpers in the shared `tests/e2e/support/` directory.
-- `playwright.live.config.ts` starts the real local Agent Server/UI stack via `npm run dev:minimal`, not MSW mocks. It uses `LIVE_E2E_SESSION_API_KEY` when set, otherwise generates a per-run random session key and passes it through `SESSION_API_KEY`, `OH_SESSION_API_KEYS_0`, and `VITE_SESSION_API_KEY`; specs that need direct backend requests must inject `X-Session-API-Key` only for the configured backend origin through `routeBackendSessionApiKey(page)`, never through global Playwright `extraHTTPHeaders`. Live tests default to frontend port `3101` and Agent Server `http://127.0.0.1:18100` so they do not accidentally reuse a normal local dev stack.
+- `playwright.live.config.ts` starts the real local Agent Server/UI stack via `npm run dev -- --no-automation --sandbox none`, not MSW mocks. It uses `LIVE_E2E_SESSION_API_KEY` when set, otherwise generates a per-run random session key and passes it through `SESSION_API_KEY`, `OH_SESSION_API_KEYS_0`, and `VITE_SESSION_API_KEY`; specs that need direct backend requests must inject `X-Session-API-Key` only for the configured backend origin through `routeBackendSessionApiKey(page)`, never through global Playwright `extraHTTPHeaders`. Live tests default to frontend port `3101` and Agent Server `http://127.0.0.1:18100` so they do not accidentally reuse a normal local dev stack.
 - `tests/e2e/live/utils/agent-server-conversation.ts` configures the running Agent Server before each live conversation by PATCHing `${LIVE_E2E_BACKEND_URL ?? "http://127.0.0.1:18100"}/api/settings` with LLM settings and low-risk conversation settings. LLM credentials are read from `LIVE_E2E_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `LLM_API_KEY`; CI defaults use `LIVE_E2E_LLM_BASE_URL` (default `https://llm-proxy.app.all-hands.dev`) and `LIVE_E2E_LLM_MODEL` (default `openhands/claude-haiku-4-5-20251001`).
 - The live conversation test should stay cheap and as deterministic as possible while still exercising one real tool call: it asks the model to run the exact `EXPECTED_BASH_COMMAND`, waits for the bash output token to appear outside the user's message in the UI, confirms a successful `ExecuteBashObservation`/`TerminalObservation` through the real Agent Server events API, and then waits for the final `EXPECTED_REPLY_TOKEN`. This exercises the real UI, Agent Server settings API, conversation creation, websocket/event path, terminal tool execution, and LLM response path. Because LLM behavior is not perfectly deterministic even at temperature 0, CI keeps one retry for live E2E; future live tests should document any expected variance and avoid prompts that require unnecessary formatting obedience.
 - Live E2E must not pollute analytics. `playwright.live.config.ts` starts the app with `VITE_DO_NOT_TRACK=1`; the live helper seeds local storage with telemetry/analytics opt-out values before app code runs; and each live spec should install `guardAgainstPostHogRequests(page)` before navigation so any attempted request to `*.posthog.com` or `z.openhands.dev` is blocked locally and fails the test.
@@ -159,6 +159,7 @@ you are running inside of — NOT the automation backend.
 
 - `@openhands/typescript-client` is currently pinned to commit `ef62e82fc3dfb03991a1c8025429caf354427263` because the package metadata needed by this PR has not been published as a consistent npm/tagged release yet. That commit ships the needed typed clients plus subpath exports for `client/http-client`, `events/remote-events-list`, and `workspace/remote-workspace`. `RemoteWorkspace.gitChanges`/`gitDiff` accept an optional `{ ref }` option; agent-canvas passes `'HEAD'` so the changes panel reflects working-tree + index versus the latest commit (i.e. staged + unstaged) instead of a diff against the upstream/default branch.
 - The `@openhands/typescript-client` git dep must be expressed as a `git+https://github.com/...` URL in both `package.json` and the top-level dep entry of `package-lock.json`; the `github:OpenHands/...` shorthand normalizes to `git+ssh://` inside the lockfile, and Vercel's build environment has no GitHub SSH key, so an ssh-pinned lockfile makes Vercel fall back to a stale cached tarball and the bundler then fails with `[MISSING_EXPORT] ConversationClient/FileClient/SharedClient is not exported by .../dist/clients.js`. `scripts/vercel-install.sh` (wired up via `vercel.json`'s `installCommand`) defensively rewrites any leftover `git+ssh://git@github.com/` resolved URLs to `git+https://github.com/` and adds matching `git config --global url..insteadOf` aliases before invoking `npm ci`, so a future regression that re-introduces an ssh-pinned lockfile entry still builds on Vercel. See GitHub issue #384 for the original failure and PR #382 for the prior single-shot lockfile fix that this generalizes.
+
 ## API Access Rules
 
 Two strict conventions govern every REST call in the frontend. Violations break CI
@@ -171,6 +172,7 @@ All calls that target the local agent-server (`/api/*`, `/server_info`, `/socket
 raw `axios`, `fetch`, or the legacy shared `openHands` axios instance.
 
 Available clients and their subpath imports:
+
 - `ConversationClient` -- `@openhands/typescript-client/clients`
 - `FileClient` -- `@openhands/typescript-client/clients`
 - `VSCodeClient` -- `@openhands/typescript-client/clients`
@@ -180,6 +182,7 @@ Available clients and their subpath imports:
 - `RemoteEventsList` -- `@openhands/typescript-client/events/remote-events-list`
 
 Client options are always assembled via helpers in `src/api/agent-server-client-options.ts`:
+
 - `getAgentServerClientOptions(overrides?)` -- for SDK client constructors
 - `getAgentServerHttpClientOptions(overrides?)` -- for `HttpClient`-based callers
 
@@ -188,8 +191,12 @@ registry and env config, so callers never hardcode URLs or auth tokens.
 
 ```ts
 // CORRECT
-const data = await new ConversationClient(getAgentServerClientOptions()).getConversation(id);
-const file = await new FileClient(getAgentServerClientOptions()).downloadTextFile(path);
+const data = await new ConversationClient(
+  getAgentServerClientOptions(),
+).getConversation(id);
+const file = await new FileClient(
+  getAgentServerClientOptions(),
+).downloadTextFile(path);
 
 // WRONG -- raw axios/fetch calls fail the no-direct-agent-server-calls.test.ts guard
 const data = await axios.get(`${host}/api/conversations/${id}`);
@@ -197,6 +204,7 @@ const data = await fetch(`/api/conversations/${id}`);
 ```
 
 **Allowed exceptions** (files that may use axios directly for infrastructure reasons):
+
 - `src/api/automation-service/automation-service.api.ts`
 - `src/api/cloud/proxy.ts` -- the proxy envelope POST itself
 
@@ -233,6 +241,7 @@ const result = await axios.get(`${backend.host}/api/v1/app-conversations`);
 ```
 
 `callCloudProxy` key options:
+
 - `backend` -- the cloud `Backend` object (provides host and bearer token)
 - `hostOverride` -- override for runtime-sandbox calls; replaces `backend.host`
 - `authMode` -- `"bearer"` (default, cloud) | `"session-api-key"` (runtime sandbox) | `"none"`
@@ -309,37 +318,37 @@ return new ConversationClient(getAgentServerClientOptions()).someMethod(...);
 - `BackendSelector`'s cloud-org switch paths should never rethrow from the dropdown `onChange` handler: unexpected non-Axios failures need a generic error toast instead of an unhandled promise rejection, and the malformed `(cloud backend, null org)` self-heal path should fall back to the bundled backend if `/switch` fails.
 - `NewConversationButton` should support keyboard dismissal (`Escape`) for its inline popover, while still keeping the popover open when its modal children (`FolderBrowserModal`, `ManageWorkspacesModal`) are active.
 
-- README expectation: keep the first section as a concrete, chronological from-scratch quickstart for running this frontend against a real `openhands-agent-server` (clone, install prerequisites, optional `.env`, run `npm run dev:docker` or `npm run dev:dangerously-dockerless`).
-- Keep README user-focused and move contributor/developer-specific workflows (`dev:safe`, mock mode, detailed env vars/build-test notes) into `DEVELOPMENT.md`.
-- `scripts/dev-safe.mjs` uses `uvx` for temporary agent-server installation — no permanent `uv tool install` needed. Environment variables (highest precedence first):
+- README expectation: keep the first section as a concrete, chronological from-scratch quickstart. Docker-sandboxed local development uses `npm run dev` by default; direct host execution must be shown explicitly as `npm run dev -- --sandbox none` with the filesystem-access warning.
+- Keep README user-focused and move contributor/developer-specific workflows (`npm run dev -- --no-automation --sandbox none`, mock mode, detailed env vars/build-test notes) into `DEVELOPMENT.md`.
+- `scripts/launch-safe.mjs` uses `uvx` for temporary agent-server installation — no permanent `uv tool install` needed. Environment variables (highest precedence first):
   - `OH_AGENT_SERVER_LOCAL_PATH` — absolute path to a local `software-agent-sdk` checkout. Runs the local checkout via `uvx` with `--with-editable` for `openhands-sdk`/`openhands-tools`/`openhands-workspace` and `--reinstall` for `openhands-agent-server`, so SDK edits are picked up on restart. Highest precedence.
   - `OH_AGENT_SERVER_GIT_REF` — git commit SHA or branch name (takes precedence over version)
   - `OH_AGENT_SERVER_VERSION` — specific PyPI version (e.g., "1.22.1")
   - `OH_SECRET_KEY` — secret key for settings encryption; uses a static default for local dev since it's needed for reading persisted encrypted values across restarts
   - `SESSION_API_KEY` / `OH_SESSION_API_KEYS_0` / `VITE_SESSION_API_KEY` — session API key for agent-server authentication; auto-generated using `crypto.randomBytes(32)` if not set, passed to both agent-server (`OH_SESSION_API_KEYS_0`) and frontend (`VITE_SESSION_API_KEY`)
   - Default: released PyPI version `1.22.1` for agent-server SDK libraries
-- `scripts/dev-docker.mjs` runs the agent-server inside a Docker container instead of via `uvx`, and serves a static frontend build by default for stable user/tunnel access. The required host-projects env var is `PROJECTS_PATH` and it is mounted into the container at `/projects`. Use `npm run dev:docker:dynamic` or `node scripts/dev-docker.mjs --dynamic` for the Vite dev server. The default image uses versioned release tags:
+- `scripts/launch-docker.mjs` runs the default `npm run dev` path: the agent-server runs inside a Docker container instead of via `uvx`, and the frontend is served from a static build by default for stable user/tunnel access. The required host-projects env var is `PROJECTS_PATH` and it is mounted into the container at `/projects`. Use `npm run dev -- --dynamic` for the Vite dev server. The default image uses versioned release tags:
   - `DEFAULT_AGENT_SERVER_TAG` — uses format `{version}-python` (e.g., `1.22.1-python`) for reproducibility. Note: the SDK build script strips the "v" prefix from semver release tags.
-  - Should stay in sync with `DEFAULT_AGENT_SERVER_VERSION` in `dev-safe.mjs` for consistency between Docker and non-Docker dev modes
+  - Should stay in sync with `DEFAULT_AGENT_SERVER_VERSION` in `launch-safe.mjs` for consistency between Docker and non-Docker dev modes
   - `OH_AGENT_SERVER_GIT_REF` — override to use a git ref-based tag (e.g., `main` → `main-python`, `abc1234` → `abc1234-python`)
   - Docker images are published from https://github.com/OpenHands/software-agent-sdk via the Agent Server workflow to `ghcr.io/openhands/agent-server`
   - The container runs as the host UID/GID when Node exposes `process.getuid()` / `process.getgid()`. In the default isolated-home mode, `/home/openhands` is a writable tmpfs and persistence remains at `/home/openhands/.openhands`, so host-owned bind mounts remain writable without persisting ordinary home cache/config files.
-- Security: `scripts/dev-safe.mjs` and `scripts/dev-with-automation.mjs` auto-generate random API keys when needed and persist the defaults so static builds, localStorage, and restarted services stay in sync:
+- Security: `scripts/launch-safe.mjs` and `scripts/launch-automation.mjs` auto-generate random API keys when needed and persist the defaults so static builds, localStorage, and restarted services stay in sync:
   - `SESSION_API_KEY` — 64-character hex (256-bit) for agent-server API authentication; persisted at `~/.openhands/agent-canvas/session-api-key.txt` unless overridden via env var
   - `AUTOMATION_LOCAL_API_KEY` — 64-character hex for automation backend auth; persisted at `~/.openhands/agent-canvas/automation-api-key.txt` unless overridden
   - `OH_SECRET_KEY` — kept as a static default because it's used for encrypting/decrypting persisted settings values and needs consistency across restarts
-- `scripts/dev-safe.mjs` should fail fast if `uvx` cannot be spawned (for example missing PATH entries).
-- `npm run dev` now runs the Docker full stack with automation and a static frontend by default (via `dev:docker`). `npm run dev:dangerously-dockerless` does the same without Docker through the `dev-static.mjs` launcher. Use `npm run dev:docker:dynamic` or `npm run dev:dangerously-dockerless:dynamic` for Vite/HMR.
-- `scripts/dev-with-automation.mjs` runs the full stack: agent-server, automation backend (both via uvx), frontend server, and ingress proxy. It defaults to Vite when run directly, supports `--static` for an existing build, and supports `--dynamic` so wrappers that default static can opt back into Vite. Uses a standalone ingress proxy (`scripts/ingress.mjs`) to route traffic:
+- `scripts/launch-safe.mjs` should fail fast if `uvx` cannot be spawned (for example missing PATH entries).
+- `npm run dev` routes through the unified `scripts/dev.mjs` launcher and starts the full Docker-sandboxed stack with automation and a static frontend by default. Use `npm run dev -- --sandbox none` for the dockerless stack, `npm run dev -- --no-automation` to omit automation, `npm run dev -- --backend-only` for only the agent-server, and `npm run dev -- --frontend-only` for only the frontend.
+- `scripts/launch-automation.mjs` runs the full stack: agent-server, automation backend (both via uvx), frontend server, and ingress proxy. It defaults to Vite when run directly, supports `--static` for an existing build, and supports `--dynamic` so wrappers that default static can opt back into Vite. Uses a standalone ingress proxy (`scripts/ingress.mjs`) to route traffic:
   - `/api/automation/*` → automation backend (:18001)
   - `/api/*`, `/sockets`, etc. → agent server (:18000)
   - `/*` (default) → frontend server (:3001), either Vite or static depending on launcher mode
   - Environment variables: `PORT` (ingress port, default: 8000), `OH_AUTOMATION_GIT_REF` (git ref, overrides default version), `OH_AUTOMATION_VERSION` (default: `1.0.0a3`), `AUTOMATION_LOCAL_API_KEY` (optional, use a fixed key; default: persisted generated key), `OH_AUTOMATION_API_KEY_PATH` (override the persisted default key path)
-  - `scripts/check-sdk-version-sync.mjs` checks the released `openhands-automation` package against `DEFAULT_AUTOMATION_SDK_VERSION` in `scripts/dev-with-automation.mjs`; that value may intentionally lag `DEFAULT_AGENT_SERVER_VERSION` while automation has not yet published a matching release.
+  - `scripts/check-sdk-version-sync.mjs` checks the released `openhands-automation` package against `DEFAULT_AUTOMATION_SDK_VERSION` in `scripts/launch-automation.mjs`; that value may intentionally lag `DEFAULT_AGENT_SERVER_VERSION` while automation has not yet published a matching release.
   - Access points: `http://localhost:8000/` (main UI), `http://localhost:8000/api/automation/docs` (API docs)
   - Security: `AUTOMATION_LOCAL_API_KEY` defaults to a generated key persisted across restarts because static frontend builds bake it into `VITE_AUTOMATION_API_KEY`. Set the env var explicitly to rotate or pin it. The cipher key (`OH_SECRET_KEY`) keeps a static default for local dev since it's used for encrypting/decrypting persisted settings values.
 - `scripts/ingress.mjs` is a standalone HTTP reverse proxy that can be used independently to route traffic to multiple backends based on URL path prefix.
-- `scripts/dev-safe.mjs` (now `npm run dev:minimal`) runs just agent-server + Vite without automation.
+- `scripts/launch-safe.mjs` (now `npm run dev -- --no-automation --sandbox none`) runs just agent-server + Vite without automation.
 - Vite dev mode can black-screen on first load with `504 Outdated Optimize Dep` if core client-entry deps are not prebundled; keep `react`, `react/jsx-runtime`, `react-dom/client`, and `react-router/dom` in `optimizeDeps.include`.
 - Bundle/dev-graph hygiene (Tier 1 cleanup landed):
   - `src/i18n/translation.json` (~1 MB) is imported only by `src/i18n/resources.ts`, which `src/i18n/index.ts` re-exports as `translationResources` for the `@openhands/agent-canvas/i18n` subpath. The re-export is a `export … from` plus `/* @__PURE__ */` annotation, so rollup drops the JSON from the app build (the prod `custom-toast-handlers` chunk went from ~909 KB to ~74 KB). Do not move the JSON import back into `src/i18n/index.ts` — that immediately re-bundles all translations into every chunk that imports `i18n`.

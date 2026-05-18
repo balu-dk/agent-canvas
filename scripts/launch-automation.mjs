@@ -1,7 +1,7 @@
 /**
  * Development Stack with Automation Service
  *
- * Extends agent-canvas's dev-safe.mjs to additionally run the OpenHands Automation
+ * Extends agent-canvas's launch-safe.mjs to additionally run the OpenHands Automation
  * backend via uvx. No cloning required - runs directly from git reference.
  *
  * Uses a standalone ingress proxy to route traffic to multiple backends.
@@ -21,10 +21,10 @@
  *   │             │    │               │         │ :18001           │
  *   └─────────────┘    └───────────────┘         └──────────────────┘
  *
- * Usage:
- *   node scripts/dev-with-automation.mjs
- *   node scripts/dev-with-automation.mjs --automation-ref feat/my-branch
- *   node scripts/dev-with-automation.mjs --port 12000
+ * Usage (via the public launcher):
+ *   npm run dev -- --sandbox none
+ *   npm run dev -- --sandbox none --automation-ref feat/my-branch
+ *   npm run dev -- --sandbox none --port 12000
  *
  * Environment variables:
  *   - PORT: Ingress port (default: 8000)
@@ -56,13 +56,13 @@ import {
   findFreePorts,
   getOrCreatePersistedApiKey,
   validateFrontendDependencies,
-} from "./dev-safe.mjs";
+} from "./launch-safe.mjs";
 import {
   createShutdownHookRegistry,
   getProcessTreeSpawnOptions,
   isProcessRunning,
   signalProcessTree,
-} from "./dev-process-utils.mjs";
+} from "./launch-process-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
@@ -135,6 +135,7 @@ function parseArgs() {
     dynamic: false,
     staticDir: null,
     skipBuild: false,
+    frontendRequireSessionKey: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -165,6 +166,9 @@ function parseArgs() {
       case "--skip-build":
         config.skipBuild = true;
         break;
+      case "--frontend-require-session-key":
+        config.frontendRequireSessionKey = true;
+        break;
       case "-h":
       case "--help":
         showHelp();
@@ -183,7 +187,7 @@ Runs agent-canvas with the automation backend (via uvx, no clone needed).
 Uses a standalone ingress proxy to route traffic.
 
 USAGE:
-  node scripts/dev-with-automation.mjs [options]
+  npm run dev -- --sandbox none [options]
 
 OPTIONS:
   -p, --port <port>           Ingress port (default: 8000)
@@ -191,6 +195,8 @@ OPTIONS:
   --automation-repo <url>     Git repo URL (default: ${DEFAULT_AUTOMATION_REPO})
   --static                    Serve an existing production build instead of Vite
   --static-dir <dir>          Static build directory (default: build/)
+  --frontend-require-session-key Do not inject the generated session key into the frontend
+
   --skip-build                Reuse build/ when the launcher builds static assets
   --dynamic                   Force Vite dev server when a wrapper defaults static
   -v, --verbose               Show detailed output
@@ -362,7 +368,7 @@ async function buildConfig(args, env = process.env) {
     // Paths
     canvasPath: projectRoot,
 
-    // Data directories (same as dev-safe.mjs)
+    // Data directories (same as launch-safe.mjs)
     stateDir,
 
     // Auth
@@ -386,20 +392,28 @@ function commandExists(cmd) {
   return result.status === 0;
 }
 
-function checkPrerequisites({ checkFrontendDependencies = true } = {}) {
+function checkPrerequisites({
+  checkFrontendDependencies = true,
+  requireUvx = true,
+  requireNpm = true,
+} = {}) {
   logStep("1/2", "Checking prerequisites...");
 
-  if (!commandExists("uvx")) {
-    console.error(formatMissingUvxGuidance(projectRoot));
-    process.exit(1);
+  if (requireUvx) {
+    if (!commandExists("uvx")) {
+      console.error(formatMissingUvxGuidance(projectRoot));
+      process.exit(1);
+    }
+    logSuccess("uvx found");
   }
-  logSuccess("uvx found");
 
-  if (!commandExists("npm")) {
-    logError("npm is required but not found");
-    process.exit(1);
+  if (requireNpm) {
+    if (!commandExists("npm")) {
+      logError("npm is required but not found");
+      process.exit(1);
+    }
+    logSuccess("npm found");
   }
-  logSuccess("npm found");
 
   if (checkFrontendDependencies) {
     try {
@@ -635,41 +649,42 @@ function startIngress(config) {
 
   const ingressScript = join(projectRoot, "scripts", "ingress.mjs");
 
-  spawnService(
-    "ingress",
-    "node",
-    [
-      ingressScript,
-      "--port",
-      config.ingressPort.toString(),
+  const ingressArgs = [ingressScript, "--port", config.ingressPort.toString()];
+
+  if (config.automationEnabled !== false) {
+    ingressArgs.push(
       "--route",
       `/api/automation=http://localhost:${config.autoBackendPort}`,
-      "--route",
-      `/api=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/sockets=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/server_info=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/health=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/ready=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/alive=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/docs=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/redoc=http://localhost:${config.agentServerPort}`,
-      "--route",
-      `/openapi.json=http://localhost:${config.agentServerPort}`,
-      "--default",
-      `http://localhost:${config.vitePort}`,
-    ],
-    {
-      cwd: projectRoot,
-      color: c.yellow,
-    },
+    );
+  }
+
+  ingressArgs.push(
+    "--route",
+    `/api=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/sockets=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/server_info=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/health=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/ready=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/alive=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/docs=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/redoc=http://localhost:${config.agentServerPort}`,
+    "--route",
+    `/openapi.json=http://localhost:${config.agentServerPort}`,
+    "--default",
+    `http://localhost:${config.vitePort}`,
   );
+
+  spawnService("ingress", "node", ingressArgs, {
+    cwd: projectRoot,
+    color: c.yellow,
+  });
 }
 
 /**
@@ -680,7 +695,7 @@ function startIngress(config) {
  */
 export function buildAutomationRuntimeServicesInfo(config) {
   return buildRuntimeServicesInfo({
-    mode: config.mode ?? "dev:automation",
+    mode: config.mode ?? "npm run dev",
     agentHostAlias: config.agentHostAlias ?? "localhost",
     agentServerPort: config.agentServerPort,
     ingressPort: config.ingressPort,
@@ -689,14 +704,20 @@ export function buildAutomationRuntimeServicesInfo(config) {
     // in static mode. The launcher records this on the config so the
     // description shown to the agent matches reality.
     frontendKind: config.frontendKind ?? "vite",
-    automation: { port: config.autoBackendPort },
+    automation:
+      config.automationEnabled === false
+        ? undefined
+        : { port: config.autoBackendPort },
   });
 }
 
 function startVite(config) {
   logService("vite", `Starting on port ${config.vitePort}...`, c.magenta);
 
-  const frontendCommand = buildNpmScriptCommand("dev:frontend");
+  const frontendCommand = buildNpmScriptCommand("dev", [
+    "--",
+    "--frontend-only",
+  ]);
   const runtimeServicesInfo = buildAutomationRuntimeServicesInfo(config);
 
   spawnService("vite", frontendCommand.command, frontendCommand.args, {
@@ -708,17 +729,16 @@ function startVite(config) {
       VITE_WORKING_DIR:
         config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
       VITE_FRONTEND_PORT: config.vitePort.toString(),
-      // Session API key for frontend to authenticate with agent-server
-      VITE_SESSION_API_KEY: config.sessionApiKey,
+      // Session API key for frontend to authenticate with agent-server,
+      // unless the caller explicitly wants to provide it themselves.
+      ...(config.frontendRequireSessionKey
+        ? {}
+        : { VITE_SESSION_API_KEY: config.sessionApiKey }),
       // Automation API key for frontend to authenticate with automation backend
       VITE_AUTOMATION_API_KEY: config.localApiKey,
       // Inform the frontend (and downstream, the agent's system prompt) about
       // which services are available in this dev stack.
       VITE_RUNTIME_SERVICES_INFO: JSON.stringify(runtimeServicesInfo),
-      // Session API key for agent-server auth (when SESSION_API_KEY is set)
-      ...(config.sessionApiKey && {
-        VITE_SESSION_API_KEY: config.sessionApiKey,
-      }),
     },
     color: c.magenta,
   });
@@ -820,6 +840,17 @@ async function seedAutomationSecret(config, options = {}) {
   return false;
 }
 
+function printBackendOnlyBanner(config) {
+  console.log("");
+  console.log(`${c.green}${c.bold}Agent Canvas Backend${c.reset}`);
+  console.log(
+    `${c.cyan}Agent Server: http://localhost:${config.agentServerPort}/${c.reset}`,
+  );
+  console.log(`${c.dim}State directory: ${config.stateDir}${c.reset}`);
+  console.log(`${c.dim}Press Ctrl+C to stop${c.reset}`);
+  console.log("");
+}
+
 function printBanner(config) {
   console.log("");
   console.log(
@@ -839,11 +870,13 @@ function printBanner(config) {
       75,
     ) + `${c.green}${c.bold}║${c.reset}`,
   );
-  console.log(
-    `${c.green}${c.bold}║${c.reset}  API Docs:     ${c.cyan}http://localhost:${config.ingressPort}/api/automation/docs${c.reset}`.padEnd(
-      75,
-    ) + `${c.green}${c.bold}║${c.reset}`,
-  );
+  if (config.automationEnabled !== false) {
+    console.log(
+      `${c.green}${c.bold}║${c.reset}  API Docs:     ${c.cyan}http://localhost:${config.ingressPort}/api/automation/docs${c.reset}`.padEnd(
+        75,
+      ) + `${c.green}${c.bold}║${c.reset}`,
+    );
+  }
   console.log(
     `${c.green}${c.bold}║${c.reset}                                                              ${c.green}${c.bold}║${c.reset}`,
   );
@@ -867,13 +900,15 @@ async function main(options = {}) {
     buildStaticFrontend,
     staticDir: staticDirOverride,
     // Hostname the agent uses to reach services running on the host.
-    // dev-docker.mjs overrides this to "host.docker.internal" because the
+    // launch-docker.mjs overrides this to "host.docker.internal" because the
     // agent-server runs in a container and the host is not "localhost"
     // from its perspective.
     agentHostAlias = "localhost",
     // Human-readable label for the dev mode, surfaced in the agent's
     // <RUNTIME_SERVICES> system-prompt block.
-    mode = "dev:automation",
+    mode = "npm run dev",
+    noAutomation = false,
+    backendOnly = false,
   } = options;
 
   const args = parseArgs();
@@ -892,12 +927,16 @@ async function main(options = {}) {
   console.log(`${c.cyan}${c.bold}${titleWithMode}${c.reset}`);
   console.log("");
 
-  // Setup phase
-  // (uvx is still required even in docker mode because the automation
-  // backend runs via uvx; only the agent-server is dockerized.)
+  const automationEnabled = !noAutomation && !backendOnly;
+
+  // Setup phase. Docker backend-only mode does not need uvx/npm because the
+  // agent-server comes from the container image and no frontend is started.
   checkPrerequisites({
     checkFrontendDependencies:
-      !useStaticMode || typeof buildStaticFrontend === "function",
+      !backendOnly &&
+      (!useStaticMode || typeof buildStaticFrontend === "function"),
+    requireUvx: automationEnabled || !startAgentServerOverride,
+    requireNpm: !backendOnly,
   });
 
   // Build config with dynamic port allocation
@@ -909,17 +948,22 @@ async function main(options = {}) {
   config.mode = mode;
   config.agentHostAlias = agentHostAlias;
   config.frontendKind = useStaticMode ? "static" : "vite";
+  config.automationEnabled = automationEnabled;
   ensureDirectories(config);
   if (typeof extraPrereqs === "function") {
     extraPrereqs(config);
   }
 
-  if (useStaticMode && typeof buildStaticFrontend === "function") {
+  if (
+    !backendOnly &&
+    useStaticMode &&
+    typeof buildStaticFrontend === "function"
+  ) {
     buildStaticFrontend(config, args);
   }
 
   // In static mode, verify build exists after any launcher-managed build.
-  if (useStaticMode && !existsSync(staticDir)) {
+  if (!backendOnly && useStaticMode && !existsSync(staticDir)) {
     logError(`Static directory not found: ${staticDir}`);
     logError(`Run 'npm run build' first to create the static files.`);
     process.exit(1);
@@ -939,33 +983,38 @@ async function main(options = {}) {
     60000, // 60 second timeout for initial startup
   );
 
-  // 2. Seed automation API key into agent-server secrets
-  // This makes the key available to agents during conversations
-  // Note: seedAutomationSecret has its own retry logic if server is still warming up
-  if (agentServerReady) {
-    await seedAutomationSecret(config);
-  } else {
-    logService(
-      "secrets",
-      "Skipping secret seeding - agent-server not ready",
-      c.yellow,
-    );
+  if (backendOnly) {
+    printBackendOnlyBanner(config);
+    return;
   }
 
-  // 3. Start automation backend
-  startAutomationBackend(config);
+  // 2. Seed automation API key into agent-server secrets and start automation
+  // backend only when this stack includes automation.
+  if (automationEnabled) {
+    if (agentServerReady) {
+      await seedAutomationSecret(config);
+    } else {
+      logService(
+        "secrets",
+        "Skipping secret seeding - agent-server not ready",
+        c.yellow,
+      );
+    }
 
-  // 4. Start frontend server (Vite dev server OR static server)
+    startAutomationBackend(config);
+  }
+
+  // 3. Start frontend server (Vite dev server OR static server)
   if (useStaticMode) {
     startStaticFrontend(config, staticDir);
   } else {
     startVite(config);
   }
 
-  // 5. Wait for services to be ready
+  // 4. Wait for services to be ready
   await delay(2000);
 
-  // 6. Start ingress proxy (routes traffic to all backends)
+  // 5. Start ingress proxy (routes traffic to all backends)
   startIngress(config);
 
   // Wait for ingress to start

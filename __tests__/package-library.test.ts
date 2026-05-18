@@ -49,18 +49,22 @@ describe("package library metadata", () => {
     });
   });
 
-  it("uses static frontend launchers for user-facing dev commands", () => {
-    expect(packageJson.scripts.dev).toBe("npm run dev:docker");
-    expect(packageJson.scripts["dev:dangerously-dockerless"]).toBe(
-      "node --env-file-if-exists=.env scripts/dev-static.mjs",
+  it("uses one npm-facing dev launcher", () => {
+    expect(packageJson.scripts.dev).toBe(
+      "node --env-file-if-exists=.env scripts/dev.mjs",
     );
-    expect(packageJson.scripts["dev:static"]).toBeUndefined();
-    expect(packageJson.scripts["dev:docker"]).toContain(
-      "scripts/dev-docker.mjs",
+    expect(packageJson.scripts["dev:mock"]).toBe(
+      "npm run make-i18n && cross-env VITE_MOCK_API=true react-router dev",
     );
-    expect(packageJson.scripts["dev:docker:dynamic"]).toContain("--dynamic");
-    expect(packageJson.scripts["dev:dangerously-dockerless:dynamic"]).toBe(
-      "node --env-file-if-exists=.env scripts/dev-with-automation.mjs",
-    );
+    expect(packageJson.scripts.dev_wsl).toBeUndefined();
+
+    for (const scriptName of Object.keys(packageJson.scripts)) {
+      const isExtraDevScript =
+        (scriptName.startsWith("dev:") && scriptName !== "dev:mock") ||
+        scriptName.startsWith("dev_");
+      if (isExtraDevScript) {
+        throw new Error(`Unexpected dev launcher alias: ${scriptName}`);
+      }
+    }
   });
 });

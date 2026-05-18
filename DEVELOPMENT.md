@@ -4,24 +4,19 @@ This document is for contributors working on `agent-canvas` itself.
 
 ## Recommended local workflow
 
-The README quickstart commands (`npm run dev`, `npm run dev:docker`, and
-`npm run dev:dangerously-dockerless`) serve a static frontend build by default.
-Use them for user-like local testing, remote access, and tunnels such as ngrok.
-
-When you are editing the Agent Canvas frontend and want Vite live reload, use a
-dynamic command explicitly:
+The main contributor entrypoint is the unified launcher:
 
 ```sh
-npm run dev:docker:dynamic
+npm run dev
 ```
 
-For a dockerless frontend/backend dev loop:
+By default, this starts the full Docker-sandboxed stack: Dockerized agent-server, automation backend, ingress, and a static frontend. To run the same stack without Docker, pass `--sandbox none`:
 
 ```sh
-npm run dev:dangerously-dockerless:dynamic
+npm run dev -- --sandbox none
 ```
 
-The dockerless dynamic stack uses `uvx` to run a temporary `agent-server`
+The dockerless stack uses `uvx` to run a temporary `agent-server`
 installation on `127.0.0.1:18000` and points the frontend at it. It isolates
 conversation persistence by setting separate `OH_CONVERSATIONS_PATH`,
 `OH_BASH_EVENTS_DIR`, and `OH_VSCODE_PORT` values under `.openhands-dev/`, and
@@ -31,18 +26,18 @@ cloud-backed OpenHands sessions.
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Ingress port | `8000` |
-| `OH_AUTOMATION_GIT_REF` | Git ref for automation backend | `main` |
-| `OH_AGENT_SERVER_GIT_REF` | Git ref for agent-server | `main` |
+| Variable                  | Description                    | Default |
+| ------------------------- | ------------------------------ | ------- |
+| `PORT`                    | Ingress port                   | `8000`  |
+| `OH_AUTOMATION_GIT_REF`   | Git ref for automation backend | `main`  |
+| `OH_AGENT_SERVER_GIT_REF` | Git ref for agent-server       | `main`  |
 
 ### Alternative: Minimal Mode (without Automation)
 
 To run without the automation service:
 
 ```sh
-npm run dev:minimal
+npm run dev -- --no-automation --sandbox none
 ```
 
 This runs only agent-server + Vite (no automation backend or ingress).
@@ -54,14 +49,14 @@ By default, the latest released version from PyPI is used. You can override this
 
 ```sh
 # Run against a local software-agent-sdk checkout.
-OH_AGENT_SERVER_LOCAL_PATH=/abs/path/to/software-agent-sdk npm run dev:docker
+OH_AGENT_SERVER_LOCAL_PATH=/abs/path/to/software-agent-sdk npm run dev
 
 # Use a git branch or commit (takes precedence over version)
-OH_AGENT_SERVER_GIT_REF=main npm run dev:docker
-OH_AGENT_SERVER_GIT_REF=abc1234 npm run dev:docker
+OH_AGENT_SERVER_GIT_REF=main npm run dev
+OH_AGENT_SERVER_GIT_REF=abc1234 npm run dev
 
-# Use a specific PyPI version
-OH_AGENT_SERVER_VERSION=1.18.0 npm run dev:dangerously-dockerless
+# Use a specific PyPI version without Docker
+OH_AGENT_SERVER_VERSION=1.18.0 npm run dev -- --sandbox none --static
 ```
 
 `OH_AGENT_SERVER_LOCAL_PATH` must be an absolute path to a `software-agent-sdk` checkout containing the `openhands-agent-server`, `openhands-sdk`, `openhands-tools`, and `openhands-workspace` workspace packages. In docker mode it is bind-mounted into the container and installed editable before the server starts. In dockerless mode the agent-server itself is rebuilt from local source on each start (`uvx --reinstall`); the other workspace packages are installed editable, so their source changes take effect without a rebuild.
@@ -75,20 +70,12 @@ OH_AGENT_SERVER_VERSION=1.18.0 npm run dev:dangerously-dockerless
 
 ## Alternative development workflows
 
-### Multiple local backends (shared persistence)
-
-To run a second standalone agent-server alongside `npm run dev` while sharing
-its conversation history and encrypted secrets, see
-[docs/multi-backend-setup.md](./docs/multi-backend-setup.md). The
-`npm run dev:extra-backend` helper launches an extra server on `:18002` that
-reuses the bundled instance's state dir.
-
 ### Frontend against an existing backend
 
 Use this only if you intentionally started `agent-server` yourself or want the frontend to talk to another backend:
 
 ```sh
-npm run dev:frontend
+npm run dev -- --frontend-only
 ```
 
 The frontend-only workflow expects the backend at `127.0.0.1:8000` by default.

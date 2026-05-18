@@ -1,7 +1,7 @@
 /**
  * Dockerized Development Stack
  *
- * Same as `dev-with-automation.mjs`, but runs the agent-server inside a Docker
+ * Same as `launch-automation.mjs`, but runs the agent-server inside a Docker
  * container instead of via `uvx`. The default frontend is a static production
  * build for stability over tunnels and slow networks; pass `--dynamic` for the
  * Vite dev server with live reload.
@@ -43,9 +43,9 @@
  *   the host home unless you opt in.
  *
  * Usage:
- *   PROJECTS_PATH=/path/to/your/projects npm run dev:docker
- *   PROJECTS_PATH=/path/to/your/projects npm run dev:docker -- --dynamic
- *   OH_AGENT_SERVER_GIT_REF=main PROJECTS_PATH=... npm run dev:docker
+ *   PROJECTS_PATH=/path/to/your/projects npm run dev
+ *   PROJECTS_PATH=/path/to/your/projects npm run dev -- --dynamic
+ *   OH_AGENT_SERVER_GIT_REF=main PROJECTS_PATH=... npm run dev
  */
 
 import { spawnSync } from "node:child_process";
@@ -64,8 +64,8 @@ import {
   main,
   registerShutdownHook,
   spawnService,
-} from "./dev-with-automation.mjs";
-import { validateLocalAgentServerPath } from "./dev-safe.mjs";
+} from "./launch-automation.mjs";
+import { validateLocalAgentServerPath } from "./launch-safe.mjs";
 import { buildFrontend } from "./static-build.mjs";
 
 // Path inside the container where OH_AGENT_SERVER_LOCAL_PATH is bind-mounted.
@@ -83,7 +83,7 @@ const HOST_CANVAS_TOOLS_DIR = fileURLToPath(
 // Docker image for the agent-server.
 const AGENT_SERVER_REPO = "ghcr.io/openhands/agent-server";
 // Default tag used when OH_AGENT_SERVER_GIT_REF is not set.
-// Should match DEFAULT_AGENT_SERVER_VERSION in dev-safe.mjs for consistency.
+// Should match DEFAULT_AGENT_SERVER_VERSION in launch-safe.mjs for consistency.
 // Format: {version}-python (e.g., 1.22.1-python) for released versions.
 // Note: The SDK build script strips the "v" prefix from semver release tags.
 const DEFAULT_AGENT_SERVER_TAG = "1.22.1-python";
@@ -96,12 +96,12 @@ const CONTAINER_NAME = "agent-canvas-dev-agent-server";
 const CONTAINER_HOME_DIR = "/home/openhands";
 const CONTAINER_OPENHANDS_DIR = `${CONTAINER_HOME_DIR}/.openhands`;
 
-// Default secret key matches dev-safe.mjs so persisted settings stay
+// Default secret key matches launch-safe.mjs so persisted settings stay
 // decryptable across docker / non-docker runs.
 const DEFAULT_SECRET_KEY = "openhands-dev-secret-key-change-in-prod";
 
 // Path inside the container where the agent-server stores per-conversation
-// workspace directories. Mirrors dev-with-automation.mjs's host-side
+// workspace directories. Mirrors launch-automation.mjs's host-side
 // `${stateDir}/workspaces`, but rooted under the container's persistence
 // dir (which is `~/.openhands` on the host, mounted in below). The frontend
 // receives this via VITE_WORKING_DIR so the working_dir it sends to the
@@ -126,7 +126,7 @@ function suggestDockerless() {
   logError(
     "If you'd rather not use Docker, you can run the agent-server directly with:",
   );
-  logError("  npm run dev:dangerously-dockerless");
+  logError("  npm run dev -- --sandbox none");
   logError("Note: this runs the agent with full access to your filesystem.");
 }
 
@@ -234,7 +234,7 @@ function getProjectsPathDockerArgs(env = process.env) {
 
 function checkDockerPrereqs(config) {
   if (!commandExists("docker")) {
-    logError("docker is required for dev:docker but was not found on PATH.");
+    logError("docker is required for npm run dev but was not found on PATH.");
     logError("Install Docker: https://docs.docker.com/get-docker/");
     suggestDockerless();
     process.exit(1);
@@ -256,7 +256,7 @@ function checkDockerPrereqs(config) {
   logSuccess("docker daemon is running");
 
   if (!process.env.PROJECTS_PATH) {
-    logError("PROJECTS_PATH is required for dev:docker.");
+    logError("PROJECTS_PATH is required for npm run dev's Docker sandbox.");
     logError("Set it to the directory containing your projects, e.g.:");
     logError("  export PROJECTS_PATH=/path/to/your/projects");
     process.exit(1);
@@ -343,7 +343,7 @@ function startAgentServerDocker(config) {
   dockerArgs.push("-p", `${config.agentServerPort}:8000`);
 
   // Environment variables for the agent-server inside the container.
-  // These mirror buildAgentServerEnv() from dev-safe.mjs but use paths
+  // These mirror buildAgentServerEnv() from launch-safe.mjs but use paths
   // that exist inside the container (under the mounted ~/.openhands).
   const containerEnv = {
     HOME: CONTAINER_HOME_DIR,
@@ -393,12 +393,11 @@ function startAgentServerDocker(config) {
   });
 }
 
-const isMainModule =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
-
-if (isMainModule) {
-  main({
-    bannerTitle: "Agent Canvas + Automation Development Stack (Docker)",
+function runDockerDevEntrypoint(options = {}) {
+  return main({
+    bannerTitle: options.noAutomation
+      ? "Agent Canvas Development Stack (Docker)"
+      : "Agent Canvas + Automation Development Stack (Docker)",
     extraPrereqs: checkDockerPrereqs,
     startAgentServer: startAgentServerDocker,
     viteWorkingDir: CONTAINER_WORKSPACES_DIR,
@@ -408,8 +407,17 @@ if (isMainModule) {
     // host services (ingress, automation, vite) are reachable via
     // "host.docker.internal" rather than "localhost" from the agent's POV.
     agentHostAlias: "host.docker.internal",
-    mode: "dev:docker",
-  }).catch((err) => {
+    mode: "npm run dev",
+    noAutomation: options.noAutomation,
+    backendOnly: options.backendOnly,
+  });
+}
+
+const isMainModule =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMainModule) {
+  runDockerDevEntrypoint().catch((err) => {
     logError(`Fatal error: ${err.message}`);
     if (err.stack) {
       console.error(c.dim + err.stack + c.reset);
@@ -435,5 +443,6 @@ export {
   getProjectsPathDockerArgs,
   isDockerPermissionDenied,
   resolveAgentServerImage,
+  runDockerDevEntrypoint,
   startAgentServerDocker,
 };

@@ -107,7 +107,7 @@ describe("WorkspaceSelectionForm", () => {
     mockGetHome.mockResolvedValue({ home: "/Users/me" });
     useWorkspacesStore.setState({ workspaces: [], workspaceParents: [] });
     // `useResolvedWorkspaces` always queries an implicit `/projects` parent
-    // (the dev:docker mount point). Default it to empty so tests that don't
+    // (the npm run dev mount point). Default it to empty so tests that don't
     // care about it don't hit a real network call. Tests that need specific
     // behavior can replace this with their own spy.
     mockSearchSubdirectories.mockResolvedValue({
@@ -548,7 +548,13 @@ describe("WorkspaceSelectionForm", () => {
     );
 
     renderForm(
-      [{ id: "/Users/me/dev/repo1", name: "repo1", path: "/Users/me/dev/repo1" }],
+      [
+        {
+          id: "/Users/me/dev/repo1",
+          name: "repo1",
+          path: "/Users/me/dev/repo1",
+        },
+      ],
       [],
       { onConfirm },
     );

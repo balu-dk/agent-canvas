@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAutomationBackendEnv } from "../../scripts/dev-static.mjs";
+import { buildAutomationBackendEnv } from "../../scripts/launch-static.mjs";
 
 describe("dev-static", () => {
   it("passes the agent-server session key to the automation backend", () => {

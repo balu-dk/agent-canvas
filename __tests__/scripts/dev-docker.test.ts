@@ -1,5 +1,5 @@
 // @vitest-environment node
-// These tests load `scripts/dev-docker.mjs`, which constructs file:// URLs
+// These tests load `scripts/launch-docker.mjs`, which constructs file:// URLs
 // relative to its own location via `new URL("../tools", import.meta.url)`.
 // jsdom's URL constructor ignores file:// base URLs (it falls back to its
 // document base, e.g. http://localhost:3000/), breaking that resolution;
@@ -16,7 +16,7 @@ import {
   getHostDockerUserSpec,
   getProjectsPathDockerArgs,
   isDockerPermissionDenied,
-} from "../../scripts/dev-docker.mjs";
+} from "../../scripts/launch-docker.mjs";
 
 describe("CONTAINER_WORKSPACES_DIR", () => {
   it("points at the dockerized agent-server's in-container persistence dir so the working_dir the GUI sends is one the container can mkdir (regression guard for the host-path leak that caused 500 on POST /api/conversations)", () => {

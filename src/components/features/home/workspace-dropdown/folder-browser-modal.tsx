@@ -155,7 +155,7 @@ export function FolderBrowserModal({
   const subdirs = listing?.items ?? [];
   const parent = currentPath ? getParentPath(currentPath) : null;
 
-  // Signal that we're inside the dev:docker container without the host
+  // Signal that we're inside the npm run dev container without the host
   // home mounted: the agent server reports `/home/openhands` as home and
   // returns no favorites (the only contents are hidden credential dirs).
   // In that case there's nothing useful for the user to browse, so we

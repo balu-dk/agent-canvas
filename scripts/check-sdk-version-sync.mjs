@@ -11,7 +11,7 @@
  *   - openhands-agent-server
  *
  * This script checks the RELEASED PyPI version of openhands-automation (as specified
- * by DEFAULT_AUTOMATION_VERSION in dev-with-automation.mjs), not the main branch.
+ * by DEFAULT_AUTOMATION_VERSION in launch-automation.mjs), not the main branch.
  * DEFAULT_AUTOMATION_SDK_VERSION records the SDK dependency version for that
  * released automation package and may intentionally lag DEFAULT_AGENT_SERVER_VERSION.
  *
@@ -23,9 +23,9 @@
  *   node scripts/check-sdk-version-sync.mjs --check-pypi
  *
  * Environment variables:
- *   EXPECTED_SDK_VERSION      - Override the expected version (instead of reading from dev-with-automation.mjs)
+ *   EXPECTED_SDK_VERSION      - Override the expected version (instead of reading from launch-automation.mjs)
  *   AUTOMATION_PACKAGE_NAME   - Override the automation package name (default: openhands-automation)
- *   AUTOMATION_PACKAGE_VERSION - Override the automation package version (instead of reading from dev-with-automation.mjs)
+ *   AUTOMATION_PACKAGE_VERSION - Override the automation package version (instead of reading from launch-automation.mjs)
  *
  * Options:
  *   --check-pypi    Also check the latest SDK version on PyPI
@@ -57,7 +57,7 @@ Verifies that the released openhands-automation package on PyPI uses the
 SDK version expected for that automation release.
 
 The automation version is read from DEFAULT_AUTOMATION_VERSION in
-dev-with-automation.mjs (currently used for local development). The expected
+launch-automation.mjs (currently used for local development). The expected
 SDK dependency version is read from DEFAULT_AUTOMATION_SDK_VERSION when present,
 falling back to DEFAULT_AGENT_SERVER_VERSION for older configs.
 
@@ -69,9 +69,9 @@ Options:
   --help, -h      Show this help
 
 Environment variables:
-  EXPECTED_SDK_VERSION        Override the expected SDK version (instead of reading from dev-with-automation.mjs)
+  EXPECTED_SDK_VERSION        Override the expected SDK version (instead of reading from launch-automation.mjs)
   AUTOMATION_PACKAGE_NAME     Override the automation package name (default: openhands-automation)
-  AUTOMATION_PACKAGE_VERSION  Override the automation package version (instead of reading from dev-with-automation.mjs)
+  AUTOMATION_PACKAGE_VERSION  Override the automation package version (instead of reading from launch-automation.mjs)
 
 Triggering from other repos:
   The automation repo or SDK repo can trigger this check via GitHub repository_dispatch:
@@ -144,10 +144,10 @@ function sleep(ms) {
 }
 
 /**
- * Read the default agent-server SDK version from dev-safe.mjs.
+ * Read the default agent-server SDK version from launch-safe.mjs.
  */
 function getDefaultAgentServerVersion() {
-  const devSafePath = join(projectRoot, "scripts", "dev-safe.mjs");
+  const devSafePath = join(projectRoot, "scripts", "launch-safe.mjs");
   const content = readFileSync(devSafePath, "utf8");
 
   const match = content.match(
@@ -155,15 +155,15 @@ function getDefaultAgentServerVersion() {
   );
   if (!match) {
     throw new Error(
-      "Could not find DEFAULT_AGENT_SERVER_VERSION in dev-safe.mjs",
+      "Could not find DEFAULT_AGENT_SERVER_VERSION in launch-safe.mjs",
     );
   }
-  return { version: match[1], source: "dev-safe.mjs" };
+  return { version: match[1], source: "launch-safe.mjs" };
 }
 
 /**
  * Read the expected automation SDK dependency version from environment,
- * dev-with-automation.mjs, or dev-safe.mjs.
+ * launch-automation.mjs, or launch-safe.mjs.
  */
 function getExpectedVersion() {
   // Allow override via environment variable (useful for CI triggers).
@@ -172,7 +172,7 @@ function getExpectedVersion() {
     return { version: envVersion.trim(), source: "EXPECTED_SDK_VERSION env var" };
   }
 
-  const devAutomationPath = join(projectRoot, "scripts", "dev-with-automation.mjs");
+  const devAutomationPath = join(projectRoot, "scripts", "launch-automation.mjs");
   const content = readFileSync(devAutomationPath, "utf8");
   const match = content.match(
     /const DEFAULT_AUTOMATION_SDK_VERSION = "([^"]+)"/,
@@ -180,7 +180,7 @@ function getExpectedVersion() {
   if (match) {
     return {
       version: match[1],
-      source: "DEFAULT_AUTOMATION_SDK_VERSION in dev-with-automation.mjs",
+      source: "DEFAULT_AUTOMATION_SDK_VERSION in launch-automation.mjs",
     };
   }
 
@@ -205,7 +205,7 @@ async function fetchPyPIVersion(packageName) {
 }
 
 /**
- * Read the automation version from env var or dev-with-automation.mjs
+ * Read the automation version from env var or launch-automation.mjs
  */
 function getAutomationVersion() {
   // Allow override via environment variable
@@ -214,7 +214,7 @@ function getAutomationVersion() {
     return { version: envVersion.trim(), source: "AUTOMATION_PACKAGE_VERSION env var" };
   }
 
-  const devAutomationPath = join(projectRoot, "scripts", "dev-with-automation.mjs");
+  const devAutomationPath = join(projectRoot, "scripts", "launch-automation.mjs");
   const content = readFileSync(devAutomationPath, "utf8");
 
   const match = content.match(
@@ -222,10 +222,10 @@ function getAutomationVersion() {
   );
   if (!match) {
     throw new Error(
-      "Could not find DEFAULT_AUTOMATION_VERSION in dev-with-automation.mjs",
+      "Could not find DEFAULT_AUTOMATION_VERSION in launch-automation.mjs",
     );
   }
-  return { version: match[1], source: "dev-with-automation.mjs" };
+  return { version: match[1], source: "launch-automation.mjs" };
 }
 
 /**
@@ -324,7 +324,7 @@ async function main() {
   console.log("");
 
   try {
-    // Get expected version from env var or dev-safe.mjs
+    // Get expected version from env var or launch-safe.mjs
     const { version: expectedVersion, source: versionSource } = getExpectedVersion();
     console.log(
       `Expected automation SDK version: ${colors.green}${expectedVersion}${colors.reset} (from ${versionSource})`,
@@ -337,7 +337,7 @@ async function main() {
       );
     }
 
-    // Get automation version from env var or dev-with-automation.mjs
+    // Get automation version from env var or launch-automation.mjs
     const { version: automationVersion, source: automationSource } = getAutomationVersion();
     console.log(
       `Automation package: ${colors.cyan}${AUTOMATION_PACKAGE_NAME}==${automationVersion}${colors.reset} (from ${automationSource})`,
@@ -427,13 +427,13 @@ async function main() {
       console.log("");
       console.log("To fix, update one of the following:");
       console.log(
-        `  1. Update DEFAULT_AUTOMATION_SDK_VERSION in scripts/dev-with-automation.mjs to match the automation release`,
+        `  1. Update DEFAULT_AUTOMATION_SDK_VERSION in scripts/launch-automation.mjs to match the automation release`,
       );
       console.log(
         `  2. Release a new version of ${AUTOMATION_PACKAGE_NAME} with SDK dependencies pinned to ${expectedVersion}`,
       );
       console.log(
-        `  3. Update DEFAULT_AUTOMATION_VERSION in scripts/dev-with-automation.mjs to a newer release`,
+        `  3. Update DEFAULT_AUTOMATION_VERSION in scripts/launch-automation.mjs to a newer release`,
       );
       console.log("");
       process.exit(1);

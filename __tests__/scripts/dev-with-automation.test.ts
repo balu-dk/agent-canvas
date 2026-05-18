@@ -1,5 +1,5 @@
 // @vitest-environment node
-// These tests load `scripts/dev-with-automation.mjs` and `scripts/dev-safe.mjs`,
+// These tests load `scripts/launch-automation.mjs` and `scripts/launch-safe.mjs`,
 // which construct file:// URLs relative to their own location via
 // `new URL("../tools", import.meta.url)`. jsdom's URL constructor ignores
 // file:// base URLs (it falls back to its document base, e.g.
@@ -22,8 +22,8 @@ import {
   DEFAULT_AUTOMATION_VERSION,
   DEFAULT_BACKEND_PORT,
   DEFAULT_AUTOMATION_PORT,
-} from "../../scripts/dev-with-automation.mjs";
-import { resetPersistedSessionApiKeyCache } from "../../scripts/dev-safe.mjs";
+} from "../../scripts/launch-automation.mjs";
+import { resetPersistedSessionApiKeyCache } from "../../scripts/launch-safe.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -314,7 +314,7 @@ describe("buildConfig", () => {
     expect(config.sessionApiKey).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("reuses the persisted session API key across calls (parity for dev:docker and dev:dangerously-dockerless restarts)", async () => {
+  it("reuses the persisted session API key across calls (parity for npm run dev and npm run dev -- --sandbox none --static restarts)", async () => {
     const env = envWithIsolatedKeyPath();
     const first = await buildConfig({}, env);
 
@@ -417,7 +417,7 @@ describe("dev-with-automation CLI", () => {
   it("shows help with --help flag", async () => {
     const child = spawn(
       process.execPath,
-      ["scripts/dev-with-automation.mjs", "--help"],
+      ["scripts/launch-automation.mjs", "--help"],
       {
         cwd: repoRoot,
         stdio: ["ignore", "pipe", "pipe"],
@@ -445,7 +445,7 @@ describe("dev-with-automation CLI", () => {
   });
 
   it("exits promptly when uvx is missing", async () => {
-    const child = spawn(process.execPath, ["scripts/dev-with-automation.mjs"], {
+    const child = spawn(process.execPath, ["scripts/launch-automation.mjs"], {
       cwd: repoRoot,
       env: {
         PATH: "",

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getProcessTreeSpawnOptions,
   isProcessRunning,
-} from "../../scripts/dev-process-utils.mjs";
+} from "../../scripts/launch-process-utils.mjs";
 
 describe("dev process utils", () => {
   it("treats a signaled but unexited process as still running", () => {

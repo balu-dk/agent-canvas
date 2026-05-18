@@ -473,7 +473,7 @@ describe("buildRuntimeServicesSystemSuffix", () => {
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:docker",
+        mode: "npm run dev",
         agent_host_alias: "host.docker.internal",
         services: {
           agent_server: {
@@ -495,7 +495,7 @@ describe("buildRuntimeServicesSystemSuffix", () => {
     const suffix = buildRuntimeServicesSystemSuffix();
     expect(suffix).toBeDefined();
     expect(suffix).toContain("<RUNTIME_SERVICES>");
-    expect(suffix).toContain("dev:docker");
+    expect(suffix).toContain("npm run dev");
     expect(suffix).toContain("http://localhost:8000");
     expect(suffix).toContain("http://host.docker.internal:18001");
     expect(suffix).toContain(
@@ -512,12 +512,12 @@ describe("buildRuntimeServicesSystemSuffix", () => {
   });
 
   it("uses the configured agent-server URL in the don't-guess line (not a hardcoded :8000)", () => {
-    // dev:safe runs the agent-server on :18000, not :8000. Make sure the
+    // npm run dev -- --no-automation --sandbox none runs the agent-server on :18000, not :8000. Make sure the
     // rendered block doesn't lie to the agent about its own URL.
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:safe",
+        mode: "npm run dev -- --no-automation --sandbox none",
         services: {
           agent_server: { url_from_agent: "http://localhost:18000" },
         },
@@ -537,7 +537,7 @@ describe("buildRuntimeServicesSystemSuffix", () => {
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:docker",
+        mode: "npm run dev",
         services: {
           agent_server: { url_from_agent: "http://localhost:8000" },
           frontend: {
@@ -561,7 +561,7 @@ describe("buildRuntimeServicesSystemSuffix", () => {
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:safe",
+        mode: "npm run dev -- --no-automation --sandbox none",
         services: {
           agent_server: { url_from_agent: "http://localhost:18000" },
           vite: {
@@ -579,7 +579,7 @@ describe("buildRuntimeServicesSystemSuffix", () => {
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:safe",
+        mode: "npm run dev -- --no-automation --sandbox none",
         services: {
           agent_server: { url_from_agent: "http://localhost:18000" },
         },
@@ -613,7 +613,7 @@ describe("createAgentFromSettings runtime services suffix", () => {
     vi.stubEnv(
       "VITE_RUNTIME_SERVICES_INFO",
       JSON.stringify({
-        mode: "dev:docker",
+        mode: "npm run dev",
         services: {
           agent_server: { url_from_agent: "http://localhost:8000" },
           automation: {
