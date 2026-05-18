@@ -475,7 +475,10 @@ function buildConfiguredAgentSettings(settings: Settings): SettingsRecord {
   };
 }
 
-function createAgentFromSettings(agentSettings: SettingsRecord) {
+function createAgentFromSettings(
+  agentSettings: SettingsRecord,
+  projectDir: string,
+) {
   const runtimeServicesSuffix = buildRuntimeServicesSystemSuffix();
   return {
     kind: "Agent",
@@ -483,6 +486,8 @@ function createAgentFromSettings(agentSettings: SettingsRecord) {
     agent_context: {
       load_public_skills: true,
       load_user_skills: true,
+      load_project_skills: true,
+      project_dir: projectDir,
       // When the dev launcher provided `VITE_RUNTIME_SERVICES_INFO`, append
       // a <RUNTIME_SERVICES> block to the system prompt so the agent knows
       // which services exist in this dev stack (e.g. automation backend
@@ -580,7 +585,8 @@ export function buildStartConversationRequest(
     : options.settings;
 
   const agentSettings = buildConfiguredAgentSettings(sourceAgentSettings);
-  const agent = createAgentFromSettings(agentSettings);
+  const projectDir = options.workingDir ?? getAgentServerWorkingDir();
+  const agent = createAgentFromSettings(agentSettings, projectDir);
 
   // For conversation settings, merge encrypted settings if provided
   const sourceConversationOptions = options.encryptedConversationSettings

@@ -122,6 +122,8 @@ describe("buildStartConversationRequest", () => {
     expect(payload.agent.agent_context).toEqual({
       load_public_skills: true,
       load_user_skills: true,
+      load_project_skills: true,
+      project_dir: "/workspace/project/agent-canvas",
     });
     expect(payload.agent.agent).toBeUndefined();
     expect(payload.workspace.working_dir).toBe(
@@ -254,10 +256,16 @@ describe("buildStartConversationRequest", () => {
     }) as {
       conversation_id?: string;
       workspace: { working_dir: string };
+      agent: { agent_context: Record<string, unknown> };
     };
 
     expect(payload.conversation_id).toBe(conversationId);
     expect(payload.workspace.working_dir).toBe(workingDir);
+    // The agent_context.project_dir must match the workspace working_dir so
+    // the agent-server loads `.agents/skills/` from the same directory the
+    // conversation runs in (see issue #574).
+    expect(payload.agent.agent_context.project_dir).toBe(workingDir);
+    expect(payload.agent.agent_context.load_project_skills).toBe(true);
   });
 
   it("always requests a git worktree for new conversations", () => {
@@ -606,6 +614,8 @@ describe("createAgentFromSettings runtime services suffix", () => {
     expect(payload.agent.agent_context).toEqual({
       load_public_skills: true,
       load_user_skills: true,
+      load_project_skills: true,
+      project_dir: "/workspace/project/agent-canvas",
     });
   });
 
@@ -631,6 +641,8 @@ describe("createAgentFromSettings runtime services suffix", () => {
     expect(payload.agent.agent_context).toMatchObject({
       load_public_skills: true,
       load_user_skills: true,
+      load_project_skills: true,
+      project_dir: "/workspace/project/agent-canvas",
     });
     expect(
       payload.agent.agent_context.system_message_suffix as string,
