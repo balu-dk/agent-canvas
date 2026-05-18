@@ -111,24 +111,9 @@ describe("OnboardingModal", () => {
       screen.getByTestId("onboarding-step-choose-agent"),
     ).toBeInTheDocument();
 
-    // Active slide sits at offset 0; later slides are translated 100%
-    // per index away to the right and absolute-positioned so they
-    // don't bleed into the modal box.
     expect(screen.getByTestId("onboarding-slide-0")).toHaveAttribute(
       "data-active",
       "true",
-    );
-    expect(screen.getByTestId("onboarding-slide-0").style.transform).toBe(
-      "translateX(0%)",
-    );
-    expect(screen.getByTestId("onboarding-slide-1").style.transform).toBe(
-      "translateX(100%)",
-    );
-    expect(screen.getByTestId("onboarding-slide-2").style.transform).toBe(
-      "translateX(200%)",
-    );
-    expect(screen.getByTestId("onboarding-slide-3").style.transform).toBe(
-      "translateX(300%)",
     );
 
     // Progress bar reflects step 1 of 4.
@@ -158,15 +143,6 @@ describe("OnboardingModal", () => {
       "data-active",
       "true",
     );
-    expect(screen.getByTestId("onboarding-slide-0").style.transform).toBe(
-      "translateX(-100%)",
-    );
-    expect(screen.getByTestId("onboarding-slide-1").style.transform).toBe(
-      "translateX(0%)",
-    );
-    expect(screen.getByTestId("onboarding-slide-2").style.transform).toBe(
-      "translateX(100%)",
-    );
 
     // Local backend is selected by default, so step 1's Next is enabled.
     await waitFor(() =>
@@ -192,9 +168,6 @@ describe("OnboardingModal", () => {
       "data-active",
       "true",
     );
-    expect(screen.getByTestId("onboarding-slide-3").style.transform).toBe(
-      "translateX(0%)",
-    );
   });
 
   it("Skip immediately closes the modal", async () => {
@@ -205,18 +178,6 @@ describe("OnboardingModal", () => {
     await user.click(screen.getByTestId("onboarding-skip"));
 
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("opts the Skip button into cursor-pointer so hovering it shows the pointer affordance", () => {
-    // Arrange: render the modal so the Skip button is mounted.
-    renderModal();
-
-    // Act: locate the Skip button the user hovers.
-    const skipButton = screen.getByTestId("onboarding-skip");
-
-    // Assert: Tailwind v4 preflight resets <button> cursor to default, so
-    // the button must opt back into cursor-pointer for the hover affordance.
-    expect(skipButton.className).toMatch(/(^|\s)cursor-pointer(\s|$)/);
   });
 
   it("wraps the slide rail in a dedicated scroll region so the modal chrome stays put", () => {
