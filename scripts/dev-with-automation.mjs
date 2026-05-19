@@ -1186,7 +1186,8 @@ async function seedSecuritySettings(config, options = {}) {
       const text = await response.text();
       lastError = `HTTP ${response.status}: ${text}`;
 
-      if (response.status === 401 || response.status === 403) {
+      // Permanent errors — no point retrying
+      if ([400, 401, 403, 404, 422].includes(response.status)) {
         logService(
           "settings",
           `Warning: could not seed security settings (${response.status})`,
