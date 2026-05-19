@@ -1,0 +1,14 @@
+node_modules
+.git
+build
+dist
+.env
+.env.*
+*.log
+.openhands
+tests
+__tests__
+__mocks__
+.github
+.pr
+artifacts

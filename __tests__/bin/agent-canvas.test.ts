@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("agent-canvas CLI", () => {
-  it("shows PROJECTS_PATH in --help output", async () => {
+  it("shows help output without requiring Docker or PROJECTS_PATH", async () => {
     const child = spawn(process.execPath, ["bin/agent-canvas.mjs", "--help"], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"],
@@ -29,7 +29,14 @@ describe("agent-canvas CLI", () => {
 
     expect(code).toBe(0);
     expect(stderr).toBe("");
-    expect(stdout).toContain("PROJECTS_PATH");
-    expect(stdout).not.toContain("PROJECT_PATH=/path/to/projects");
+    // The npm-install path runs without Docker — help should not mention
+    // Docker-specific env vars like PROJECTS_PATH
+    expect(stdout).not.toContain("PROJECTS_PATH");
+    // Should describe the simple usage
+    expect(stdout).toContain("agent-canvas");
+    expect(stdout).toContain("--port");
+    // Should mention uv as a prerequisite (not Docker)
+    expect(stdout).toContain("uv");
+    expect(stdout).not.toContain("Docker");
   });
 });
