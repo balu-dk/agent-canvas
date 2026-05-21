@@ -7,6 +7,10 @@ import {
   createUserMessageEvent,
 } from "test-utils";
 import { ACPToolCallEvent } from "#/types/agent-server/core/events/acp-tool-call-event";
+import {
+  ConversationErrorEvent,
+  ServerErrorEvent,
+} from "#/types/agent-server/core";
 
 const makeACPEvent = (
   overrides: Partial<ACPToolCallEvent> = {},
@@ -48,6 +52,34 @@ describe("shouldRenderEvent - PlanningFileEditorAction", () => {
 
   it("should return true for user message events", () => {
     const event = createUserMessageEvent("msg-1");
+
+    expect(shouldRenderEvent(event)).toBe(true);
+  });
+});
+
+describe("shouldRenderEvent - displayable error events", () => {
+  it("renders ConversationErrorEvent so a failed run isn't silent", () => {
+    const event: ConversationErrorEvent = {
+      id: "err-1",
+      kind: "ConversationErrorEvent",
+      timestamp: "2024-01-01T00:00:00Z",
+      source: "environment",
+      code: "AuthenticationError",
+      detail: "litellm.AuthenticationError: LiteLLM Virtual Key expected.",
+    };
+
+    expect(shouldRenderEvent(event)).toBe(true);
+  });
+
+  it("renders ServerErrorEvent", () => {
+    const event: ServerErrorEvent = {
+      id: "err-2",
+      kind: "ServerErrorEvent",
+      timestamp: "2024-01-01T00:00:00Z",
+      source: "environment",
+      code: "MCPError",
+      detail: "Something went wrong on the server.",
+    };
 
     expect(shouldRenderEvent(event)).toBe(true);
   });

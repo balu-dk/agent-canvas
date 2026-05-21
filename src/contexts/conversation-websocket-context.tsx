@@ -390,8 +390,9 @@ export function ConversationWebSocketProvider({
         if (isAgentServerEvent(event)) {
           addEvent(event);
 
-          // Handle displayable error events - show error banner
-          // AgentErrorEvent errors are displayed inline in the chat, not as banners
+          // ConversationErrorEvent / ServerErrorEvent render inline in the
+          // transcript (see shouldRenderEvent), so track them but don't also
+          // raise a banner; non-error events still clear a stale banner.
           if (isDisplayableErrorEvent(event)) {
             const errorEvent = event as
               | ConversationErrorEvent
@@ -405,7 +406,6 @@ export function ConversationWebSocketProvider({
               },
               posthog,
             });
-            setErrorMessage(errorEvent.detail);
           } else {
             handleNonErrorEvent();
           }
@@ -551,8 +551,9 @@ export function ConversationWebSocketProvider({
           };
           addEvent(eventWithPlanningFlag);
 
-          // Handle displayable error events - show error banner
-          // AgentErrorEvent errors are displayed inline in the chat, not as banners
+          // ConversationErrorEvent / ServerErrorEvent render inline in the
+          // transcript (see shouldRenderEvent), so track them but don't also
+          // raise a banner; non-error events still clear a stale banner.
           if (isDisplayableErrorEvent(event)) {
             const errorEvent = event as
               | ConversationErrorEvent
@@ -566,7 +567,6 @@ export function ConversationWebSocketProvider({
               },
               posthog,
             });
-            setErrorMessage(errorEvent.detail);
           } else {
             handleNonErrorEvent();
           }

@@ -16,6 +16,8 @@ import {
   isPlanningFileEditorObservationEvent,
   isHookExecutionEvent,
   isACPToolCallEvent,
+  isConversationErrorEvent,
+  isServerErrorEvent,
 } from "#/types/agent-server/type-guards";
 import { useConfig } from "#/hooks/query/use-config";
 import { useConversationStore } from "#/stores/conversation-store";
@@ -23,6 +25,7 @@ import { useAgentState } from "#/hooks/use-agent-state";
 import { AgentState } from "#/types/agent-state";
 import { PlanPreview } from "../../features/chat/plan-preview";
 import { ErrorEventMessage } from "./event-message-components/error-event-message";
+import { ConversationErrorEventMessage } from "./event-message-components/conversation-error-event-message";
 import { UserAssistantEventMessage } from "./event-message-components/user-assistant-event-message";
 import { FinishEventMessage } from "./event-message-components/finish-event-message";
 import { GenericEventMessageWrapper } from "./event-message-components/generic-event-message-wrapper";
@@ -160,6 +163,11 @@ export function EventMessage({
   // Agent error events
   if (isAgentErrorEvent(event)) {
     return <ErrorEventMessage event={event} {...commonProps} />;
+  }
+
+  // Conversation/server error events (e.g. an LLM AuthenticationError)
+  if (isConversationErrorEvent(event) || isServerErrorEvent(event)) {
+    return <ConversationErrorEventMessage event={event} />;
   }
 
   // Hook execution events

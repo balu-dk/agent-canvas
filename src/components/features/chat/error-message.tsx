@@ -8,9 +8,15 @@ import { MarkdownRenderer } from "../markdown/markdown-renderer";
 interface ErrorMessageProps {
   errorId?: string;
   defaultMessage: string;
+  /** Optional leading icon rendered before the error label. */
+  icon?: React.ReactNode;
 }
 
-export function ErrorMessage({ errorId, defaultMessage }: ErrorMessageProps) {
+export function ErrorMessage({
+  errorId,
+  defaultMessage,
+  icon,
+}: ErrorMessageProps) {
   const { t } = useTranslation("openhands");
   const [showDetails, setShowDetails] = React.useState(false);
 
@@ -22,6 +28,7 @@ export function ErrorMessage({ errorId, defaultMessage }: ErrorMessageProps) {
   return (
     <div className="flex flex-col gap-2 my-2 py-2 text-sm w-full">
       <div className="font-bold text-danger">
+        {icon}
         {t(errorKey)}
         <button
           type="button"

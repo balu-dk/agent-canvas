@@ -7,6 +7,7 @@ import {
   isConversationStateUpdateEvent,
   isHookExecutionEvent,
   isACPToolCallEvent,
+  isDisplayableErrorEvent,
 } from "#/types/agent-server/type-guards";
 
 export const shouldRenderEvent = (event: OpenHandsEvent) => {
@@ -49,6 +50,14 @@ export const shouldRenderEvent = (event: OpenHandsEvent) => {
 
   // Render agent error events
   if (isAgentErrorEvent(event)) {
+    return true;
+  }
+
+  // Render conversation/server error events (e.g. an LLM AuthenticationError
+  // raised when the run fails). Surfacing these inline means they show whether
+  // they arrive live or as part of REST-loaded history, so a failed run never
+  // leaves the user with a silent dead conversation.
+  if (isDisplayableErrorEvent(event)) {
     return true;
   }
 
