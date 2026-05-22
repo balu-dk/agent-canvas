@@ -57,6 +57,10 @@ export function CreateInstructions() {
           }
           navigate?.(`/conversations/${conversation.conversation_id}`);
           window.setTimeout(() => setMessageToSend(AUTOMATION_PROMPT), 0);
+          // Reset the re-entry guard in case the component stays mounted
+          // (e.g. `navigate` is a noop because no NavigationProvider is
+          // wired up); otherwise the button would be permanently disabled.
+          launchInFlightRef.current = false;
         },
         onError: () => {
           launchInFlightRef.current = false;
