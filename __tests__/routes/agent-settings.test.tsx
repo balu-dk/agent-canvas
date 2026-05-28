@@ -5,7 +5,6 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AgentSettingsScreen from "#/routes/agent-settings";
 import SettingsService from "#/api/settings-service/settings-service.api";
-import { AcpEnvService } from "#/api/acp-env-service";
 import { MOCK_DEFAULT_USER_SETTINGS } from "#/mocks/handlers";
 import { Settings } from "#/types/settings";
 
@@ -38,9 +37,6 @@ describe("AgentSettingsScreen", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
-    vi.spyOn(AcpEnvService, "list").mockResolvedValue([]);
-    vi.spyOn(AcpEnvService, "upsert").mockResolvedValue({ name: "x" });
-    vi.spyOn(AcpEnvService, "delete").mockResolvedValue(undefined);
   });
 
   it("renders the agent type selector defaulting to OpenHands with sub-agents toggle", async () => {
@@ -689,7 +685,7 @@ describe("AgentSettingsScreen", () => {
     ]);
   });
 
-  it("renders the env-vars panel on the ACP branch and lists server-side names", async () => {
+  it("renders existing acp_env names on the ACP page", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
         agent_settings: {
@@ -698,25 +694,27 @@ describe("AgentSettingsScreen", () => {
           acp_server: "claude-code",
           acp_command: [],
           acp_model: null,
+          // Server-side ``acp_env`` is redacted on GET; the manager only
+          // surfaces names.
+          acp_env: {
+            ANTHROPIC_API_KEY: "**********",
+            ANTHROPIC_BASE_URL: "**********",
+          },
         },
       }),
     );
-    vi.spyOn(AcpEnvService, "list").mockResolvedValue([
-      { name: "ANTHROPIC_API_KEY" },
-      { name: "ANTHROPIC_BASE_URL" },
-    ]);
 
     renderAgentSettingsScreen();
     await screen.findByTestId("acp-env-settings");
     expect(
-      await screen.findByTestId("acp-env-row-ANTHROPIC_API_KEY"),
+      screen.getByTestId("acp-env-row-ANTHROPIC_API_KEY"),
     ).toBeInTheDocument();
     expect(
       screen.getByTestId("acp-env-row-ANTHROPIC_BASE_URL"),
     ).toBeInTheDocument();
   });
 
-  it("adds an env-var via the dedicated /agent-env PUT endpoint", async () => {
+  it("adds an acp_env entry via the inline form (own PATCH)", async () => {
     const user = userEvent.setup();
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
@@ -729,7 +727,6 @@ describe("AgentSettingsScreen", () => {
         },
       }),
     );
-    const upsert = vi.spyOn(AcpEnvService, "upsert");
     const save = vi.spyOn(SettingsService, "saveSettings");
 
     renderAgentSettingsScreen();
@@ -743,14 +740,19 @@ describe("AgentSettingsScreen", () => {
     await user.click(screen.getByTestId("acp-env-add-button"));
 
     await waitFor(() => {
-      expect(upsert).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
-    expect(upsert).toHaveBeenCalledWith("ANTHROPIC_API_KEY", "sk-test");
-    // The page-level PATCH /api/settings is not used for env-var ops.
-    expect(save).not.toHaveBeenCalled();
+    const call = save.mock.calls[0]?.[0] as {
+      agent_settings_diff?: Record<string, unknown>;
+    };
+    // The add PATCH only carries acp_env — it does not duplicate the
+    // page's other ACP fields (those are owned by the page's Save).
+    expect(call.agent_settings_diff).toEqual({
+      acp_env: { ANTHROPIC_API_KEY: "sk-test" },
+    });
   });
 
-  it("deletes an env-var via the dedicated /agent-env DELETE endpoint", async () => {
+  it("deletes an acp_env entry by sending null on confirmation", async () => {
     const user = userEvent.setup();
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
@@ -760,22 +762,31 @@ describe("AgentSettingsScreen", () => {
           acp_server: "claude-code",
           acp_command: [],
           acp_model: null,
+          acp_env: {
+            ANTHROPIC_API_KEY: "**********",
+            DROP_ME: "**********",
+          },
         },
       }),
     );
-    vi.spyOn(AcpEnvService, "list").mockResolvedValue([{ name: "DROP_ME" }]);
-    const del = vi.spyOn(AcpEnvService, "delete");
+    const save = vi.spyOn(SettingsService, "saveSettings");
 
     renderAgentSettingsScreen();
-    await screen.findByTestId("acp-env-row-DROP_ME");
+    await screen.findByTestId("acp-env-settings");
 
     await user.click(screen.getByTestId("acp-env-delete-DROP_ME"));
-    await user.click(await screen.findByTestId("confirm-button"));
+    const confirmBtn = await screen.findByTestId("confirm-button");
+    await user.click(confirmBtn);
 
     await waitFor(() => {
-      expect(del).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
-    expect(del).toHaveBeenCalledWith("DROP_ME");
+    const call = save.mock.calls[0]?.[0] as {
+      agent_settings_diff?: Record<string, unknown>;
+    };
+    expect(call.agent_settings_diff).toEqual({
+      acp_env: { DROP_ME: null },
+    });
   });
 
   it("page Save button stays gated on command/model edits, not env-vars", async () => {
@@ -794,9 +805,8 @@ describe("AgentSettingsScreen", () => {
     renderAgentSettingsScreen();
     await screen.findByTestId("acp-env-settings");
 
-    // Env-var actions commit through their own endpoints — they don't
-    // feed the page's dirty state, so Save stays disabled until command
-    // or model is touched.
+    // No edits → disabled. Env-var actions commit through their own
+    // PATCH and don't feed the page's dirty state.
     expect(screen.getByTestId("agent-save-button")).toBeDisabled();
   });
 });
