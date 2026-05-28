@@ -5252,6 +5252,23 @@
     "uk": "Add",
     "ca": "Add"
   },
+  "SETTINGS$AGENT_ENV_EMPTY": {
+    "en": "No environment variables yet. Use the form below to add one.",
+    "ja": "No environment variables yet. Use the form below to add one.",
+    "zh-CN": "No environment variables yet. Use the form below to add one.",
+    "zh-TW": "No environment variables yet. Use the form below to add one.",
+    "ko-KR": "No environment variables yet. Use the form below to add one.",
+    "no": "No environment variables yet. Use the form below to add one.",
+    "it": "No environment variables yet. Use the form below to add one.",
+    "pt": "No environment variables yet. Use the form below to add one.",
+    "es": "No environment variables yet. Use the form below to add one.",
+    "ar": "No environment variables yet. Use the form below to add one.",
+    "fr": "No environment variables yet. Use the form below to add one.",
+    "tr": "No environment variables yet. Use the form below to add one.",
+    "de": "No environment variables yet. Use the form below to add one.",
+    "uk": "No environment variables yet. Use the form below to add one.",
+    "ca": "No environment variables yet. Use the form below to add one."
+  },
   "SETTINGS$AGENT_ENV_NAME_PLACEHOLDER": {
     "en": "Name (e.g. ANTHROPIC_API_KEY)",
     "ja": "Name (e.g. ANTHROPIC_API_KEY)",

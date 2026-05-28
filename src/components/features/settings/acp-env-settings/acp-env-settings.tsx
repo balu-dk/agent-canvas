@@ -96,7 +96,7 @@ export function AcpEnvSettings({ envKeys }: AcpEnvSettingsProps) {
         {t(I18nKey.SETTINGS$AGENT_ENV_DESCRIPTION)}
       </Typography.Text>
 
-      {sortedKeys.length > 0 && (
+      {sortedKeys.length > 0 ? (
         <ul className="flex flex-col mt-1" data-testid="acp-env-list">
           {sortedKeys.map((key) => (
             <li
@@ -120,6 +120,13 @@ export function AcpEnvSettings({ envKeys }: AcpEnvSettingsProps) {
             </li>
           ))}
         </ul>
+      ) : (
+        <p
+          data-testid="acp-env-empty"
+          className="text-xs italic text-tertiary-light mt-1"
+        >
+          {t(I18nKey.SETTINGS$AGENT_ENV_EMPTY)}
+        </p>
       )}
 
       <form
@@ -153,7 +160,7 @@ export function AcpEnvSettings({ envKeys }: AcpEnvSettingsProps) {
         <BrandButton
           testId="acp-env-add-button"
           type="submit"
-          variant="secondary"
+          variant="primary"
           isDisabled={isPending || !name.trim() || !value}
         >
           {t(I18nKey.SETTINGS$AGENT_ENV_ADD)}
