@@ -509,7 +509,7 @@ function buildAgentContext(agentSettings: SettingsRecord): SettingsRecord {
   return {
     ...toRecord(agentSettings.agent_context),
     load_public_skills: shouldLoadPublicSkills(),
-    load_user_skills: true,
+    load_user_skills: true, // always enabled — user skills are personal and always loaded
     load_project_skills: shouldLoadProjectSkills(),
     load_org_skills: shouldLoadOrgSkills(),
     ...(runtimeServicesSuffix
