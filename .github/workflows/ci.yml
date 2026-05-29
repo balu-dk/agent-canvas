@@ -19,19 +19,29 @@ permissions:
   contents: read
 
 jobs:
-  # The check name is preserved as `test-and-build (ubuntu)` because the main
-  # branch ruleset (`required_status_checks`) requires that exact context.
-  # Renaming requires updating the ruleset in lockstep.
-  #
-  # The Windows smoke build lives in `ci-windows.yml` and only runs on push
-  # to `main`. Keeping it out of this PR-triggered workflow avoids GitHub's
-  # strict-ruleset "Expected — Waiting for status to be reported" entry for
-  # `test-and-build (windows)`, which previously blocked every PR's merge
-  # state regardless of required-check configuration.
-  test-and-build:
-    name: test-and-build (ubuntu)
+  prepare-test-matrix:
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Build test matrix
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo 'matrix={"include":[{"name":"ubuntu","os":"ubuntu-24.04","full_checks":true},{"name":"windows","os":"windows-latest","full_checks":false}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix={"include":[{"name":"ubuntu","os":"ubuntu-24.04","full_checks":true}]}' >> "$GITHUB_OUTPUT"
+          fi
+
+  test-and-build:
+    needs: prepare-test-matrix
+    name: test-and-build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-test-matrix.outputs.matrix) }}
 
     steps:
       - name: Check out repository
@@ -50,6 +60,7 @@ jobs:
         run: npm ci
 
       - name: Lint
+        if: matrix.full_checks
         run: npm run lint
 
       - name: Test
@@ -59,9 +70,11 @@ jobs:
         run: npm run build
 
       - name: Build library
+        if: matrix.full_checks
         run: npm run build:lib
 
       - name: Verify package contents
+        if: matrix.full_checks
         run: npm pack --dry-run
 
   live-e2e:
