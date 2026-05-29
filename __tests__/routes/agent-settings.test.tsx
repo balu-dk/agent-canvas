@@ -265,7 +265,9 @@ describe("AgentSettingsScreen", () => {
     // a built-in provider's default.
     await user.click(screen.getByTestId("agent-preset-selector"));
     await user.click(
-      await screen.findByRole("option", { name: "SETTINGS$AGENT_PRESET_CUSTOM" }),
+      await screen.findByRole("option", {
+        name: "SETTINGS$AGENT_PRESET_CUSTOM",
+      }),
     );
     const commandInput = screen.getByTestId(
       "agent-command-input",
@@ -752,7 +754,7 @@ describe("AgentSettingsScreen", () => {
     });
   });
 
-  it("deletes an acp_env entry by writing an empty-string soft-delete", async () => {
+  it("deletes an acp_env entry via an RFC 7386 null unset", async () => {
     const user = userEvent.setup();
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
@@ -784,17 +786,15 @@ describe("AgentSettingsScreen", () => {
     const call = save.mock.calls[0]?.[0] as {
       agent_settings_diff?: Record<string, unknown>;
     };
-    // Empty string, not null — the running v1.24.0 agent-server validates
-    // ``acp_env`` as ``dict[str, str]`` and would 422 on null. The empty
-    // string is treated as "unset" by every credential CLI we spawn against
-    // (Claude Code, codex-acp, gemini-cli) and is filtered out of the
-    // displayed list below, so it reads as a real delete in the UI.
+    // True delete: a null inner value unsets the key server-side (RFC 7386
+    // merge-patch, software-agent-sdk#3431) — no empty-string sentinel, no
+    // zombie entry left on disk. Requires an agent-server image with #3431.
     expect(call.agent_settings_diff).toEqual({
-      acp_env: { DROP_ME: "" },
+      acp_env: { DROP_ME: null },
     });
   });
 
-  it("filters soft-deleted (empty-string) acp_env entries out of the list", async () => {
+  it("filters blank acp_env entries out of the list (legacy soft-delete zombies)", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
         agent_settings: {
@@ -806,8 +806,9 @@ describe("AgentSettingsScreen", () => {
           acp_env: {
             // Live entry: server-redacted to "**********".
             ANTHROPIC_API_KEY: "**********",
-            // Soft-deleted: was wiped via the empty-string delete; the
-            // editor must not show it as a configured variable.
+            // Legacy zombie: a blank entry left on disk by the old
+            // empty-string soft-delete (pre-#3431). The editor must still
+            // hide it so it doesn't read as a configured variable.
             ZOMBIE_KEY: "",
           },
         },

@@ -51,11 +51,11 @@ function extractAcpEnvKeys(value: unknown): string[] {
   // expose-secrets header is set, so we only ever surface the *names* in
   // the editor — never the (masked) values.
   //
-  // Empty-string entries are filtered out: ``AcpEnvSettings`` writes a
-  // soft-delete sentinel of ``""`` for the Delete action (see the comment
-  // there), so an empty value means "user removed this from the UI".
-  // Server-side they live on until a real delete primitive lands
-  // (software-agent-sdk#3420).
+  // Delete is a true unset (``acp_env: { NAME: null }``, software-agent-sdk#3431),
+  // so removed keys disappear from the map entirely. The blank-value filter
+  // below is just defensive: redacted values are non-empty, and the Add form
+  // rejects blank values, so a falsy entry should never occur — we skip it
+  // rather than render an empty row.
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   return Object.entries(value as Record<string, unknown>)
     .filter(([, v]) => typeof v === "string" && v.length > 0)
