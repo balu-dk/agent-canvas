@@ -4,9 +4,12 @@ import {
   type ChatInputModelState,
 } from "#/hooks/use-chat-input-model-state";
 import { useSwitchAcpModel } from "#/hooks/mutation/use-switch-acp-model";
+import { useProfileRuntimePlans } from "#/hooks/use-profile-runtime-plans";
+import { reasonToI18nKey } from "#/utils/agent-profiles/reason-labels";
 import { ComboboxCaretInline } from "#/ui/combobox-caret";
 import SettingsGearIcon from "#/icons/settings-gear.svg?react";
 import CheckIcon from "#/icons/checkmark.svg?react";
+import CircuitIcon from "#/icons/u-circuit.svg?react";
 import { useClickOutsideElement } from "#/hooks/use-click-outside-element";
 import { NavigationLink } from "#/components/shared/navigation-link";
 import { ContextMenu } from "#/ui/context-menu";
@@ -50,7 +53,17 @@ export function ChatInputModelMenuContent({
 }: ChatInputModelMenuContentProps) {
   const { t } = useTranslation("openhands");
   const switchAcpModel = useSwitchAcpModel();
+  const { profiles } = useProfileRuntimePlans();
   const hasModelRows = model.showAcpPicker || Boolean(model.displayModel);
+  // Saved AgentProfiles that can't be switched into this conversation live
+  // (e.g. an OpenHands profile while an ACP agent is running). The issue
+  // requires these to be visible-but-disabled with a reason rather than
+  // hidden, so the user understands the profile exists but needs a new
+  // conversation. Cloud backends have no profiles, so this stays empty there.
+  const incompatibleProfiles = profiles.filter(
+    (entry) => entry.plan.action === "disabled",
+  );
+  const hasProfilesSection = incompatibleProfiles.length > 0;
 
   const handleSelectAcpModel = (modelId: string) => {
     if (modelId !== model.currentModelId) {
@@ -115,7 +128,59 @@ export function ChatInputModelMenuContent({
           </div>
         </li>
       ) : null}
-      {hasModelRows && <Divider inset={dividerInset} />}
+      {hasProfilesSection && (
+        <>
+          {hasModelRows && <Divider inset={dividerInset} />}
+          <li role="presentation" className="px-2 pt-1 pb-0.5">
+            <Typography.Text className="text-[11px] font-medium text-[var(--oh-text-dim)] uppercase tracking-wide leading-4">
+              {t(I18nKey.SETTINGS$AVAILABLE_PROFILES)}
+            </Typography.Text>
+          </li>
+          {incompatibleProfiles.map(({ profile, plan }) => {
+            // `plan.action` is "disabled" by construction of
+            // `incompatibleProfiles`; narrow it for `reason` access.
+            const reasonLabel =
+              plan.action === "disabled"
+                ? t(reasonToI18nKey(plan.reason))
+                : null;
+            return (
+              <ContextMenuListItem
+                key={profile.name}
+                testId={`chat-input-profile-option-${profile.name}`}
+                isDisabled
+                // Disabled rows never act; the empty handler keeps the shared
+                // button API satisfied without applying anything.
+                onClick={() => {}}
+                className="flex flex-col gap-0.5 h-auto"
+              >
+                <span
+                  className="flex items-center gap-2 min-w-0"
+                  title={reasonLabel ?? undefined}
+                >
+                  <CircuitIcon
+                    width={16}
+                    height={16}
+                    className="shrink-0"
+                    aria-hidden
+                  />
+                  <span className="flex-1 truncate text-sm leading-5">
+                    {profile.name}
+                  </span>
+                </span>
+                {reasonLabel && (
+                  <span
+                    className="block truncate text-xs leading-4 text-[var(--oh-text-dim)] pl-6"
+                    data-testid={`chat-input-profile-reason-${profile.name}`}
+                  >
+                    {reasonLabel}
+                  </span>
+                )}
+              </ContextMenuListItem>
+            );
+          })}
+        </>
+      )}
+      {(hasModelRows || hasProfilesSection) && <Divider inset={dividerInset} />}
       <li className="text-sm">
         <NavigationLink
           to={model.destinationPath}
