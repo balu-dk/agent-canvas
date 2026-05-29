@@ -26,6 +26,13 @@ export interface ProfileRuntimePlans {
   activeProfileName: string | null;
   /** True when the conversation/home context runs an ACP agent. */
   isAcpContext: boolean;
+  /**
+   * True only inside an existing conversation. On the new-conversation / home
+   * surface this is false — there's no running agent to be incompatible with,
+   * so selecting a profile *launches/activates* it (any kind) rather than
+   * live-switching, and the runtime-compatibility grey-out does not apply.
+   */
+  inConversation: boolean;
 }
 
 /**
@@ -54,11 +61,14 @@ function resolveActiveProfileName(
  * show incompatible ones disabled with a reason — never applying a profile
  * partially.
  *
- * Today profiles persist as LLM-only OpenHands profiles, so the practical
- * verdicts are: in an OpenHands conversation every profile is ``current`` or a
- * live ``switch-live`` LLM swap; in an ACP conversation they are ``disabled``
- * (``different-agent-kind`` → "Requires a new conversation"). The ACP→ACP
- * branch of the matrix activates once the backend persists ACP profiles.
+ * On the new-conversation / home surface ({@link ProfileRuntimePlans.inConversation}
+ * is false) there is no running agent to be incompatible with, so every profile
+ * is selectable (the active one is ``current``) and selecting it activates the
+ * whole profile, kind-aware. Inside a conversation the full compatibility matrix
+ * applies: an incompatible profile is ``disabled`` with a reason (e.g. an
+ * OpenHands profile in an ACP conversation → "Requires a new conversation",
+ * a different ACP provider → "Different agent provider"), and only a
+ * same-identity model-only difference is a live ``switch-live``.
  */
 export function useProfileRuntimePlans(): ProfileRuntimePlans {
   const { backend } = useActiveBackend();
@@ -136,10 +146,28 @@ export function useProfileRuntimePlans(): ProfileRuntimePlans {
     backend.kind,
   ]);
 
+  const inConversation = Boolean(conversationId);
+
   const withPlans = useMemo<ProfileWithPlan[]>(
     () =>
       profiles.map((profile) => {
         const normalized = normalizeLlmProfile(profile);
+        const isActive =
+          normalized.kind === context.kind &&
+          profile.name === activeProfileName;
+        // New-conversation / home surface: no running agent to be incompatible
+        // with. Selecting a profile activates it (kind-aware), so every profile
+        // is selectable; only the active/default one is marked current. The
+        // runtime-compatibility grey-out is reserved for live in-conversation
+        // switches below.
+        if (!inConversation) {
+          return {
+            profile,
+            plan: isActive
+              ? { action: "current" }
+              : { action: "switch-live", mutableFields: [] },
+          };
+        }
         return {
           profile,
           plan: deriveProfileRuntimePlan({
@@ -151,14 +179,17 @@ export function useProfileRuntimePlans(): ProfileRuntimePlans {
             // ACP conversation) from being mislabeled current; within-kind
             // config equality in deriveProfileRuntimePlan also resolves
             // "current" on cold loads where active_profile isn't known.
-            isActive:
-              normalized.kind === context.kind &&
-              profile.name === activeProfileName,
+            isActive,
           }),
         };
       }),
-    [profiles, context, activeProfileName],
+    [profiles, context, activeProfileName, inConversation],
   );
 
-  return { profiles: withPlans, activeProfileName, isAcpContext };
+  return {
+    profiles: withPlans,
+    activeProfileName,
+    isAcpContext,
+    inConversation,
+  };
 }

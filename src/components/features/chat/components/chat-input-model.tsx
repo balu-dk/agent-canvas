@@ -4,6 +4,7 @@ import {
   type ChatInputModelState,
 } from "#/hooks/use-chat-input-model-state";
 import { useSwitchAcpModel } from "#/hooks/mutation/use-switch-acp-model";
+import { useSwitchLlmProfileAndLog } from "#/hooks/mutation/use-switch-llm-profile-and-log";
 import { useProfileRuntimePlans } from "#/hooks/use-profile-runtime-plans";
 import { reasonToI18nKey } from "#/utils/agent-profiles/reason-labels";
 import { ComboboxCaretInline } from "#/ui/combobox-caret";
@@ -53,6 +54,7 @@ export function ChatInputModelMenuContent({
 }: ChatInputModelMenuContentProps) {
   const { t } = useTranslation("openhands");
   const switchAcpModel = useSwitchAcpModel();
+  const { switchAndLog } = useSwitchLlmProfileAndLog();
   const { profiles } = useProfileRuntimePlans();
   const hasModelRows = model.showAcpPicker || Boolean(model.displayModel);
   // Saved AgentProfiles, shown plan-driven: a same-provider ACP profile whose
@@ -62,15 +64,24 @@ export function ChatInputModelMenuContent({
   // profiles, so this section stays empty there.
   const hasProfilesSection = profiles.length > 0;
 
-  // Switching to a switch-live ACP profile is a live acp_model swap (same
-  // endpoint as picking a raw model). Only `switch-live` acts; `current` is a
-  // no-op and `disabled` rows are non-interactive.
+  // Selecting a profile: only `switch-live` acts (`current` is a no-op,
+  // `disabled` rows are non-interactive). Inside an ACP conversation
+  // (`switchConversationId` set) it's a live `acp_model` swap; on the
+  // new-conversation / home surface it activates the whole profile
+  // (kind-aware /activate) so picking, say, an OpenHands profile here flips
+  // the default away from ACP rather than just changing a model string.
   const handleSelectProfile = (entry: (typeof profiles)[number]) => {
-    if (entry.plan.action === "switch-live" && entry.profile.acp_model) {
-      switchAcpModel.mutate({
-        conversationId: model.switchConversationId,
-        model: entry.profile.acp_model,
-      });
+    if (entry.plan.action === "switch-live") {
+      if (model.switchConversationId) {
+        if (entry.profile.acp_model) {
+          switchAcpModel.mutate({
+            conversationId: model.switchConversationId,
+            model: entry.profile.acp_model,
+          });
+        }
+      } else {
+        switchAndLog(null, entry.profile.name);
+      }
     }
     onClose();
   };

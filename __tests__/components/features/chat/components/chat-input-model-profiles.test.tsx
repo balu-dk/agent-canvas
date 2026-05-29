@@ -6,6 +6,7 @@ import type { ProfileWithPlan } from "#/hooks/use-profile-runtime-plans";
 
 const useProfileRuntimePlansMock = vi.fn();
 const switchAcpModelMutate = vi.fn();
+const switchAndLog = vi.fn();
 
 vi.mock("#/hooks/use-profile-runtime-plans", () => ({
   useProfileRuntimePlans: () => useProfileRuntimePlansMock(),
@@ -13,6 +14,10 @@ vi.mock("#/hooks/use-profile-runtime-plans", () => ({
 
 vi.mock("#/hooks/mutation/use-switch-acp-model", () => ({
   useSwitchAcpModel: () => ({ mutate: switchAcpModelMutate }),
+}));
+
+vi.mock("#/hooks/mutation/use-switch-llm-profile-and-log", () => ({
+  useSwitchLlmProfileAndLog: () => ({ switchAndLog, isPending: false }),
 }));
 
 import { ChatInputModelMenuContent } from "#/components/features/chat/components/chat-input-model";
@@ -42,6 +47,7 @@ describe("ChatInputModelMenuContent disabled-profile section", () => {
   beforeEach(() => {
     useProfileRuntimePlansMock.mockReset();
     switchAcpModelMutate.mockReset();
+    switchAndLog.mockReset();
   });
 
   it("shows incompatible profiles visible-but-disabled with a reason in an ACP conversation", () => {
@@ -140,5 +146,41 @@ describe("ChatInputModelMenuContent disabled-profile section", () => {
       conversationId: "conv-1",
       model: "claude-sonnet-4-6",
     });
+  });
+
+  it("activates the whole profile (not a model swap) when selected on the home surface", () => {
+    // Home / new-conversation: no active ACP conversation, so the model state
+    // carries no switchConversationId. Selecting a profile must activate it
+    // (kind-aware) rather than only swapping acp_model.
+    const homeModelState: ChatInputModelState = {
+      ...acpModelState,
+      switchConversationId: null,
+    };
+    const selectableProfile: ProfileWithPlan = {
+      profile: {
+        name: "Local Codex",
+        kind: "acp",
+        model: "gpt-5-codex",
+        base_url: null,
+        acp_server: "codex",
+        acp_model: "gpt-5-codex",
+        api_key_set: true,
+      },
+      plan: { action: "switch-live", mutableFields: [] },
+    };
+    useProfileRuntimePlansMock.mockReturnValue({
+      profiles: [selectableProfile],
+      activeProfileName: null,
+      isAcpContext: true,
+      inConversation: false,
+    });
+
+    renderWithProviders(
+      <ChatInputModelMenuContent model={homeModelState} onClose={() => {}} />,
+    );
+
+    screen.getByTestId("chat-input-profile-option-Local Codex").click();
+    expect(switchAndLog).toHaveBeenCalledWith(null, "Local Codex");
+    expect(switchAcpModelMutate).not.toHaveBeenCalled();
   });
 });
