@@ -73,7 +73,7 @@ function isAutoSeededDefaultLocalBackend(backend: Backend): boolean {
     backend.id !== defaultBackend.id ||
     backend.kind !== "local" ||
     backend.name !== defaultBackend.name ||
-    backend.apiKey !== ""
+    backend.apiKey !== "" // empty apiKey means the user has never configured this entry — safe to prune
   ) {
     return false;
   }
