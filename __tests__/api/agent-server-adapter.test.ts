@@ -172,7 +172,6 @@ describe("buildStartConversationRequest", () => {
       { name: "terminal", params: {} },
       { name: "file_editor", params: {} },
       { name: "task_tracker", params: {} },
-      { name: "canvas_ui", params: {} },
     ]);
   });
 
@@ -200,7 +199,6 @@ describe("buildStartConversationRequest", () => {
       { name: "terminal", params: {} },
       { name: "file_editor", params: {} },
       { name: "task_tracker", params: {} },
-      { name: "canvas_ui", params: {} },
       { name: "task_tool_set", params: {} },
     ]);
   });
@@ -448,7 +446,7 @@ describe("buildStartConversationRequest", () => {
   });
 
   describe("canvas_ui tool injection", () => {
-    it("always registers canvas_ui_tool in tool_module_qualnames, even when no user settings supply qualnames", () => {
+    it("registers canvas_ui_tool in tool_module_qualnames when the backend advertises canvas_ui", () => {
       const payload = buildStartConversationRequest({
         settings: DEFAULT_SETTINGS,
       }) as { tool_module_qualnames: Record<string, string> };
@@ -456,6 +454,24 @@ describe("buildStartConversationRequest", () => {
       expect(payload.tool_module_qualnames).toMatchObject({
         canvas_ui: "canvas_ui_tool",
       });
+    });
+
+    it("omits canvas_ui and its module qualname when the backend does not advertise canvas_ui", () => {
+      mockIsAgentServerToolAvailable.mockImplementation(
+        (toolName: string) => toolName !== "canvas_ui",
+      );
+
+      const payload = buildStartConversationRequest({
+        settings: DEFAULT_SETTINGS,
+      }) as {
+        agent_settings: { tools: Array<{ name: string }> };
+        tool_module_qualnames?: Record<string, string>;
+      };
+
+      expect(payload.agent_settings.tools.map((tool) => tool.name)).not.toContain(
+        "canvas_ui",
+      );
+      expect(payload.tool_module_qualnames).toBeUndefined();
     });
 
     it("merges user-supplied tool_module_qualnames alongside canvas_ui_tool without dropping either side", () => {
