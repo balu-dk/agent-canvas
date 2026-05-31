@@ -94,12 +94,14 @@ describe("findInstalledMatch", () => {
 
 describe("isMarketplaceEntryAvailable", () => {
   it("treats unset availability as 'all'", () => {
-    expect(isMarketplaceEntryAvailable(tavilyEntry, "local")).toBe(true);
+    expect(isMarketplaceEntryAvailable(tavilyEntry, "agent-server")).toBe(true);
     expect(isMarketplaceEntryAvailable(tavilyEntry, "cloud")).toBe(true);
   });
 
   it("hides local-only entries on cloud", () => {
-    expect(isMarketplaceEntryAvailable(filesystemEntry, "local")).toBe(true);
+    expect(isMarketplaceEntryAvailable(filesystemEntry, "agent-server")).toBe(
+      true,
+    );
     expect(isMarketplaceEntryAvailable(filesystemEntry, "cloud")).toBe(false);
   });
 });

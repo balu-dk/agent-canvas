@@ -175,12 +175,12 @@ export const getFileExtension = (fileName: string): string => {
  *   - github → installation-based ONLY when the active backend is cloud
  *   - gitlab / azure_devops / forgejo → direct (search) flow
  *
- * `appMode` accepts the active backend `kind` ("local" | "cloud") so call
+ * `appMode` accepts the active backend `kind` ("agent-server" | "cloud") so call
  * sites can hand it through directly.
  */
 export const shouldUseInstallationRepos = (
   provider: Provider | null | undefined,
-  appMode?: "local" | "cloud",
+  appMode?: "agent-server" | "cloud",
 ) => {
   if (!provider) return false;
 

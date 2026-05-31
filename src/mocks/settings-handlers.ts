@@ -491,9 +491,8 @@ const MOCK_VERIFIED_MODELS_BY_PROVIDER = MOCK_MODELS.reduce<
 const MOCK_AGENT_SERVER_VERSION = "1.24.0";
 
 // --- Handlers for options/config/settings ---
-// Uses wildcard "*" prefix to match both relative paths and absolute URLs
-// (e.g., http://127.0.0.1:8000/api/...) since the code uses absolute URLs
-// when VITE_BACKEND_BASE_URL is configured.
+// Uses wildcard "*" prefix to match both relative paths and absolute URLs from
+// remote backends.
 
 export const SETTINGS_HANDLERS = [
   http.get("*/server_info", async () =>

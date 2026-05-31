@@ -72,7 +72,7 @@ function buildGroupLaunch(
   backendKind: BackendKind,
   conversations: AppConversation[],
 ): ConversationGroupLaunch {
-  if (backendKind === "local") {
+  if (backendKind === "agent-server") {
     if (id === "__none_workspace") {
       return {};
     }
@@ -179,7 +179,7 @@ export function groupConversations(
 
   for (const c of items) {
     const { id, label: rawLabel } =
-      backendKind === "local" ? workspaceGroup(c) : repositoryGroup(c);
+      backendKind === "agent-server" ? workspaceGroup(c) : repositoryGroup(c);
     const label =
       id === "__none_workspace"
         ? labels.emptyWorkspace

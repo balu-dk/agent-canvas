@@ -20,6 +20,7 @@ import {
   getActiveBackend,
   getEffectiveLocalBackend,
 } from "../backend-registry/active-store";
+import { getBackendBaseUrl } from "../backend-registry/types";
 import { callCloudProxy } from "../cloud/proxy";
 import {
   batchGetCloudConversations,
@@ -419,7 +420,7 @@ class AgentServerConversationService {
       status: "READY",
       detail: null,
       app_conversation_id: data.id,
-      agent_server_url: getEffectiveLocalBackend().host,
+      agent_server_url: getBackendBaseUrl(getEffectiveLocalBackend()),
       request: {
         initial_message: payload.initial_message as
           | AppConversationStartRequest["initial_message"]

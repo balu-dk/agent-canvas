@@ -51,7 +51,7 @@ const LOCAL_BACKEND: Backend = {
   name: "Local",
   host: "http://localhost:3000",
   apiKey: "",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const CLOUD_BACKEND: Backend = {
@@ -188,11 +188,11 @@ test.describe("Backend Management — Extended Flow Snapshots", () => {
     await setupPage(page);
     const rootLayout = await openAddModal(page);
 
-    // A localhost URL infers local kind — no API key needed.
+    // A localhost URL infers agent-server kind — no API key needed.
     await page.getByTestId("add-backend-name").fill("Dev Server");
     await page.getByTestId("add-backend-host").fill("http://localhost:8080");
 
-    // API key left empty — Connect must be enabled for local kind.
+    // API key left empty — Connect must be enabled for agent-server kind.
     await expect(page.getByTestId("add-backend-submit")).not.toBeDisabled();
     await expect(rootLayout).toHaveScreenshot(
       "backend-add-local-ready.png",
@@ -277,9 +277,7 @@ test.describe("Backend Management — Extended Flow Snapshots", () => {
     const rootLayout = await openManageModal(page);
 
     // Both backend rows visible.
-    await expect(
-      page.getByTestId("manage-backends-row-Local"),
-    ).toBeVisible();
+    await expect(page.getByTestId("manage-backends-row-Local")).toBeVisible();
     await expect(
       page.getByTestId("manage-backends-row-Production"),
     ).toBeVisible();
@@ -407,7 +405,10 @@ test.describe("Backend Management — Extended Flow Snapshots", () => {
         ".environment-switch-overlay > div { animation: none !important; opacity: 1 !important; transform: none !important; }",
     });
 
-    await expect(page).toHaveScreenshot("backend-switch-overlay.png", SNAP_OPTS);
+    await expect(page).toHaveScreenshot(
+      "backend-switch-overlay.png",
+      SNAP_OPTS,
+    );
 
     // After overlay fades (980 ms), the selector should show "Production".
     await page.waitForSelector('[data-testid="environment-switch-overlay"]', {
@@ -416,9 +417,9 @@ test.describe("Backend Management — Extended Flow Snapshots", () => {
     });
     // Re-hover to show the updated active backend in the dropdown.
     await page.getByTestId("backend-selector").hover();
-    await expect(
-      page.getByRole("option", { name: "Production" }),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("option", { name: "Production" })).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(rootLayout).toHaveScreenshot(
       "backend-after-switch.png",
       SNAP_OPTS,
@@ -489,9 +490,7 @@ test.describe("Backend Management — Extended Flow Snapshots", () => {
     });
 
     // Only the original "Local" backend should be present.
-    await expect(
-      page.getByTestId("manage-backends-row-Local"),
-    ).toBeVisible();
+    await expect(page.getByTestId("manage-backends-row-Local")).toBeVisible();
     await expect(
       page.locator('[data-testid*="manage-backends-row-Temp"]'),
     ).not.toBeVisible();

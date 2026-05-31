@@ -12,6 +12,7 @@
 
 import { getEffectiveLocalBackend } from "./backend-registry/active-store";
 import { buildAuthHeaders } from "./backend-registry/auth";
+import { getBackendBaseUrl } from "./backend-registry/types";
 
 export class DeviceFlowError extends Error {
   constructor(
@@ -86,7 +87,7 @@ async function makeProxiedRequest(
   signal?: AbortSignal,
 ): Promise<Response> {
   const local = getEffectiveLocalBackend();
-  const proxyUrl = `${local.host.replace(/\/+$/, "")}/api/cloud-proxy`;
+  const proxyUrl = `${getBackendBaseUrl(local).replace(/\/+$/, "")}/api/cloud-proxy`;
 
   const response = await fetch(proxyUrl, {
     method: "POST",

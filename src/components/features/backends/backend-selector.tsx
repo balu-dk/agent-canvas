@@ -57,7 +57,7 @@ function buildOptions(
 ): DropdownOption[] {
   const options: DropdownOption[] = [];
 
-  const locals = registered.filter((b) => b.kind === "local");
+  const locals = registered.filter((b) => b.kind === "agent-server");
   const clouds = registered.filter((b) => b.kind === "cloud");
 
   for (const b of locals) {

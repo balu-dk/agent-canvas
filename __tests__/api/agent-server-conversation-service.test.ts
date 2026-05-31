@@ -75,12 +75,13 @@ vi.mock("#/api/agent-server-config", () => ({
   DEFAULT_WORKING_DIR: "workspace/project",
   getAgentServerBaseUrl: vi.fn(() => "http://localhost:54928"),
   getAgentServerSessionApiKey: vi.fn(() => "test-api-key"),
+  getAgentServerTransport: vi.fn(() => "remote"),
+  getLauncherAgentServerSessionApiKey: vi.fn(() => null),
   getAgentServerWorkingDir: vi.fn(() => "/workspace/project/agent-canvas"),
   buildConversationWorkingDir: vi.fn(
     (id: string) => `/state/workspaces/${id.replace(/-/g, "")}`,
   ),
   getConfiguredWorkerUrls: vi.fn(() => []),
-  getAgentServerHeaders: vi.fn(() => ({ "X-Session-API-Key": "test-api-key" })),
   shouldLoadPublicSkills: vi.fn(() => true),
 }));
 

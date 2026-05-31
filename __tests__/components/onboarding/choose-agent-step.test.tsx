@@ -2,7 +2,8 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import {
   AgentOptionIcon,
   ChooseAgentStep,
@@ -33,8 +34,15 @@ function renderStep(initial: OnboardingAgentId = "openhands") {
 
 describe("ChooseAgentStep", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
     vi.restoreAllMocks();
     vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   it("renders all four agent options with OpenHands marked selected by default", () => {

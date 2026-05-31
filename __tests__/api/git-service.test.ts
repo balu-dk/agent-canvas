@@ -39,7 +39,7 @@ const cloudActive = () =>
 const localActive = () =>
   mockGetActiveBackend.mockReturnValue({
     backend: {
-      kind: "local",
+      kind: "agent-server",
       id: "test",
       name: "Test",
       host: "http://localhost",

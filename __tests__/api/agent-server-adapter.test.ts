@@ -26,13 +26,15 @@ const {
     name: "Local backend",
     host: "http://127.0.0.1:8000",
     apiKey: "session-key",
-    kind: "local" as const,
+    kind: "agent-server" as const,
   })),
 }));
 
 vi.mock("#/api/agent-server-config", () => ({
   getAgentServerBaseUrl: vi.fn(() => "http://127.0.0.1:8000"),
   getAgentServerSessionApiKey: vi.fn(() => null),
+  getAgentServerTransport: vi.fn(() => "remote"),
+  getLauncherAgentServerSessionApiKey: vi.fn(() => null),
   getAgentServerWorkingDir: mockGetAgentServerWorkingDir,
   getConfiguredWorkerUrls: vi.fn(() => []),
   shouldLoadPublicSkills: vi.fn(() => true),
@@ -53,7 +55,7 @@ beforeEach(() => {
     name: "Local backend",
     host: "http://127.0.0.1:8000",
     apiKey: "session-key",
-    kind: "local",
+    kind: "agent-server",
   });
 });
 

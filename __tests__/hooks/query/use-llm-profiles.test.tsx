@@ -22,7 +22,7 @@ const localBackend1: Backend = {
   name: "Local 1",
   host: "http://localhost:8000",
   apiKey: "session-key",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const localBackend2: Backend = {
@@ -30,7 +30,7 @@ const localBackend2: Backend = {
   name: "Local 2",
   host: "http://localhost:9000",
   apiKey: "session-key-2",
-  kind: "local",
+  kind: "agent-server",
 };
 
 describe("useLlmProfiles", () => {

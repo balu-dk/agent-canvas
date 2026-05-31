@@ -4,13 +4,12 @@
  */
 
 import { SettingsScope } from "#/types/settings";
+import { getBackendBaseUrl, type Backend } from "#/api/backend-registry/types";
 
-interface BackendQueryIdentity {
-  id: string;
-  kind: string;
-  host: string;
-  apiKey?: string | null;
-}
+type BackendQueryIdentity = Pick<
+  Backend,
+  "id" | "kind" | "host" | "apiKey" | "agentServerTransport"
+>;
 
 const WEB_CLIENT_CONFIG_QUERY_KEY = ["web-client-config"] as const;
 
@@ -22,7 +21,7 @@ export const QUERY_KEYS = {
       ...WEB_CLIENT_CONFIG_QUERY_KEY,
       backend.id,
       backend.kind,
-      backend.host,
+      getBackendBaseUrl(backend),
       backend.apiKey ?? "",
     ] as const,
 } as const;

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Typography } from "#/ui/typography";
+import { getBackendBaseUrl } from "#/api/backend-registry/types";
 import { I18nKey } from "#/i18n/declaration";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useAllCloudOrganizations } from "#/hooks/query/use-cloud-organizations";
@@ -40,7 +41,7 @@ export function BackendSyncedSettingsBadge() {
       <Typography.Text className="text-[11px] font-medium text-[var(--oh-text-dim)] leading-5">
         {t(I18nKey.SETTINGS$BACKEND_SYNCED_BADGE, {
           name,
-          host: active.backend.host,
+          host: getBackendBaseUrl(active.backend),
           interpolation: { escapeValue: false },
         })}
       </Typography.Text>

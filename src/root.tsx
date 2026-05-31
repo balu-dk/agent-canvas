@@ -3,23 +3,21 @@ import {
   LinksFunction,
   Meta,
   MetaFunction,
-  Navigate,
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLocation,
 } from "react-router";
 import "./tailwind.css";
 import "./index.css";
 import React from "react";
 import { Toaster } from "react-hot-toast";
 import { isAgentServerUnavailableError } from "#/api/agent-server-compatibility";
+import { AddBackendModal } from "#/components/features/backends/add-backend-modal";
 import { TOAST_OPTIONS } from "#/utils/custom-toast-handlers";
 import { TelemetryConsentBanner } from "#/components/features/analytics/telemetry-consent-banner";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useConfig } from "#/hooks/query/use-config";
 import { AgentServerUIRoot } from "#/components/providers";
-import { AgentServerConnectionScreen } from "#/components/features/settings/agent-server-onboarding";
 import {
   applyColorTheme,
   readPersistedColorTheme,
@@ -32,8 +30,6 @@ function ColorThemeApplier() {
   }, []);
   return null;
 }
-
-const AGENT_SERVER_SETTINGS_PATH = "/settings/backend";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -49,6 +45,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <ColorThemeApplier />
           {children}
           <Toaster toastOptions={TOAST_OPTIONS} />
+          <TelemetryConsentBanner />
           <div id="modal-portal-exit" />
         </AgentServerUIRoot>
         <ScrollRestoration />
@@ -70,6 +67,19 @@ function AgentServerBootstrapLoading() {
   );
 }
 
+function AgentServerAddBackendFallback() {
+  const ignoreClose = React.useCallback(() => {}, []);
+
+  return (
+    <main
+      data-testid="agent-server-backend-setup"
+      className="min-h-screen bg-base text-white"
+    >
+      <AddBackendModal onClose={ignoreClose} showCloseButton={false} />
+    </main>
+  );
+}
+
 export const links: LinksFunction = () => [
   { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
 ];
@@ -80,7 +90,6 @@ export const meta: MetaFunction = () => [
 ];
 
 export default function App() {
-  const location = useLocation();
   const config = useConfig();
 
   if (config.isPending || config.isLoading) {
@@ -88,19 +97,8 @@ export default function App() {
   }
 
   if (isAgentServerUnavailableError(config.error)) {
-    if (location.pathname !== AGENT_SERVER_SETTINGS_PATH) {
-      return <Navigate to={AGENT_SERVER_SETTINGS_PATH} replace />;
-    }
-
-    return <AgentServerConnectionScreen error={config.error} />;
+    return <AgentServerAddBackendFallback />;
   }
 
-  return (
-    <>
-      <Outlet />
-      {location.pathname !== AGENT_SERVER_SETTINGS_PATH ? (
-        <TelemetryConsentBanner />
-      ) : null}
-    </>
-  );
+  return <Outlet />;
 }

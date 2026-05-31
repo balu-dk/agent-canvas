@@ -66,7 +66,7 @@ beforeEach(() => {
   useActiveBackendMock.mockReset();
 
   useActiveBackendMock.mockReturnValue({
-    backend: { id: "bk-1", kind: "local" },
+    backend: { id: "bk-1", kind: "agent-server" },
     orgId: null,
   });
   listOutputsMock.mockResolvedValue([]);

@@ -44,7 +44,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function setActiveBackend(kind: "cloud" | "local") {
+function setActiveBackend(kind: "cloud" | "agent-server") {
   useActiveBackendMock.mockReturnValue({
     backend: { id: "bk-1", kind },
     orgId: null,
@@ -265,7 +265,7 @@ describe("useBashCommandLogs — cloud sandbox state handling", () => {
 });
 
 describe("useBashCommandLogs — local backend", () => {
-  beforeEach(() => setActiveBackend("local"));
+  beforeEach(() => setActiveBackend("agent-server"));
 
   it("never reports a sandboxIssue (local has no sandbox lifecycle)", async () => {
     setConversation({

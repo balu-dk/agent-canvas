@@ -52,7 +52,7 @@ export default function AutomationsList() {
   const active = useActiveBackend();
   // Edit is a local-backend-only feature in MVP — cloud automations
   // are managed elsewhere and we don't yet surface them here.
-  const canEdit = active.backend.kind === "local";
+  const canEdit = active.backend.kind === "agent-server";
 
   const {
     data: healthData,

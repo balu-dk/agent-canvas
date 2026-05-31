@@ -28,7 +28,7 @@ export const useModelInterceptor = (
   const queryClient = useQueryClient();
   const { switchAndLog } = useSwitchLlmProfileAndLog();
   const { backend, orgId } = useActiveBackend();
-  const isLocal = backend.kind === "local";
+  const isLocal = backend.kind === "agent-server";
   const { t } = useTranslation();
 
   return useCallback(

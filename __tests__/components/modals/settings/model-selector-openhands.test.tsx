@@ -1,8 +1,9 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import { ModelSelector } from "#/components/shared/modals/settings/model-selector";
 import { server } from "#/mocks/node";
 
@@ -12,11 +13,13 @@ describe("ModelSelector — OpenHands round-trip", () => {
   let modelsCount = 0;
 
   beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
     providersCount = 0;
     verifiedCount = 0;
     modelsCount = 0;
-    // Use "*" prefix to match both relative paths and absolute URLs (e.g.,
-    // http://127.0.0.1:8000/api/...) when VITE_BACKEND_BASE_URL is configured.
+    // Use "*" prefix to match both relative paths and absolute URLs from
+    // remote backends.
     server.use(
       http.get("*/api/llm/providers", () => {
         providersCount += 1;
@@ -36,6 +39,11 @@ describe("ModelSelector — OpenHands round-trip", () => {
         return HttpResponse.json({ models: [] });
       }),
     );
+  });
+
+  afterEach(() => {
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   function renderWithQuery(ui: React.ReactElement) {

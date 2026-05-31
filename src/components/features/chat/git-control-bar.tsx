@@ -44,7 +44,7 @@ export function GitControlBar({ onSuggestionsClick }: GitControlBarProps) {
     (state) => state.markPendingMessageError,
   );
   const { backend } = useActiveBackend();
-  const isLocalBackend = backend.kind === "local";
+  const isLocalBackend = backend.kind === "agent-server";
   const { providers } = useUserProviders();
   const providerTokensReady = isLocalBackend || providers.length > 0;
 

@@ -17,15 +17,14 @@ interface Snapshot {
 }
 
 /**
- * Pick the local backend the GUI should talk to for local-protocol calls
- * (settings, conversations, secrets, …). Prefers the user's first
- * registered local backend. As a last resort — when the registry has no
- * local entry at all — synthesize one from env/agent-server-config so
- * synchronous call sites never have to handle a `null` backend; the
- * synthesized entry is never persisted.
+ * Pick the agent-server backend the GUI should talk to for agent-server
+ * protocol calls (settings, conversations, secrets, ...). Prefers the user's
+ * first registered agent-server backend. As a last resort, synthesize one from
+ * env/agent-server-config so synchronous call sites never have to handle a
+ * `null` backend; the synthetic entry is never persisted.
  */
 function pickLocalBackend(backends: Backend[]): Backend {
-  const firstLocal = backends.find((b) => b.kind === "local");
+  const firstLocal = backends.find((b) => b.kind === "agent-server");
   return firstLocal ?? makeDefaultLocalBackend();
 }
 
@@ -76,24 +75,24 @@ export function getActiveBackend(): ResolvedActiveBackend {
 }
 
 /**
- * Pick the backend to use for *local agent-server protocol* calls.
+ * Pick the backend to use for agent-server protocol calls.
  *
  * Most of the GUI's services (settings reads/writes, conversation CRUD,
- * skills/MCP/secrets, etc.) speak the local agent-server's protocol —
- * they would fail against a cloud host. When the user has chosen a
- * cloud backend as active, those calls fall back to the first registered
- * local backend (or the env-derived default if none exists). Cloud-only
- * call sites import `getActiveBackend` directly.
+ * skills/MCP/secrets, etc.) speak the agent-server protocol; they would fail
+ * against a cloud host. When the user has chosen a cloud backend as active,
+ * those calls fall back to the first registered agent-server backend (or the
+ * env-derived default if none exists). Cloud-only call sites import
+ * `getActiveBackend` directly.
  */
 export function getEffectiveLocalBackend(): Backend {
   const active = snapshot.active.backend;
-  if (active.kind === "local") return active;
+  if (active.kind === "agent-server") return active;
   return pickLocalBackend(snapshot.backends);
 }
 
 export function hasEffectiveLocalBackend(): boolean {
   return (
-    snapshot.backends.some((backend) => backend.kind === "local") ||
+    snapshot.backends.some((backend) => backend.kind === "agent-server") ||
     hasConfiguredAgentServerDefaults()
   );
 }

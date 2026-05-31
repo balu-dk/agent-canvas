@@ -94,7 +94,7 @@ describe("useWorkspaceSession", () => {
   describe("local backend", () => {
     it("calls startWorkspaceSession and exposes the returned baseUrl", async () => {
       getActiveBackendMock.mockReturnValue({
-        backend: { id: "local-1", kind: "local", host: "http://localhost:8000" },
+        backend: { id: "local-1", kind: "agent-server", host: "http://localhost:8000" },
       });
       useActiveConversationMock.mockReturnValue({
         data: {
@@ -172,7 +172,7 @@ describe("useWorkspaceSession", () => {
 
   it("does not call startWorkspaceSession until the runtime is ready", async () => {
     getActiveBackendMock.mockReturnValue({
-      backend: { id: "local-1", kind: "local", host: "http://localhost:8000" },
+      backend: { id: "local-1", kind: "agent-server", host: "http://localhost:8000" },
     });
     useActiveConversationMock.mockReturnValue({
       data: {
@@ -197,7 +197,7 @@ describe("useWorkspaceSession", () => {
 
   it("does not call startWorkspaceSession without a conversation id", async () => {
     getActiveBackendMock.mockReturnValue({
-      backend: { id: "local-1", kind: "local", host: "http://localhost:8000" },
+      backend: { id: "local-1", kind: "agent-server", host: "http://localhost:8000" },
     });
     useActiveConversationMock.mockReturnValue({ data: undefined });
 

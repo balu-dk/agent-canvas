@@ -23,7 +23,7 @@ const localBackend: Backend = {
   name: "Local",
   host: "http://127.0.0.1:8000",
   apiKey: "",
-  kind: "local",
+  kind: "agent-server",
 };
 
 beforeEach(() => {

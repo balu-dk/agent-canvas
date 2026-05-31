@@ -69,7 +69,7 @@ const mockLocalBackend: Backend = {
   name: "Local Backend",
   host: "http://localhost:18000",
   apiKey: "",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const mockCloudBackend: Backend = {

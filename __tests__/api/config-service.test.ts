@@ -1,9 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import ConfigService from "#/api/config-service/config-service.api";
 import { server } from "#/mocks/node";
 
 describe("ConfigService", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
+  });
+
+  afterEach(() => {
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
+  });
+
   it("derives providers from llm endpoints", async () => {
     const page = await ConfigService.searchProviders({ limit: 10 });
 

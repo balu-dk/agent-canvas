@@ -55,7 +55,7 @@ const localBackend: Backend = {
   name: "Local",
   host: "http://localhost:8000",
   apiKey: "",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const cloudBackend: Backend = {
@@ -131,7 +131,7 @@ describe("recommended automations", () => {
 
     render(
       <RecommendedAutomationsSection
-        backendKind="local"
+        backendKind="agent-server"
         installedServers={[]}
         onSelect={onSelect}
       />,
@@ -181,7 +181,7 @@ describe("recommended automations", () => {
   it("filters recommendations by required MCP keywords", () => {
     render(
       <RecommendedAutomationsSection
-        backendKind="local"
+        backendKind="agent-server"
         installedServers={[]}
         query="standup"
         onSelect={vi.fn()}
@@ -199,7 +199,7 @@ describe("recommended automations", () => {
   it("shows a left-aligned MCP icon stack on each card", () => {
     render(
       <RecommendedAutomationsSection
-        backendKind="local"
+        backendKind="agent-server"
         installedServers={[]}
         onSelect={vi.fn()}
       />,
@@ -249,7 +249,7 @@ describe("recommended automations", () => {
     try {
       render(
         <RecommendedAutomationsSection
-          backendKind="local"
+          backendKind="agent-server"
           installedServers={[]}
           onSelect={vi.fn()}
         />,
@@ -281,7 +281,7 @@ describe("recommended automations", () => {
   it("shows a decorative plus badge on each card without toggle behavior", () => {
     render(
       <RecommendedAutomationsSection
-        backendKind="local"
+        backendKind="agent-server"
         installedServers={[]}
         onSelect={vi.fn()}
       />,
@@ -292,10 +292,10 @@ describe("recommended automations", () => {
     );
     expect(plusBadge.tagName).toBe("SPAN");
     expect(plusBadge).toHaveAttribute("aria-hidden", "true");
-    expect(plusBadge.className).toContain("hover:bg-[var(--oh-interactive-hover)]");
-    expect(
-      plusBadge.querySelector('[role="switch"]'),
-    ).not.toBeInTheDocument();
+    expect(plusBadge.className).toContain(
+      "hover:bg-[var(--oh-interactive-hover)]",
+    );
+    expect(plusBadge.querySelector('[role="switch"]')).not.toBeInTheDocument();
   });
 
   it("selects a recommendation directly from its card", () => {
@@ -306,7 +306,7 @@ describe("recommended automations", () => {
 
     render(
       <RecommendedAutomationsSection
-        backendKind="local"
+        backendKind="agent-server"
         installedServers={[]}
         onSelect={onSelect}
       />,
@@ -415,7 +415,7 @@ describe("buildAutomationPrompt", () => {
   const basePrompt = "Create an automation that does something useful.";
 
   it("appends local API instructions for local backends without cloud endpoints", () => {
-    const result = buildAutomationPrompt(basePrompt, "local");
+    const result = buildAutomationPrompt(basePrompt, "agent-server");
     expect(result).toContain(basePrompt);
     expect(result).toContain("local");
     expect(result).toContain("<RUNTIME_SERVICES>");
@@ -447,7 +447,7 @@ describe("buildAutomationPrompt", () => {
   });
 
   it("keeps the original prompt text verbatim at the start", () => {
-    const localResult = buildAutomationPrompt(basePrompt, "local");
+    const localResult = buildAutomationPrompt(basePrompt, "agent-server");
     const cloudResult = buildAutomationPrompt(
       basePrompt,
       "cloud",

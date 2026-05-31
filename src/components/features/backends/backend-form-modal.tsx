@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { ServerClient } from "@openhands/typescript-client/clients";
 import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import { ModalBackdrop } from "#/components/shared/modals/modal-backdrop";
@@ -15,9 +16,15 @@ import { useActiveBackendContext } from "#/contexts/active-backend-context";
 import { useNavigation } from "#/context/navigation-context";
 import { useBackendsHealth } from "#/hooks/query/use-backends-health";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
+import { getBackendSessionApiKey } from "#/api/backend-registry/auth";
 import ChevronDownSmallIcon from "#/icons/chevron-down-small.svg?react";
 import { I18nKey } from "#/i18n/declaration";
-import type { Backend, BackendKind } from "#/api/backend-registry/types";
+import {
+  getBackendBaseUrl,
+  getBackendConnectionKind,
+  type Backend,
+  type BackendKind,
+} from "#/api/backend-registry/types";
 import { cn } from "#/utils/utils";
 import { BackendStatusDot } from "./backend-status-dot";
 import { DeviceFlowAuth } from "./device-flow-auth";
@@ -29,6 +36,7 @@ interface BackendFormModalProps {
   /** Required when `mode === "edit"`. */
   backend?: Backend;
   onClose: () => void;
+  showCloseButton?: boolean;
 }
 
 function inferKindFromHost(host: string): BackendKind {
@@ -36,7 +44,21 @@ function inferKindFromHost(host: string): BackendKind {
   if (trimmed.includes("all-hands.dev") || trimmed.includes("openhands.dev")) {
     return "cloud";
   }
-  return "local";
+  return "agent-server";
+}
+
+export function getBackendConnectionLabel(
+  backend: Backend,
+  t: TFunction,
+): string {
+  switch (getBackendConnectionKind(backend)) {
+    case "same-origin":
+      return t(I18nKey.BACKEND$TRANSPORT_SAME_ORIGIN);
+    case "remote":
+      return t(I18nKey.BACKEND$TRANSPORT_REMOTE);
+    case "cloud":
+      return t(I18nKey.BACKEND$KIND_CLOUD);
+  }
 }
 
 /**
@@ -116,8 +138,8 @@ const DEFAULT_OPENHANDS_CLOUD_HOST = "https://app.all-hands.dev";
 
 /**
  * Live status row for the edit form: shows a connection dot, a
- * "Local"/"Cloud" label, and the agent server's reported version when
- * available. Replaces the legacy local/cloud radio fieldset (kind is
+ * backend connection label, and the agent server's reported version when
+ * available. Replaces the legacy agent-server/cloud radio fieldset (kind is
  * now inferred from the host).
  */
 function BackendStatusBadge({
@@ -128,6 +150,8 @@ function BackendStatusBadge({
   testIdRoot: string;
 }) {
   const { t } = useTranslation("openhands");
+  const backendBaseUrl = getBackendBaseUrl(backend);
+  const backendSessionApiKey = getBackendSessionApiKey(backend);
   const healthByBackendId = useBackendsHealth([backend]);
   const health = healthByBackendId[backend.id];
   const isConnected = health?.isConnected ?? null;
@@ -136,12 +160,12 @@ function BackendStatusBadge({
   const lastError = health?.lastError ?? null;
 
   const { data: version } = useQuery({
-    queryKey: ["backend-version", backend.host, backend.apiKey],
+    queryKey: ["backend-version", backendBaseUrl, backendSessionApiKey],
     queryFn: async () => {
       const info = await new ServerClient(
         getAgentServerClientOptions({
-          host: backend.host,
-          sessionApiKey: backend.apiKey || null,
+          host: backendBaseUrl,
+          sessionApiKey: backendSessionApiKey,
           timeout: 5000,
         }),
       ).getServerInfo();
@@ -149,7 +173,7 @@ function BackendStatusBadge({
     },
     retry: false,
     staleTime: 60_000,
-    enabled: backend.kind === "local" && !disabled,
+    enabled: backend.kind === "agent-server" && !disabled,
     meta: { disableToast: true },
   });
 
@@ -162,10 +186,7 @@ function BackendStatusBadge({
     statusLabel = t(I18nKey.ONBOARDING$BACKEND_STATUS_CHECKING);
   }
 
-  const kindLabel =
-    backend.kind === "cloud"
-      ? t(I18nKey.BACKEND$KIND_CLOUD)
-      : t(I18nKey.BACKEND$KIND_LOCAL);
+  const kindLabel = getBackendConnectionLabel(backend, t);
 
   return (
     <div className="flex flex-col gap-2">
@@ -261,8 +282,9 @@ export function BackendForm({
   const { t } = useTranslation("openhands");
   const { addBackend, updateBackend } = useActiveBackendContext();
 
+  const originalHost = backend ? getBackendBaseUrl(backend) : "";
   const [name, setName] = React.useState(backend?.name ?? "");
-  const [host, setHost] = React.useState(backend?.host ?? "");
+  const [host, setHost] = React.useState(originalHost);
   const [apiKey, setApiKey] = React.useState(backend?.apiKey ?? "");
 
   // Inline validation: only show errors after the user has left a field.
@@ -278,7 +300,7 @@ export function BackendForm({
   const canSubmit =
     name.trim().length > 0 &&
     isValidHostUrl(host) &&
-    (kind === "local" || apiKey.trim().length > 0);
+    (kind === "agent-server" || apiKey.trim().length > 0);
 
   // Error messages — only surfaced after the user has blurred the field.
   const nameError =
@@ -301,11 +323,21 @@ export function BackendForm({
       return;
     }
 
+    const normalizedHost = normalizeHost(host);
+    const hostChanged =
+      mode === "edit" && backend ? normalizedHost !== originalHost : false;
+    const agentServerTransport: Backend["agentServerTransport"] =
+      kind === "agent-server"
+        ? backend?.agentServerTransport === "same-origin" && !hostChanged
+          ? "same-origin"
+          : "remote"
+        : undefined;
     const payload = {
       name: name.trim(),
-      host: normalizeHost(host),
+      host: normalizedHost,
       apiKey: apiKey.trim(),
       kind,
+      agentServerTransport,
     };
 
     if (mode === "edit" && backend) {
@@ -427,7 +459,7 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
   const canSubmit =
     name.trim().length > 0 &&
     isValidHostUrl(host) &&
-    (kind === "local" || apiKey.trim().length > 0);
+    (kind === "agent-server" || apiKey.trim().length > 0);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -437,6 +469,7 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
       host: normalizeHost(host),
       apiKey: apiKey.trim(),
       kind,
+      agentServerTransport: kind === "agent-server" ? "remote" : undefined,
     });
     redirectAfterAdd();
     onClose();
@@ -610,13 +643,14 @@ export function BackendFormModal({
   mode,
   backend,
   onClose,
+  showCloseButton = true,
 }: BackendFormModalProps) {
   const { t } = useTranslation("openhands");
 
   if (mode === "add") {
     return (
       <ModalBackdrop
-        onClose={onClose}
+        onClose={showCloseButton ? onClose : undefined}
         closeOnEscape={false}
         aria-label={t(I18nKey.BACKEND$ADD_TITLE)}
       >
@@ -628,7 +662,9 @@ export function BackendFormModal({
             MODAL_MAX_WIDTH_VIEWPORT,
           )}
         >
-          <ModalCloseButton onClose={onClose} testId="add-backend-close" />
+          {showCloseButton ? (
+            <ModalCloseButton onClose={onClose} testId="add-backend-close" />
+          ) : null}
           {/* Header */}
           <div className="px-6 pt-6 pb-2 pr-12">
             <h2 className="text-lg font-semibold">

@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { ServerClient } from "@openhands/typescript-client/clients";
-import { type Backend } from "#/api/backend-registry/types";
+import { getBackendBaseUrl, type Backend } from "#/api/backend-registry/types";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
+import { getBackendSessionApiKey } from "#/api/backend-registry/auth";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { ConfirmationModal } from "#/components/shared/modals/confirmation-modal";
 import { ModalBackdrop } from "#/components/shared/modals/modal-backdrop";
@@ -21,7 +22,10 @@ import {
 } from "#/hooks/query/use-backends-health";
 import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
-import { BackendFormModal } from "./backend-form-modal";
+import {
+  BackendFormModal,
+  getBackendConnectionLabel,
+} from "./backend-form-modal";
 import { BackendStatusDot } from "./backend-status-dot";
 
 const ROW_ACTION_BUTTON_CLASS =
@@ -29,13 +33,15 @@ const ROW_ACTION_BUTTON_CLASS =
 
 function BackendVersion({ backend }: { backend: Backend }) {
   const { t } = useTranslation("openhands");
+  const backendBaseUrl = getBackendBaseUrl(backend);
+  const backendSessionApiKey = getBackendSessionApiKey(backend);
   const { data: version } = useQuery({
-    queryKey: ["backend-version", backend.host, backend.apiKey],
+    queryKey: ["backend-version", backendBaseUrl, backendSessionApiKey],
     queryFn: async () => {
       const info = await new ServerClient(
         getAgentServerClientOptions({
-          host: backend.host,
-          sessionApiKey: backend.apiKey || null,
+          host: backendBaseUrl,
+          sessionApiKey: backendSessionApiKey,
           timeout: 5000,
         }),
       ).getServerInfo();
@@ -43,7 +49,7 @@ function BackendVersion({ backend }: { backend: Backend }) {
     },
     retry: false,
     staleTime: 60_000,
-    enabled: backend.kind === "local",
+    enabled: backend.kind === "agent-server",
     meta: { disableToast: true },
   });
 
@@ -61,12 +67,6 @@ function BackendVersion({ backend }: { backend: Backend }) {
 
 interface ManageBackendsModalProps {
   onClose: () => void;
-}
-
-interface ManageBackendsPanelProps {
-  onDone: () => void;
-  doneLabel?: I18nKey;
-  doneTestId?: string;
 }
 
 interface PendingRemoval {
@@ -96,13 +96,11 @@ function BackendRow({ backend, health, onEdit, onRemove }: BackendRowProps) {
           <BackendVersion backend={backend} />
         </div>
         <span className="truncate text-xs text-[var(--oh-muted)]">
-          {backend.host}
+          {getBackendBaseUrl(backend)}
         </span>
       </div>
       <span className="px-2 py-1 rounded-full text-[11px] uppercase tracking-wide text-[var(--oh-text-tertiary)] bg-[var(--oh-surface)] border border-[var(--oh-border)]">
-        {backend.kind === "cloud"
-          ? t(I18nKey.BACKEND$KIND_CLOUD)
-          : t(I18nKey.BACKEND$KIND_LOCAL)}
+        {getBackendConnectionLabel(backend, t)}
       </span>
       <div className="flex shrink-0 items-center gap-0.5">
         <button
@@ -128,11 +126,7 @@ function BackendRow({ backend, health, onEdit, onRemove }: BackendRowProps) {
   );
 }
 
-export function ManageBackendsPanel({
-  onDone,
-  doneLabel = I18nKey.HOME$DONE,
-  doneTestId = "manage-backends-done",
-}: ManageBackendsPanelProps) {
+export function ManageBackendsModal({ onClose }: ManageBackendsModalProps) {
   const { t } = useTranslation("openhands");
   const { backends, removeBackend } = useActiveBackendContext();
   const healthByBackendId = useBackendsHealth(backends, {
@@ -153,66 +147,80 @@ export function ManageBackendsPanel({
 
   return (
     <>
-      <div
-        data-testid="manage-backends-panel"
-        className="flex min-h-0 flex-col rounded-xl border border-[var(--oh-border)] bg-[var(--oh-surface)]"
+      <ModalBackdrop
+        onClose={onClose}
+        aria-label={t(I18nKey.BACKEND$MANAGE_TITLE)}
       >
-        <div className="p-5">
-          <h2 className="text-lg font-semibold">
-            {t(I18nKey.BACKEND$MANAGE_TITLE)}
-          </h2>
-        </div>
+        <div
+          data-testid="manage-backends-modal"
+          className={cn(
+            "relative flex flex-col bg-[var(--oh-surface)] border border-[var(--oh-border)] rounded-xl",
+            modalWidthClassName("lg"),
+            MODAL_MAX_WIDTH_VIEWPORT,
+            "max-h-[70vh]",
+          )}
+        >
+          <ModalCloseButton
+            onClose={onClose}
+            testId="close-manage-backends-modal"
+          />
+          <div className="p-5 pr-12">
+            <h2 className="text-lg font-semibold">
+              {t(I18nKey.BACKEND$MANAGE_TITLE)}
+            </h2>
+          </div>
 
-        <div className="flex min-h-0 flex-col px-5">
-          <div
-            className="max-h-80 overflow-auto rounded-md border border-[var(--oh-border)] bg-surface-raised custom-scrollbar-always"
-            data-testid="manage-backends-list"
-          >
-            {backends.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-[var(--oh-text-secondary)]">
-                {t(I18nKey.BACKEND$MANAGE_EMPTY)}
-              </p>
-            ) : (
-              <ul className="divide-y divide-[var(--oh-border)]">
-                {backends.map((backend) => (
-                  <BackendRow
-                    key={backend.id}
-                    backend={backend}
-                    health={healthByBackendId[backend.id]}
-                    onEdit={() => setEditingBackend(backend)}
-                    onRemove={() =>
-                      setPendingRemoval({
-                        id: backend.id,
-                        name: backend.name,
-                      })
-                    }
-                  />
-                ))}
-              </ul>
-            )}
+          <div className="flex min-h-0 flex-1 flex-col px-5">
+            <div
+              className="flex-1 overflow-auto rounded-md border border-[var(--oh-border)] bg-surface-raised custom-scrollbar-always"
+              data-testid="manage-backends-list"
+            >
+              {backends.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-[var(--oh-text-secondary)]">
+                  {t(I18nKey.BACKEND$MANAGE_EMPTY)}
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--oh-border)]">
+                  {backends.map((backend) => (
+                    <BackendRow
+                      key={backend.id}
+                      backend={backend}
+                      health={healthByBackendId[backend.id]}
+                      onEdit={() => setEditingBackend(backend)}
+                      onRemove={() =>
+                        setPendingRemoval({
+                          id: backend.id,
+                          name: backend.name,
+                        })
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 p-5">
+            <BrandButton
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAddForm(true)}
+              testId="manage-backends-add"
+              startContent={<Plus width={14} height={14} />}
+            >
+              {t(I18nKey.BACKEND$ADD)}
+            </BrandButton>
+            <BrandButton
+              type="button"
+              variant="primary"
+              onClick={onClose}
+              testId="manage-backends-done"
+            >
+              {t(I18nKey.HOME$DONE)}
+            </BrandButton>
           </div>
         </div>
-
-        <div className="flex flex-wrap justify-end gap-2 p-5">
-          <BrandButton
-            type="button"
-            variant="secondary"
-            onClick={() => setShowAddForm(true)}
-            testId="manage-backends-add"
-            startContent={<Plus width={14} height={14} />}
-          >
-            {t(I18nKey.BACKEND$ADD)}
-          </BrandButton>
-          <BrandButton
-            type="button"
-            variant="primary"
-            onClick={onDone}
-            testId={doneTestId}
-          >
-            {t(doneLabel)}
-          </BrandButton>
-        </div>
-      </div>
+      </ModalBackdrop>
 
       {showAddForm ? (
         <BackendFormModal mode="add" onClose={() => setShowAddForm(false)} />
@@ -236,32 +244,5 @@ export function ManageBackendsPanel({
         />
       ) : null}
     </>
-  );
-}
-
-export function ManageBackendsModal({ onClose }: ManageBackendsModalProps) {
-  const { t } = useTranslation("openhands");
-
-  return (
-    <ModalBackdrop
-      onClose={onClose}
-      aria-label={t(I18nKey.BACKEND$MANAGE_TITLE)}
-    >
-      <div
-        data-testid="manage-backends-modal"
-        className={cn(
-          "relative flex flex-col",
-          modalWidthClassName("lg"),
-          MODAL_MAX_WIDTH_VIEWPORT,
-          "max-h-[70vh]",
-        )}
-      >
-        <ModalCloseButton
-          onClose={onClose}
-          testId="close-manage-backends-modal"
-        />
-        <ManageBackendsPanel onDone={onClose} />
-      </div>
-    </ModalBackdrop>
   );
 }

@@ -213,7 +213,7 @@ const localBackend = {
     name: "Local",
     host: "http://localhost",
     apiKey: "test",
-    kind: "local" as const,
+    kind: "agent-server" as const,
   },
   orgId: null,
 };

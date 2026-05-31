@@ -1,4 +1,4 @@
-import type { Backend } from "#/api/backend-registry/types";
+import { getBackendBaseUrl, type Backend } from "#/api/backend-registry/types";
 import i18n from "#/i18n";
 import { I18nKey } from "#/i18n/declaration";
 
@@ -52,10 +52,11 @@ export function maybeCreateAgentServerCorsError(
   error: unknown,
   backend: Backend,
 ): Error | null {
-  if (backend.kind !== "local" || !isFetchNetworkFailure(error)) return null;
+  if (backend.kind !== "agent-server" || !isFetchNetworkFailure(error))
+    return null;
 
   const frontendOrigin = getCurrentBrowserOrigin();
-  const backendOrigin = getUrlOrigin(backend.host);
+  const backendOrigin = getUrlOrigin(getBackendBaseUrl(backend));
   if (!frontendOrigin || !backendOrigin || frontendOrigin === backendOrigin) {
     return null;
   }

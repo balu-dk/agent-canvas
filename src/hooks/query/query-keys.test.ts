@@ -6,14 +6,14 @@ describe("QUERY_KEYS", () => {
     expect(
       QUERY_KEYS.WEB_CLIENT_CONFIG_BY_BACKEND({
         id: "local-1",
-        kind: "local",
+        kind: "agent-server",
         host: "http://localhost:8000",
         apiKey: "session-key",
       }),
     ).toEqual([
       "web-client-config",
       "local-1",
-      "local",
+      "agent-server",
       "http://localhost:8000",
       "session-key",
     ]);

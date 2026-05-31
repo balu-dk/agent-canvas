@@ -70,7 +70,7 @@ function TestSeed({
 
 beforeEach(() => {
   window.localStorage.clear();
-  vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:3000");
+  vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
   getServerInfoMock.mockReset();
   getServerInfoMock.mockResolvedValue({ version: "1.18.0" });
   __resetActiveStoreForTests();
@@ -170,7 +170,7 @@ describe("ManageBackendsModal", () => {
             name: "Acme Local",
             host: "http://localhost:9000",
             apiKey: "old-key",
-            kind: "local",
+            kind: "agent-server",
           }).id;
         }}
       >
@@ -249,7 +249,7 @@ describe("ManageBackendsModal", () => {
             name: "Acme Local",
             host: "http://localhost:9000",
             apiKey: "old-key",
-            kind: "local",
+            kind: "agent-server",
           });
         }}
       >

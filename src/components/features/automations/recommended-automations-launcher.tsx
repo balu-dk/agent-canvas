@@ -46,7 +46,7 @@ function trimTrailingSlashes(value: string): string {
 
 export function buildAutomationPrompt(
   basePrompt: string,
-  backendKind: "local" | "cloud",
+  backendKind: "agent-server" | "cloud",
   backendHost?: string,
 ): string {
   if (backendKind === "cloud") {

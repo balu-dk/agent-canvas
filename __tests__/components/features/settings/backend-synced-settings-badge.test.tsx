@@ -78,6 +78,7 @@ function renderBadge() {
 
 describe("BackendSyncedSettingsBadge", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
     vi.restoreAllMocks();
     window.localStorage.clear();
     __resetActiveStoreForTests();
@@ -86,6 +87,7 @@ describe("BackendSyncedSettingsBadge", () => {
   afterEach(() => {
     window.localStorage.clear();
     __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   it("renders the seeded default local backend label and host URL without HTML-escaping", () => {

@@ -55,7 +55,7 @@ describe("ActiveBackendProvider", () => {
     expect(result.current.backends).toHaveLength(1);
     expect(result.current.backends[0]).toMatchObject({
       id: DEFAULT_LOCAL_BACKEND_ID,
-      kind: "local",
+      kind: "agent-server",
     });
   });
 
@@ -104,7 +104,9 @@ describe("ActiveBackendProvider", () => {
     expect(result.current.active.backend.id).toBe(added!.id);
     // Previous backends remain in the registry.
     expect(result.current.backends).toHaveLength(2);
-    expect(result.current.backends.find((b) => b.id === DEFAULT_LOCAL_BACKEND_ID)).toBeDefined();
+    expect(
+      result.current.backends.find((b) => b.id === DEFAULT_LOCAL_BACKEND_ID),
+    ).toBeDefined();
   });
 
   it("setActive switches the active backend without touching unrelated React Query cache entries", () => {
@@ -121,7 +123,7 @@ describe("ActiveBackendProvider", () => {
         name: "Local 1",
         host: "http://localhost:9000",
         apiKey: "key-1",
-        kind: "local",
+        kind: "agent-server",
       });
     });
 
@@ -150,7 +152,7 @@ describe("ActiveBackendProvider", () => {
         name: "Local 1",
         host: "http://localhost:9000",
         apiKey: "k",
-        kind: "local",
+        kind: "agent-server",
       }).id;
     });
 
@@ -184,7 +186,7 @@ describe("ActiveBackendProvider", () => {
     // an env-derived local backend (with the well-known default id) so
     // synchronous call sites never have to handle a null backend.
     expect(result.current.active.backend.id).toBe(DEFAULT_LOCAL_BACKEND_ID);
-    expect(result.current.active.backend.kind).toBe("local");
+    expect(result.current.active.backend.kind).toBe("agent-server");
   });
 
   it("throws if used outside the provider", () => {
@@ -209,7 +211,7 @@ describe("ActiveBackendProvider", () => {
         name: "Stale",
         host: "http://localhost:9000",
         apiKey: "old-key",
-        kind: "local",
+        kind: "agent-server",
       }).id;
     });
     for (let i = 0; i < MAX_CONSECUTIVE_FAILURES; i += 1) {
@@ -245,7 +247,7 @@ describe("ActiveBackendProvider", () => {
         name: "Doomed",
         host: "http://localhost:9000",
         apiKey: "k",
-        kind: "local",
+        kind: "agent-server",
       }).id;
     });
     recordBackendFailure(id, new Error("boom"));

@@ -35,7 +35,7 @@ const localBackend: Backend = {
   name: "Local 1",
   host: "http://localhost:8000",
   apiKey: "session-key",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const cloudBackend: Backend = {

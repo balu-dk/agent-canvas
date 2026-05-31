@@ -25,7 +25,7 @@ const localBackend: Backend = {
   name: "Local",
   host: "http://localhost:18000",
   apiKey: "test-key",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const buildConversation = (

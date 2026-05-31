@@ -53,9 +53,9 @@ vi.mock("#/hooks/query/use-settings", () => ({
 
 vi.mock("#/contexts/active-backend-context", () => ({
   useActiveBackendContext: () => ({
-    backends: [{ id: "local", name: "Local", kind: "local" }],
+    backends: [{ id: "local", name: "Local", kind: "agent-server" }],
     active: {
-      backend: { id: "local", name: "Local", kind: "local" },
+      backend: { id: "local", name: "Local", kind: "agent-server" },
       orgId: null,
     },
     setActive: vi.fn(),

@@ -73,10 +73,10 @@ vi.mock("#/components/features/chat/open-repository-modal", () => ({
   },
 }));
 
-const makeBackend = (kind: "local" | "cloud") => ({
+const makeBackend = (kind: "agent-server" | "cloud") => ({
   backend: {
     id: "backend-id",
-    name: kind === "local" ? "Local" : "Cloud",
+    name: kind === "agent-server" ? "Local" : "Cloud",
     host: "http://example.test",
     apiKey: "test-key",
     kind,
@@ -162,7 +162,7 @@ describe("GitControlBar repo button visibility", () => {
   });
 
   it("hides the repo button on a local backend with no repository or workspace name", () => {
-    vi.mocked(useActiveBackend).mockReturnValue(makeBackend("local"));
+    vi.mocked(useActiveBackend).mockReturnValue(makeBackend("agent-server"));
 
     renderWithProviders(<GitControlBar onSuggestionsClick={vi.fn()} />);
 
@@ -182,7 +182,7 @@ describe("GitControlBar repo button visibility", () => {
   });
 
   it("renders the repo button as disabled on a local backend when only a workspace name is available", () => {
-    vi.mocked(useActiveBackend).mockReturnValue(makeBackend("local"));
+    vi.mocked(useActiveBackend).mockReturnValue(makeBackend("agent-server"));
     vi.mocked(getStoredConversationMetadata).mockReturnValue({
       selected_workspace: "/projects/my-app",
     } as ReturnType<typeof getStoredConversationMetadata>);

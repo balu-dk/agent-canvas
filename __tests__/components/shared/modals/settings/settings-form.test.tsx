@@ -1,7 +1,8 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "test-utils";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import { SettingsForm } from "#/components/shared/modals/settings/settings-form";
 import { DEFAULT_SETTINGS } from "#/services/settings";
@@ -24,8 +25,15 @@ describe("SettingsForm", () => {
   const expectedModelName = expectedModel.split("/").slice(1).join("/");
 
   beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
     vi.clearAllMocks();
     saveSettingsSpy.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   it("should save the user settings and close the modal when submitted outside a conversation route", async () => {

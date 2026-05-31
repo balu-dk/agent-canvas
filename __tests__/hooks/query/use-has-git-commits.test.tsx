@@ -38,12 +38,14 @@ function makeWrapper() {
   };
 }
 
-const makeBackend = (kind: "local" | "cloud") => ({
+const makeBackend = (kind: "agent-server" | "cloud") => ({
   backend: {
     id: "backend-id",
-    name: kind === "local" ? "Local" : "Production",
+    name: kind === "agent-server" ? "Local" : "Production",
     host:
-      kind === "local" ? "http://127.0.0.1:8000" : "https://app.all-hands.dev",
+      kind === "agent-server"
+        ? "http://127.0.0.1:8000"
+        : "https://app.all-hands.dev",
     apiKey: "test-key",
     kind,
   },
@@ -91,7 +93,7 @@ describe("useHasGitCommits", () => {
 
   it("probes HEAD via executeCommand on a local backend and returns true when the repo has commits", async () => {
     // Arrange
-    useActiveBackendMock.mockReturnValue(makeBackend("local"));
+    useActiveBackendMock.mockReturnValue(makeBackend("agent-server"));
     executeCommandSpy.mockResolvedValue({
       exit_code: 0,
       stdout: "abcdef0\n",

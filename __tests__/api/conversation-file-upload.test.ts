@@ -51,7 +51,7 @@ describe("uploadFilesToConversation", () => {
         name: "Local",
         host: "http://127.0.0.1:18000",
         apiKey: "local-key",
-        kind: "local",
+        kind: "agent-server",
       },
     ]);
     setActiveSelection({ backendId: "local-1" });

@@ -3,15 +3,14 @@ import {
   getActiveBackend,
   getEffectiveLocalBackend,
 } from "../backend-registry/active-store";
-import { getAgentServerHeaders } from "../agent-server-config";
 import { buildAuthHeaders } from "../backend-registry/auth";
-import type { Backend } from "../backend-registry/types";
+import { getBackendBaseUrl, type Backend } from "../backend-registry/types";
 
 interface CloudProxyRequest {
   /**
    * Cloud backend whose bearer token authenticates the upstream call.
-   * `backend.host` is also the default upstream host unless `hostOverride`
-   * is set.
+   * The backend's resolved base URL is also the default upstream host unless
+   * `hostOverride` is set.
    */
   backend: Backend;
   /** HTTP method against the upstream host. */
@@ -26,8 +25,8 @@ interface CloudProxyRequest {
   timeoutSeconds?: number;
   /**
    * Override the upstream host. When set, the proxy targets this host
-   * instead of `backend.host`. Used for runtime-sandbox calls where the
-   * upstream lives at the conversation's runtime URL (e.g.
+   * instead of the backend's resolved base URL. Used for runtime-sandbox calls
+   * where the upstream lives at the conversation's runtime URL (e.g.
    * `http://<id>.prod-runtime.all-hands.dev`) rather than the cloud API.
    * The host must still pass the proxy's allowlist server-side.
    */
@@ -74,10 +73,7 @@ export async function callCloudProxy<TResponse = unknown>(
   req: CloudProxyRequest,
 ): Promise<TResponse> {
   const local = getEffectiveLocalBackend();
-  const localAuthHeaders = {
-    ...buildAuthHeaders(local),
-    ...getAgentServerHeaders(),
-  };
+  const localAuthHeaders = buildAuthHeaders(local);
   // Send `X-Org-Id` so the upstream scopes per-request to the org the user
   // selected locally, instead of the user's globally-shared
   // `current_org_id` on the cloud backend. Restricted to calls against the active
@@ -95,14 +91,15 @@ export async function callCloudProxy<TResponse = unknown>(
     ...orgIdHeader,
     ...(req.headers ?? {}),
   };
-  const upstreamHost = req.hostOverride ?? req.backend.host;
+  const upstreamHost = req.hostOverride ?? getBackendBaseUrl(req.backend);
+  const localHost = getBackendBaseUrl(local);
 
   // Talk directly to the local agent-server, bypassing the global
   // local agent-server client configuration (which would otherwise read host + auth
   // from the active backend — wrong for this call: we need the local
   // backend's host and session key explicitly, not the active one).
   const response = await axios.post<TResponse>(
-    `${local.host.replace(/\/+$/, "")}/api/cloud-proxy`,
+    `${localHost.replace(/\/+$/, "")}/api/cloud-proxy`,
     {
       host: upstreamHost,
       method: req.method,

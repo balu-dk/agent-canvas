@@ -39,6 +39,10 @@ vi.mock("#/hooks/query/use-provider-models", () => ({
   }),
 }));
 
+vi.mock("#/hooks/query/use-openhands-verified-models", () => ({
+  useOpenhandsVerifiedModels: () => ({ data: [] }),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {

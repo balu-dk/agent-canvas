@@ -49,6 +49,7 @@ export function buildFrontend(config, args = {}) {
       // to Vite.
       VITE_WORKING_DIR:
         config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
+      VITE_AGENT_SERVER_TRANSPORT: "same-origin",
       // Bake the session API key — used by the frontend for both agent-server
       // and automation auth via the `X-Session-API-Key` header.
       VITE_SESSION_API_KEY: config.sessionApiKey,
@@ -58,9 +59,8 @@ export function buildFrontend(config, args = {}) {
       VITE_RUNTIME_SERVICES_INFO: JSON.stringify(
         buildAutomationRuntimeServicesInfo(config),
       ),
-      // Intentionally do NOT set VITE_BACKEND_BASE_URL: leaving it unset makes
-      // the runtime fall back to window.location.origin, which keeps the build
-      // portable across localhost, LAN hosts, and tunnels such as ngrok.
+      // Same-origin transport keeps the build portable across localhost, LAN
+      // hosts, and tunnels such as ngrok; the ingress handles API routing.
     },
   });
 

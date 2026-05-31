@@ -23,7 +23,7 @@ const localBackend: Backend = {
   name: "Self-hosted",
   host: "http://192.168.1.99:9999",
   apiKey: "local-key",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const runtimeResponse = {

@@ -21,7 +21,7 @@ const localBackend: Backend = {
   name: "Bundled",
   host: "http://localhost:3000",
   apiKey: "",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const cloudBackend: Backend = {

@@ -1,11 +1,19 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import WorkspacesService from "#/api/workspaces-service/workspaces-service.api";
 import { resetMockWorkspaces } from "#/mocks/handlers";
 
 describe("mock workspaces handlers", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
+  });
+
   afterEach(() => {
     resetMockWorkspaces();
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   it("starts with an empty workspaces list", async () => {

@@ -100,12 +100,13 @@ export function ActiveBackendProvider({
       const next = list.find((b) => b.id === id);
       if (
         id === DEFAULT_LOCAL_BACKEND_ID &&
-        next?.kind === "local" &&
+        next?.kind === "agent-server" &&
         (patch.host !== undefined || patch.apiKey !== undefined)
       ) {
         saveAgentServerConfig({
           baseUrl: next.host,
           sessionApiKey: next.apiKey,
+          transport: next.agentServerTransport,
         });
       }
 
@@ -189,10 +190,10 @@ export function useEffectiveLocalBackend(): Backend {
   if (!ctx) return makeDefaultLocalBackend();
 
   const active = ctx.active.backend;
-  if (active.kind === "local") return active;
+  if (active.kind === "agent-server") return active;
 
   return (
-    ctx.backends.find((backend) => backend.kind === "local") ??
+    ctx.backends.find((backend) => backend.kind === "agent-server") ??
     makeDefaultLocalBackend()
   );
 }

@@ -9,6 +9,7 @@ import {
   getActiveBackend,
   getEffectiveLocalBackend,
 } from "../backend-registry/active-store";
+import { getBackendBaseUrl } from "../backend-registry/types";
 import { callCloudProxy } from "../cloud/proxy";
 
 const AUTOMATION_BASE_PATH = "/api/automation";
@@ -35,7 +36,7 @@ localAutomationAxios.interceptors.request.use((config) => {
   // the 401 errors reported in issue #829.
   const backend = getEffectiveLocalBackend();
   // eslint-disable-next-line no-param-reassign
-  if (!config.baseURL) config.baseURL = backend.host;
+  if (!config.baseURL) config.baseURL = getBackendBaseUrl(backend);
 
   const apiKey = backend.apiKey?.trim();
   if (apiKey) {

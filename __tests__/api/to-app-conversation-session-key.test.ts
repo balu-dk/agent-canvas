@@ -20,7 +20,8 @@ afterEach(() => {
 });
 
 describe("toAppConversation session_api_key hydration", () => {
-  it("prefers the configured VITE_SESSION_API_KEY over a stale stored default-local apiKey", () => {
+  it("uses launcher-injected auth for same-origin backends over stale UI auth", () => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
     vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
 
     setRegisteredBackends([
@@ -29,11 +30,30 @@ describe("toAppConversation session_api_key hydration", () => {
         name: "Local",
         host: window.location.origin,
         apiKey: "stale-session-key",
-        kind: "local",
+        kind: "agent-server",
+        agentServerTransport: "same-origin",
       },
     ]);
 
     const conversation = toAppConversation(directInfo("conv-1"));
     expect(conversation.session_api_key).toBe("fresh-session-key");
+  });
+
+  it("uses UI auth for remote backends and ignores launcher-injected auth", () => {
+    vi.stubEnv("VITE_SESSION_API_KEY", "launcher-session-key");
+
+    setRegisteredBackends([
+      {
+        id: "remote-agent",
+        name: "Remote",
+        host: "https://agent.example.com",
+        apiKey: "remote-session-key",
+        kind: "agent-server",
+        agentServerTransport: "remote",
+      },
+    ]);
+
+    const conversation = toAppConversation(directInfo("conv-2"));
+    expect(conversation.session_api_key).toBe("remote-session-key");
   });
 });

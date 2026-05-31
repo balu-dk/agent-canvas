@@ -98,7 +98,7 @@ export const useLocalGitInfo = () => {
   const { data: conversation } = useActiveConversation();
   const runtimeIsReady = useRuntimeIsReady();
   const { backend } = useActiveBackend();
-  const isLocalBackend = backend.kind === "local";
+  const isLocalBackend = backend.kind === "agent-server";
 
   const conversationId = conversation?.id;
   const conversationUrl = conversation?.conversation_url;

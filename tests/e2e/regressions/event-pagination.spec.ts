@@ -11,7 +11,7 @@ function timestampForEvent(index: number): string {
 
 async function seedBackendSelection(
   page: Page,
-  mode: "local" | "cloud",
+  mode: "agent-server" | "cloud",
   conversationId: string,
 ) {
   await page.addInitScript(
@@ -31,7 +31,7 @@ async function seedBackendSelection(
         name: "Local pagination backend",
         host: window.location.origin,
         apiKey: "",
-        kind: "local",
+        kind: "agent-server",
       };
       const cloudBackend = {
         id: "pagination-cloud-backend",
@@ -129,7 +129,7 @@ test.describe("conversation event pagination", () => {
   test("loads older events when scrolling up on a local backend", async ({
     page,
   }) => {
-    await seedBackendSelection(page, "local", LOCAL_CONVERSATION_ID);
+    await seedBackendSelection(page, "agent-server", LOCAL_CONVERSATION_ID);
 
     const initialRequestPromise = page.waitForRequest((request) => {
       if (request.method() !== "GET") return false;

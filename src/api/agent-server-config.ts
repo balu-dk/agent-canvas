@@ -1,15 +1,23 @@
+import type { AgentServerTransport } from "./backend-registry/types";
+
 export const AGENT_SERVER_CONFIG_STORAGE_KEY = "openhands-agent-server-config";
 export const DEFAULT_WORKING_DIR = "workspace/project";
+export type { AgentServerTransport } from "./backend-registry/types";
 
 interface StoredAgentServerConfig {
   baseUrl?: string | null;
   sessionApiKey?: string | null;
+  transport?: AgentServerTransport | null;
   workingDir?: string | null;
 }
 
 export interface AgentServerFormDefaults {
   baseUrl: string;
   sessionApiKey: string;
+}
+
+interface AgentServerConfigUpdate extends AgentServerFormDefaults {
+  transport?: AgentServerTransport | null;
 }
 
 function readStoredConfig(): StoredAgentServerConfig {
@@ -71,88 +79,96 @@ function normalizeBaseUrl(value?: string | null): string | null {
   return `http://${trimmed}`;
 }
 
-function getConfiguredBaseUrl(): string | null {
-  const storedUrl = normalizeBaseUrl(readStoredConfig().baseUrl);
-  if (storedUrl) return storedUrl;
-
-  return normalizeBaseUrl(import.meta.env.VITE_BACKEND_BASE_URL);
+function normalizeTransport(
+  value?: string | null,
+): AgentServerTransport | null {
+  if (value === "same-origin" || value === "remote") return value;
+  return null;
 }
 
-function getConfiguredSessionApiKey(): string | null {
-  const storedKey = trimToNull(readStoredConfig().sessionApiKey);
-  if (storedKey) return storedKey;
+function getConfiguredBaseUrlOverride(): string | null {
+  const storedConfig = readStoredConfig();
+  const storedTransport = normalizeTransport(storedConfig.transport);
+  if (storedTransport === "same-origin") return null;
 
+  return normalizeBaseUrl(storedConfig.baseUrl);
+}
+
+function getConfiguredTransportOverride(): AgentServerTransport | null {
+  const storedTransport = normalizeTransport(readStoredConfig().transport);
+  if (storedTransport) return storedTransport;
+
+  return normalizeTransport(
+    import.meta.env.VITE_AGENT_SERVER_TRANSPORT?.trim(),
+  );
+}
+
+function getStoredSessionApiKey(): string | null {
+  return trimToNull(readStoredConfig().sessionApiKey);
+}
+
+function getLauncherSessionApiKey(): string | null {
   return trimToNull(import.meta.env.VITE_SESSION_API_KEY);
 }
 
-function shouldUseProxyOrigin(baseUrl: string): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
+export function getAgentServerTransport(): AgentServerTransport {
+  if (getConfiguredBaseUrlOverride()) return "remote";
 
-  try {
-    const configuredUrl = new URL(baseUrl);
-    const localHosts = new Set(["127.0.0.1", "localhost", "0.0.0.0"]);
-    const browserHostname = window.location.hostname;
-
-    return (
-      localHosts.has(configuredUrl.hostname) && !localHosts.has(browserHostname)
-    );
-  } catch {
-    return false;
-  }
+  return (
+    getConfiguredTransportOverride() ??
+    (import.meta.env.VITE_MOCK_API === "true" ? "same-origin" : "remote")
+  );
 }
 
-function resolveAgentServerBaseUrl(baseUrl: string | null): string | null {
-  if (!baseUrl) {
-    return null;
+function getConfiguredAgentServerBaseUrl(): string | null {
+  const baseUrl = getConfiguredBaseUrlOverride();
+  if (baseUrl) return baseUrl;
+
+  const transport = getConfiguredTransportOverride();
+  if (transport === "same-origin" || import.meta.env.VITE_MOCK_API === "true") {
+    return typeof window !== "undefined" ? window.location.origin : null;
   }
 
-  if (shouldUseProxyOrigin(baseUrl)) {
-    return window.location.origin;
-  }
-
-  return baseUrl;
+  return null;
 }
 
 export function getAgentServerFormDefaults(): AgentServerFormDefaults {
   return {
-    baseUrl: getConfiguredBaseUrl() ?? "",
-    sessionApiKey: getConfiguredSessionApiKey() ?? "",
+    baseUrl: getConfiguredAgentServerBaseUrl() ?? "",
+    sessionApiKey: getAgentServerSessionApiKey() ?? "",
   };
 }
 
 export function hasConfiguredAgentServerDefaults(): boolean {
-  return Boolean(
-    getConfiguredBaseUrl() ||
-    import.meta.env.VITE_MOCK_API === "true" ||
-    !import.meta.env.DEV,
-  );
+  return Boolean(getConfiguredAgentServerBaseUrl());
 }
 
-export function saveAgentServerConfig(config: AgentServerFormDefaults): void {
+export function saveAgentServerConfig(config: AgentServerConfigUpdate): void {
   const currentConfig = readStoredConfig();
+  const transport =
+    config.transport ?? (normalizeBaseUrl(config.baseUrl) ? "remote" : null);
 
   writeStoredConfig({
     ...currentConfig,
-    baseUrl: normalizeBaseUrl(config.baseUrl),
+    baseUrl:
+      transport === "same-origin" ? null : normalizeBaseUrl(config.baseUrl),
     sessionApiKey: trimToNull(config.sessionApiKey),
+    transport,
   });
 }
 
 export function getAgentServerBaseUrl(): string {
-  const configuredUrl = resolveAgentServerBaseUrl(getConfiguredBaseUrl());
-  if (configuredUrl) return configuredUrl;
+  return getConfiguredAgentServerBaseUrl() ?? "";
+}
 
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
-
-  return "http://127.0.0.1:8000";
+export function getLauncherAgentServerSessionApiKey(): string | null {
+  return getLauncherSessionApiKey();
 }
 
 export function getAgentServerSessionApiKey(): string | null {
-  return getConfiguredSessionApiKey();
+  return getAgentServerTransport() === "same-origin"
+    ? getLauncherSessionApiKey()
+    : getStoredSessionApiKey();
 }
 
 export function getAgentServerWorkingDir(): string {
@@ -179,11 +195,6 @@ export function getConfiguredWorkerUrls(): string[] {
     .split(",")
     .map((url: string) => normalizeBaseUrl(url))
     .filter((url: string | null): url is string => Boolean(url));
-}
-
-export function getAgentServerHeaders(): Record<string, string> {
-  const sessionApiKey = getAgentServerSessionApiKey();
-  return sessionApiKey ? { "X-Session-API-Key": sessionApiKey } : {};
 }
 
 /**

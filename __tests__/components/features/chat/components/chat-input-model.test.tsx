@@ -40,7 +40,7 @@ describe("ChatInputModel", () => {
     useActiveBackendMock.mockReset();
     // Default to a local backend (mirrors useActiveBackend's standalone
     // fallback): live ACP model switching is local-only.
-    useActiveBackendMock.mockReturnValue({ backend: { kind: "local" } });
+    useActiveBackendMock.mockReturnValue({ backend: { kind: "agent-server" } });
     switchAcpModelMutate.mockReset();
   });
 

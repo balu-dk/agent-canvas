@@ -173,7 +173,7 @@ export function ConversationPanelFilterMenu({
   const { t } = useTranslation("openhands");
 
   const groupedLabel =
-    backendKind === "local"
+    backendKind === "agent-server"
       ? t(I18nKey.CONVERSATION_PANEL$BY_WORKSPACE)
       : t(I18nKey.CONVERSATION_PANEL$BY_REPOSITORY);
 

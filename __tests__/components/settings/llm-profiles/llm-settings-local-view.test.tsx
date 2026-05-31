@@ -1,8 +1,17 @@
-import { describe, expect, it, vi, beforeEach, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import { AxiosError } from "axios";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "test-utils";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import { LlmSettingsLocalView } from "#/components/features/settings/llm-profiles/llm-settings-local-view";
 import * as useLlmProfilesHook from "#/hooks/query/use-llm-profiles";
 import * as useActivateLlmProfileHook from "#/hooks/mutation/use-activate-llm-profile";
@@ -82,6 +91,8 @@ describe("LlmSettingsLocalView", () => {
   const mockSaveMutateAsync = vi.fn();
 
   beforeEach(() => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+    __resetActiveStoreForTests();
     vi.clearAllMocks();
 
     vi.mocked(useLlmProfilesHook.useLlmProfiles).mockReturnValue(
@@ -99,6 +110,11 @@ describe("LlmSettingsLocalView", () => {
         ReturnType<typeof useSaveLlmProfileHook.useSaveLlmProfile>
       >(mockSaveMutateAsync),
     );
+  });
+
+  afterEach(() => {
+    __resetActiveStoreForTests();
+    vi.unstubAllEnvs();
   });
 
   it("renders profile list by default", () => {

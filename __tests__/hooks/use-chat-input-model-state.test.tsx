@@ -61,7 +61,7 @@ describe("useChatInputModelState", () => {
     useSettingsMock.mockReturnValue({ data: undefined });
     useActiveBackendMock.mockReset();
     // Default to a local backend — live ACP switching is local-only.
-    useActiveBackendMock.mockReturnValue({ backend: { kind: "local" } });
+    useActiveBackendMock.mockReturnValue({ backend: { kind: "agent-server" } });
     useAcpModelContextMock.mockReset();
     useAcpModelContextMock.mockReturnValue(acpContext());
     useOptionalConversationIdMock.mockReset();

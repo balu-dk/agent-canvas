@@ -55,7 +55,7 @@ export function useWorkspaceSession(): {
   const conversationId = conversation?.id;
   const conversationUrl = conversation?.conversation_url;
   const sessionApiKey = conversation?.session_api_key;
-  const isLocal = getActiveBackend().backend.kind === "local";
+  const isLocal = getActiveBackend().backend.kind === "agent-server";
 
   const enabled = runtimeIsReady && !!conversationId && isLocal;
 

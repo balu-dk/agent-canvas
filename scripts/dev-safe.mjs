@@ -1019,8 +1019,8 @@ async function main() {
     cwd: config.cwd,
     env: {
       ...process.env,
-      VITE_BACKEND_HOST: config.backendHost,
-      VITE_BACKEND_BASE_URL: config.backendBaseUrl,
+      VITE_AGENT_SERVER_TRANSPORT: "same-origin",
+      VITE_AGENT_SERVER_PROXY_TARGET: config.backendHost,
       VITE_WORKING_DIR: config.workingDir,
       // Pass session API key so frontend can authenticate with agent-server
       VITE_SESSION_API_KEY: config.sessionApiKey,

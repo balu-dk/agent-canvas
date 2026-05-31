@@ -44,7 +44,7 @@ const SEED_LOCAL_1 = {
   name: "Local 1",
   host: "http://localhost:9000",
   apiKey: "k",
-  kind: "local" as const,
+  kind: "agent-server" as const,
 };
 
 const SEED_CLOUD_PRODUCTION = {
@@ -95,7 +95,7 @@ async function openDropdown() {
 
 beforeEach(() => {
   window.localStorage.clear();
-  vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:3000");
+  vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
   __resetActiveStoreForTests();
   vi.mocked(getCloudOrganizations).mockReset();
   vi.mocked(getCloudOrganizationMe).mockReset();
@@ -468,7 +468,7 @@ describe("BackendSelector", () => {
             name: "Acme Local",
             host: "http://localhost:9000",
             apiKey: "k",
-            kind: "local",
+            kind: "agent-server",
           });
         }}
       >
@@ -593,7 +593,7 @@ describe("BackendSelector", () => {
           name: "Local 1",
           host: "http://localhost:9000",
           apiKey: "k",
-          kind: "local",
+          kind: "agent-server",
         },
       ]),
     );

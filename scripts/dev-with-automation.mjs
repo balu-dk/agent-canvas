@@ -730,8 +730,8 @@ function startVite(config) {
     cwd: config.canvasPath,
     env: {
       // Point Vite at the ingress (so client-side fetches work)
-      VITE_BACKEND_HOST: `127.0.0.1:${config.ingressPort}`,
-      VITE_BACKEND_BASE_URL: `http://127.0.0.1:${config.ingressPort}`,
+      VITE_AGENT_SERVER_TRANSPORT: "same-origin",
+      VITE_AGENT_SERVER_PROXY_TARGET: `127.0.0.1:${config.ingressPort}`,
       VITE_WORKING_DIR:
         config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
       VITE_FRONTEND_PORT: config.vitePort.toString(),

@@ -181,7 +181,9 @@ describe("useCreateConversation", () => {
 
     const { result } = renderHook(() => useCreateConversation(), {
       wrapper: ({ children }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
       ),
     });
 
@@ -203,7 +205,7 @@ describe("useCreateConversation", () => {
       name: "Local agent server",
       host: "http://127.0.0.1:8000",
       apiKey: "",
-      kind: "local" as const,
+      kind: "agent-server" as const,
     };
     writeStoredBackends([backend]);
     writeStoredActiveBackend({ backendId: backend.id });

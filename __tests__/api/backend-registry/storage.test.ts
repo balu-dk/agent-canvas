@@ -7,11 +7,11 @@ import {
   writeStoredActiveBackend,
   writeStoredBackends,
 } from "#/api/backend-registry/storage";
+import { getBackendSessionApiKey } from "#/api/backend-registry/auth";
 import type { Backend } from "#/api/backend-registry/types";
 
 beforeEach(() => {
-  vi.stubEnv("VITE_BACKEND_HOST", window.location.host);
-  vi.stubEnv("VITE_BACKEND_BASE_URL", window.location.origin);
+  vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
   vi.stubEnv("VITE_SESSION_API_KEY", "test-session-key");
 });
 
@@ -28,7 +28,7 @@ describe("backend-registry storage", () => {
         name: "Local 1",
         host: "http://127.0.0.1:9000",
         apiKey: "key-1",
-        kind: "local",
+        kind: "agent-server",
       },
       {
         id: "xyz",
@@ -55,7 +55,7 @@ describe("backend-registry storage", () => {
     const result = readStoredBackends();
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: "default-local", kind: "local" });
+    expect(result[0]).toMatchObject({ id: "default-local", kind: "agent-server" });
     // Persists the seed so a subsequent read returns the same entry.
     expect(window.localStorage.getItem(BACKENDS_STORAGE_KEY)).not.toBeNull();
     expect(readStoredBackends()).toEqual(result);
@@ -67,7 +67,7 @@ describe("backend-registry storage", () => {
     const result = readStoredBackends();
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: "default-local", kind: "local" });
+    expect(result[0]).toMatchObject({ id: "default-local", kind: "agent-server" });
   });
 
   it("re-seeds the default Local backend when every stored entry is invalid", () => {
@@ -79,14 +79,14 @@ describe("backend-registry storage", () => {
     const result = readStoredBackends();
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: "default-local", kind: "local" });
+    expect(result[0]).toMatchObject({ id: "default-local", kind: "agent-server" });
   });
 
   it("filters out backends with invalid shape", () => {
     window.localStorage.setItem(
       BACKENDS_STORAGE_KEY,
       JSON.stringify([
-        { id: "ok", name: "x", host: "y", apiKey: "z", kind: "local" },
+        { id: "ok", name: "x", host: "y", apiKey: "z", kind: "agent-server" },
         { id: "missing-kind", name: "x", host: "y", apiKey: "z" },
         { kind: "cloud" },
         "not-an-object",
@@ -94,11 +94,11 @@ describe("backend-registry storage", () => {
     );
 
     expect(readStoredBackends()).toEqual([
-      { id: "ok", name: "x", host: "y", apiKey: "z", kind: "local" },
+      { id: "ok", name: "x", host: "y", apiKey: "z", kind: "agent-server" },
     ]);
   });
 
-  it("fills a missing API key on the default Local backend from env defaults", () => {
+  it("keeps a missing API key on the default Local backend", () => {
     vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
     window.localStorage.setItem(
       BACKENDS_STORAGE_KEY,
@@ -108,7 +108,7 @@ describe("backend-registry storage", () => {
           name: "Local",
           host: window.location.origin,
           apiKey: "",
-          kind: "local",
+          kind: "agent-server",
         },
       ]),
     );
@@ -117,18 +117,52 @@ describe("backend-registry storage", () => {
 
     expect(result[0]).toMatchObject({
       id: "default-local",
-      apiKey: "fresh-session-key",
+      apiKey: "",
     });
     expect(
       JSON.parse(window.localStorage.getItem(BACKENDS_STORAGE_KEY)!)[0],
     ).toMatchObject({
       id: "default-local",
-      apiKey: "fresh-session-key",
+      apiKey: "",
     });
   });
 
 
-  it("refreshes a stale API key on the default Local backend from env defaults", () => {
+  it("keeps and uses a stored remote API key on the default Local backend", () => {
+    vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "remote");
+    vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
+    window.localStorage.setItem(
+      BACKENDS_STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: "default-local",
+          name: "Local",
+          host: "https://agent.example.com",
+          apiKey: "stored-session-key",
+          kind: "agent-server",
+          agentServerTransport: "remote",
+        },
+      ]),
+    );
+
+    const result = readStoredBackends();
+
+    expect(result[0]).toMatchObject({
+      id: "default-local",
+      apiKey: "stored-session-key",
+      agentServerTransport: "remote",
+    });
+    expect(getBackendSessionApiKey(result[0])).toBe("stored-session-key");
+    expect(
+      JSON.parse(window.localStorage.getItem(BACKENDS_STORAGE_KEY) ?? "[]")[0],
+    ).toMatchObject({
+      id: "default-local",
+      apiKey: "stored-session-key",
+      agentServerTransport: "remote",
+    });
+  });
+
+  it("keeps but does not use a stale same-origin API key on the default Local backend", () => {
     vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
     window.localStorage.setItem(
       BACKENDS_STORAGE_KEY,
@@ -138,7 +172,8 @@ describe("backend-registry storage", () => {
           name: "Local",
           host: window.location.origin,
           apiKey: "stale-session-key",
-          kind: "local",
+          kind: "agent-server",
+          agentServerTransport: "same-origin",
         },
       ]),
     );
@@ -147,13 +182,16 @@ describe("backend-registry storage", () => {
 
     expect(result[0]).toMatchObject({
       id: "default-local",
-      apiKey: "fresh-session-key",
+      apiKey: "stale-session-key",
+      agentServerTransport: "same-origin",
     });
+    expect(getBackendSessionApiKey(result[0])).toBe("fresh-session-key");
     expect(
       JSON.parse(window.localStorage.getItem(BACKENDS_STORAGE_KEY) ?? "[]")[0],
     ).toMatchObject({
       id: "default-local",
-      apiKey: "fresh-session-key",
+      apiKey: "stale-session-key",
+      agentServerTransport: "same-origin",
     });
   });
 
@@ -167,7 +205,7 @@ describe("backend-registry storage", () => {
           name: "Local",
           host: "http://127.0.0.1:9999",
           apiKey: "",
-          kind: "local",
+          kind: "agent-server",
         },
       ]),
     );

@@ -87,7 +87,7 @@ describe("useWorkspaceFileContent", () => {
       error: null,
     });
     getActiveBackendMock.mockReturnValue({
-      backend: { id: "local-1", kind: "local", host: "http://localhost:8000" },
+      backend: { id: "local-1", kind: "agent-server", host: "http://localhost:8000" },
       orgId: null,
     });
     useWorkspaceMutationCounter.setState({ count: 0 });

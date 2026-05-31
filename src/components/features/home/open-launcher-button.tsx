@@ -11,7 +11,7 @@ import {
 } from "#/utils/form-control-classes";
 
 interface OpenLauncherButtonProps {
-  kind: "local" | "cloud";
+  kind: "agent-server" | "cloud";
   onClick: () => void;
   disabled?: boolean;
   disabledTooltip?: string | null;
@@ -25,7 +25,7 @@ export function OpenLauncherButton({
 }: OpenLauncherButtonProps) {
   const { t } = useTranslation("openhands");
 
-  const isLocal = kind === "local";
+  const isLocal = kind === "agent-server";
   const label = isLocal
     ? t(I18nKey.HOME$OPEN_WORKSPACE)
     : t(I18nKey.COMMON$OPEN_REPOSITORY);

@@ -33,14 +33,14 @@ const localBackend: Backend = {
   name: "Local 1",
   host: "http://localhost:9000",
   apiKey: "k",
-  kind: "local",
+  kind: "agent-server",
 };
 
 describe("active-store", () => {
   it("seeds the registry with a default local backend on first read and uses it as the active backend", () => {
     const { backend, orgId } = getActiveBackend();
     expect(backend.id).toBe(DEFAULT_LOCAL_BACKEND_ID);
-    expect(backend.kind).toBe("local");
+    expect(backend.kind).toBe("agent-server");
     expect(orgId).toBeNull();
   });
 
@@ -67,7 +67,7 @@ describe("active-store", () => {
     setActiveSelection(null);
 
     const { backend } = getActiveBackend();
-    expect(backend.kind).toBe("local");
+    expect(backend.kind).toBe("agent-server");
     expect(backend.id).toBe(DEFAULT_LOCAL_BACKEND_ID);
   });
 

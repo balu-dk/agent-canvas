@@ -31,7 +31,7 @@ export function ConversationPanelNewThreadPicker({
     <FolderPlus className="h-4 w-4 shrink-0" aria-hidden strokeWidth={2} />
   );
 
-  if (backendKind === "local") {
+  if (backendKind === "agent-server") {
     return (
       <LocalNewConversationMenu
         useFixedPlacement

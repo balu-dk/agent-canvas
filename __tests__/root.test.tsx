@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Navigate, createRoutesStub } from "react-router";
+import { createRoutesStub } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import App, { links } from "#/root";
@@ -10,39 +10,32 @@ import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store"
 import { ActiveBackendProvider } from "#/contexts/active-backend-context";
 
 const ORIGINAL_LOCATION = window.location;
-const APP_HOME_PATH = "/";
-const BACKEND_SETTINGS_PATH = "/settings/backend";
 
 const TRANSLATIONS: Record<string, string> = {
   COMMON$OPTIONAL: "Optional",
-  SETTINGS$AGENT_SERVER_ONBOARDING_EYEBROW: "Get started",
-  SETTINGS$AGENT_SERVER_ONBOARDING_TITLE: "Connect to your agent server",
-  SETTINGS$AGENT_SERVER_ONBOARDING_DESCRIPTION:
-    "Agent Canvas needs an agent server before it can load conversations, tools, and settings.",
-  SETTINGS$AGENT_SERVER_MISSING_STATUS_TITLE: "No backend is configured",
-  SETTINGS$AGENT_SERVER_MISSING_STATUS_MESSAGE:
-    "Enter the agent server URL and session API key to connect this browser.",
-  SETTINGS$AGENT_SERVER_AUTH_STATUS_TITLE: "Backend authentication failed",
-  SETTINGS$AGENT_SERVER_AUTH_STATUS_MESSAGE:
-    "The configured server rejected the session API key.",
-  SETTINGS$AGENT_SERVER_UNAVAILABLE_STATUS_TITLE:
-    "We couldn't reach the configured server",
-  SETTINGS$AGENT_SERVER_UNAVAILABLE_STATUS_MESSAGE:
-    "Check the URL, confirm the server is running, and try again.",
-  SETTINGS$AGENT_SERVER_DETAILS_LABEL: "Details: {{details}}",
-  SETTINGS$AGENT_SERVER_RETRY_CONNECTION: "Retry connection",
+  BACKEND$ADD_TITLE: "Add backend",
   BACKEND$MANAGE_TITLE: "Manage Backends",
   BACKEND$MANAGE_EMPTY: "No backends configured.",
   BACKEND$ADD: "Add backend",
   BACKEND$EDIT: "Edit",
   BACKEND$REMOVE: "Remove",
-  BACKEND$KIND_LOCAL: "Local",
+    BACKEND$TRANSPORT_SAME_ORIGIN: "Same origin",
+  BACKEND$TRANSPORT_REMOTE: "Remote",
   BACKEND$KIND_CLOUD: "Cloud",
   BACKEND$VERSION_LABEL: "v{{version}}",
   BACKEND$EDIT_TITLE: "Edit backend",
   BACKEND$NAME_LABEL: "Name",
+  BACKEND$NAME_HELPER: "A friendly name for this backend.",
   BACKEND$HOST_LABEL: "Host",
+  BACKEND$HOST_HELPER: "Agent server or cloud host URL.",
   BACKEND$KEY_LABEL: "API key",
+  BACKEND$CONNECT: "Connect",
+  BACKEND$LOGIN_OR: "or",
+  BACKEND$CLOUD_TITLE: "OpenHands Cloud",
+  BACKEND$CLOUD_DESCRIPTION: "Connect to OpenHands Cloud.",
+  BACKEND$LOGIN_WITH_OPENHANDS: "Login with OpenHands",
+  BACKEND$ADVANCED: "Advanced",
+  BACKEND$LOGIN_CLOUD_HINT: "Use a custom OpenHands Cloud host.",
   BACKEND$SAVE: "Save",
   BUTTON$CANCEL: "Cancel",
   ONBOARDING$BACKEND_STATUS_CONNECTED: "Connected",
@@ -71,10 +64,6 @@ const RouterStub = createRoutesStub([
         Component: () => <div data-testid="app-outlet">app outlet</div>,
         path: "/",
       },
-      {
-        Component: () => <Navigate to={APP_HOME_PATH} replace />,
-        path: BACKEND_SETTINGS_PATH,
-      },
     ],
   },
 ]);
@@ -94,8 +83,8 @@ const renderApp = (initialEntries: string[] = ["/"]) =>
     ),
   });
 
-function stubConfiguredBackend(baseUrl = "http://agent.example.com") {
-  vi.stubEnv("VITE_BACKEND_BASE_URL", baseUrl);
+function stubConfiguredBackend() {
+  vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
   __resetActiveStoreForTests();
 }
 
@@ -127,9 +116,7 @@ describe("App root agent-server availability guard", () => {
       expect(screen.getByTestId("app-outlet")).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByTestId("agent-server-onboarding-screen"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-backend-modal")).not.toBeInTheDocument();
   });
 
   it("renders the routed page when the server omits a version field", async () => {
@@ -147,7 +134,7 @@ describe("App root agent-server availability guard", () => {
     });
   });
 
-  it("shows the backend settings page without probing the Vite origin when no backend is configured", async () => {
+  it("shows the add-backend dialog without probing the Vite origin when no backend is configured", async () => {
     let serverInfoRequests = 0;
 
     server.use(
@@ -160,55 +147,16 @@ describe("App root agent-server availability guard", () => {
     renderApp(["/"]);
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("agent-server-onboarding-screen"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("add-backend-modal")).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId("manage-backends-panel")).toBeInTheDocument();
-    expect(screen.getByText("No backend is configured")).toBeInTheDocument();
-    expect(screen.getByText("No backends configured.")).toBeInTheDocument();
-    expect(screen.queryByText(/^Details:/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("agent-server-backend-setup")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-backend-close")).not.toBeInTheDocument();
     expect(serverInfoRequests).toBe(0);
     expect(screen.queryByTestId("app-outlet")).not.toBeInTheDocument();
   });
 
-  it("does not dump HTML response bodies into backend error details", async () => {
-    stubConfiguredBackend();
-    server.use(
-      http.get(
-        "*/server_info",
-        () =>
-          new HttpResponse(
-            '<!DOCTYPE html><html lang="en"><body><h1>404 Not Found</h1></body></html>',
-            {
-              status: 404,
-              headers: { "Content-Type": "text/html" },
-            },
-          ),
-      ),
-    );
-
-    renderApp(["/"]);
-
-    await waitFor(() => {
-      expect(
-        screen.getByTestId("agent-server-onboarding-screen"),
-      ).toBeInTheDocument();
-    });
-
-    expect(
-      screen.getByText("We couldn't reach the configured server"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/DOCTYPE html/i)).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /The server returned an HTML page instead of an agent-server API response\./,
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("redirects to the backend settings page when the backend rejects the session key", async () => {
+  it("shows the add-backend dialog when the backend rejects the session key", async () => {
     stubConfiguredBackend();
     server.use(
       http.get("*/server_info", () => new HttpResponse(null, { status: 401 })),
@@ -217,19 +165,13 @@ describe("App root agent-server availability guard", () => {
     renderApp(["/"]);
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("agent-server-onboarding-screen"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("add-backend-modal")).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId("manage-backends-panel")).toBeInTheDocument();
-    expect(
-      screen.getByText("Backend authentication failed"),
-    ).toBeInTheDocument();
     expect(screen.queryByTestId("app-outlet")).not.toBeInTheDocument();
   });
 
-  it("redirects to the backend settings page when protected API auth fails", async () => {
+  it("shows the add-backend dialog when protected API auth fails", async () => {
     stubConfiguredBackend();
     server.use(
       http.get("*/server_info", () =>
@@ -241,14 +183,9 @@ describe("App root agent-server availability guard", () => {
     renderApp(["/"]);
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("agent-server-onboarding-screen"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("add-backend-modal")).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText("Backend authentication failed"),
-    ).toBeInTheDocument();
     expect(screen.queryByTestId("app-outlet")).not.toBeInTheDocument();
   });
 
@@ -282,20 +219,17 @@ describe("App root agent-server availability guard", () => {
     renderApp(["/"]);
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("agent-server-onboarding-screen"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("add-backend-modal")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByTestId("manage-backends-add"));
-    await user.type(await screen.findByTestId("add-backend-name"), "Remote");
-    const hostInput = await screen.findByTestId("add-backend-host");
+    await user.type(screen.getByTestId("add-backend-name"), "Remote");
+    const hostInput = screen.getByTestId("add-backend-host");
     await user.type(hostInput, remoteOrigin);
     await user.click(screen.getByTestId("add-backend-submit"));
 
-    expect(
-      window.localStorage.getItem("openhands-backends"),
-    ).toContain(remoteOrigin);
+    expect(window.localStorage.getItem("openhands-backends")).toContain(
+      remoteOrigin,
+    );
     await waitFor(() => {
       expect(screen.getByTestId("app-outlet")).toBeInTheDocument();
     });
@@ -310,9 +244,7 @@ describe("App root agent-server availability guard", () => {
       expect(screen.getByTestId("app-outlet")).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByTestId("agent-server-onboarding-screen"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-backend-modal")).not.toBeInTheDocument();
   });
 });
 

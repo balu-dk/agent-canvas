@@ -20,7 +20,7 @@ const TEST_BACKEND = {
   name: "Test local backend",
   host: "http://127.0.0.1:8000",
   apiKey: "",
-  kind: "local" as const,
+  kind: "agent-server" as const,
 };
 
 describe("OptionService", () => {
@@ -93,6 +93,32 @@ describe("OptionService", () => {
       message: expect.stringContaining("Agent server not found"),
       details: expect.stringContaining("OH_ALLOW_CORS_ORIGINS"),
       reason: "unreachable",
+    });
+  });
+
+  it("does not expose HTML response bodies in unavailable error details", async () => {
+    server.use(
+      http.get(
+        "*/server_info",
+        () =>
+          new HttpResponse(
+            '<!DOCTYPE html><html lang="en"><body><h1>404 Not Found</h1></body></html>',
+            {
+              status: 404,
+              headers: { "Content-Type": "text/html" },
+            },
+          ),
+      ),
+    );
+
+    await expect(OptionService.getConfig()).rejects.toMatchObject({
+      name: AgentServerUnavailableError.name,
+      details: expect.stringContaining(
+        "The server returned an HTML page instead of an agent-server API response.",
+      ),
+    });
+    await expect(OptionService.getConfig()).rejects.not.toMatchObject({
+      details: expect.stringContaining("DOCTYPE html"),
     });
   });
 

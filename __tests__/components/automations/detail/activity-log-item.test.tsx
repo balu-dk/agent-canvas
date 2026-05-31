@@ -52,7 +52,7 @@ const localBackend: Backend = {
   name: "Local 1",
   host: "http://localhost:8000",
   apiKey: "k",
-  kind: "local",
+  kind: "agent-server",
 };
 
 function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {

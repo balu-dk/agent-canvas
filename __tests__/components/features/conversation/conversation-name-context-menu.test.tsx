@@ -17,7 +17,7 @@ vi.mock("#/contexts/active-backend-context", () => ({
       name: "Bundled",
       host: "http://localhost:3000",
       apiKey: "",
-      kind: "local",
+      kind: "agent-server",
     },
     orgId: null,
   }),

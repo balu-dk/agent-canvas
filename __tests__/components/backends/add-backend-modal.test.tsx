@@ -76,7 +76,7 @@ describe("AddBackendModal – two-column layout", () => {
     await user.type(screen.getByTestId("add-backend-name"), "My Server");
     expect(submit).toBeDisabled();
 
-    // A localhost host infers "local" kind → no API key required
+    // A localhost host infers "agent-server" kind -> no API key required.
     await user.type(
       screen.getByTestId("add-backend-host"),
       "http://localhost:8000",
@@ -107,7 +107,7 @@ describe("AddBackendModal – two-column layout", () => {
       name: "Local Extra",
       host: "http://127.0.0.1:18002",
       apiKey: "",
-      kind: "local",
+      kind: "agent-server",
     });
   });
 
@@ -156,7 +156,7 @@ describe("AddBackendModal – two-column layout", () => {
       name: "Local 1",
       host: "http://localhost:9000",
       apiKey: "k",
-      kind: "local",
+      kind: "agent-server",
     });
 
     // Active selection must point at the newly added backend.

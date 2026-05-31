@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const MANAGED_ENV_KEYS = [
   "BUILD_LIB",
-  "VITE_BACKEND_BASE_URL",
-  "VITE_BACKEND_HOST",
+  "VITE_AGENT_SERVER_PROXY_TARGET",
   "VITE_USE_TLS",
   "VITE_FRONTEND_PORT",
   "VITE_INSECURE_SKIP_VERIFY",
@@ -100,24 +99,22 @@ describe("vite backend defaults", () => {
   it("does not synthesize backend config or proxy routes for the frontend-only dev server", async () => {
     const config = await viteConfig({ mode: "development", command: "serve" });
 
-    expect(process.env.VITE_BACKEND_BASE_URL).toBeUndefined();
     expect(config.server?.proxy).toBeUndefined();
   });
 
-  it("uses VITE_BACKEND_HOST for the dev proxy target", async () => {
-    process.env.VITE_BACKEND_HOST = "127.0.0.1:19000";
+  it("uses VITE_AGENT_SERVER_PROXY_TARGET for the dev proxy target", async () => {
+    process.env.VITE_AGENT_SERVER_PROXY_TARGET = "127.0.0.1:19000";
 
     const config = await viteConfig({ mode: "development", command: "serve" });
     const proxy = config.server?.proxy as Record<string, { target?: string }>;
 
     expect(proxy["/api"]?.target).toBe("http://127.0.0.1:19000/");
-    expect(process.env.VITE_BACKEND_BASE_URL).toBeUndefined();
   });
 
-  it("does not inject a backend base URL for production builds", async () => {
+  it("does not inject a proxy target for production builds", async () => {
     await viteConfig({ mode: "production", command: "build" });
 
-    expect(process.env.VITE_BACKEND_BASE_URL).toBeUndefined();
+    expect(process.env.VITE_AGENT_SERVER_PROXY_TARGET).toBeUndefined();
   });
 });
 

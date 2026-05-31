@@ -34,7 +34,7 @@ const localBackend: Backend = {
   name: "Local",
   host: "http://localhost:8000",
   apiKey: "session-key",
-  kind: "local",
+  kind: "agent-server",
 };
 
 const dailyAutomation: Automation = {

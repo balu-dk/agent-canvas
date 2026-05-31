@@ -12,7 +12,7 @@ vi.mock("#/api/automation-service/automation-service.api", () => ({
 
 vi.mock("#/contexts/active-backend-context", () => ({
   useActiveBackend: () => ({
-    backend: { id: "test-backend", kind: "local" },
+    backend: { id: "test-backend", kind: "agent-server" },
     orgId: null,
   }),
 }));

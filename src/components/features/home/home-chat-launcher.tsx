@@ -33,7 +33,7 @@ export function HomeChatLauncher() {
   const { t } = useTranslation("openhands");
   const { backend } = useActiveBackend();
   const { navigate } = useNavigation();
-  const isLocal = backend.kind === "local";
+  const isLocal = backend.kind === "agent-server";
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingWorkspace, setPendingWorkspace] =
@@ -209,7 +209,7 @@ export function HomeChatLauncher() {
           />
         ) : (
           <OpenLauncherButton
-            kind={isLocal ? "local" : "cloud"}
+            kind={isLocal ? "agent-server" : "cloud"}
             onClick={() => setIsDialogOpen(true)}
             disabled={isCreating || Boolean(workspacesUnsupportedMessage)}
             disabledTooltip={workspacesUnsupportedMessage}

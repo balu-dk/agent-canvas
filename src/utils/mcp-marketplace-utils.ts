@@ -115,11 +115,16 @@ export function findInstalledMatch(
 
 export function isMarketplaceEntryAvailable(
   entry: MarketplaceEntry,
-  backendKind: "local" | "cloud",
+  backendKind: "agent-server" | "cloud",
 ): boolean {
   if (!entry.runtimeAvailability || entry.runtimeAvailability === "all")
     return true;
-  return entry.runtimeAvailability === backendKind;
+
+  const availability =
+    entry.runtimeAvailability === "local"
+      ? "agent-server"
+      : entry.runtimeAvailability;
+  return availability === backendKind;
 }
 
 function normalize(query: string): string {

@@ -8,7 +8,7 @@ import {
   getEffectiveLocalBackend,
   hasEffectiveLocalBackend,
 } from "#/api/backend-registry/active-store";
-import type { Backend } from "#/api/backend-registry/types";
+import { getBackendBaseUrl, type Backend } from "#/api/backend-registry/types";
 import { maybeCreateAgentServerCorsError } from "#/utils/agent-server-cors-error";
 
 const AGENT_SERVER_INFO_TIMEOUT_MS = 5000;
@@ -151,13 +151,13 @@ export async function loadAgentServerInfo() {
   }
 
   const local = getEffectiveLocalBackend();
+  const localHost = getBackendBaseUrl(local);
   let serverInfo: AgentServerInfo;
 
   try {
     serverInfo = (await new ServerClient(
       getAgentServerClientOptions({
-        host: local.host,
-        sessionApiKey: local.apiKey || null,
+        host: localHost,
         timeout: AGENT_SERVER_INFO_TIMEOUT_MS,
       }),
     ).getServerInfo()) as AgentServerInfo;
@@ -174,13 +174,13 @@ export async function loadAgentServerInfo() {
 
 export async function preflightAgentServerAccess() {
   const local = getEffectiveLocalBackend();
+  const localHost = getBackendBaseUrl(local);
   const serverInfo = await loadAgentServerInfo();
 
   try {
     await new SettingsClient(
       getAgentServerClientOptions({
-        host: local.host,
-        sessionApiKey: local.apiKey || null,
+        host: localHost,
         timeout: AGENT_SERVER_INFO_TIMEOUT_MS,
       }),
     ).getSettings();

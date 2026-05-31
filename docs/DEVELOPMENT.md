@@ -90,11 +90,13 @@ the frontend.
 
 If you start the backend with `SESSION_API_KEY` or `OH_SESSION_API_KEYS_0`, every `/api/*` route is authenticated with `X-Session-API-Key`. In that case the frontend must send the same key via `VITE_SESSION_API_KEY`.
 
-Set `VITE_BACKEND_BASE_URL` when you want the first default backend to be
-preconfigured. Set `VITE_BACKEND_HOST` when you also want the Vite dev server
-to proxy same-origin `/api`, `/server_info`, and `/sockets` requests to that
-backend. Backends added through the UI are stored in local browser storage and
-can be switched from the backend selector.
+Set `VITE_AGENT_SERVER_TRANSPORT=same-origin` when the browser should reach the
+agent server through the same origin that serves the frontend. In frontend-only
+dev, also set `VITE_AGENT_SERVER_PROXY_TARGET` so Vite can proxy same-origin
+`/api`, `/server_info`, and `/sockets` requests to that backend. When the
+browser should call an agent server on another origin, add that remote backend
+through the UI; backends added there are stored in local browser storage and can
+be switched from the backend selector.
 
 ### Mock mode
 
@@ -152,8 +154,8 @@ You can create a `.env` file in the project directory with these variables based
 
 | Variable                    | Description                                                                        | Default Value          |
 | --------------------------- | ---------------------------------------------------------------------------------- | ---------------------- |
-| `VITE_BACKEND_BASE_URL`     | Full base URL for the agent server used by direct browser requests                 | current browser origin |
-| `VITE_BACKEND_HOST`         | Backend host used by the Vite dev proxy when set                                  | -                      |
+| `VITE_AGENT_SERVER_TRANSPORT` | Agent-server browser transport: `same-origin` or `remote`                         | -                      |
+| `VITE_AGENT_SERVER_PROXY_TARGET` | Backend host used by the Vite dev proxy when set                              | -                      |
 | `VITE_SESSION_API_KEY`      | Optional `X-Session-API-Key` header value for authenticated agent_server instances | -                      |
 | `VITE_WORKING_DIR`          | Workspace path sent when starting new conversations                                | `workspace/project`    |
 | `VITE_WORKER_URLS`          | Optional comma-separated worker/app URLs for the Browser tab                       | -                      |

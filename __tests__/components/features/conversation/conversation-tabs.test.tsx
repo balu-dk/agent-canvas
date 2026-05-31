@@ -461,7 +461,7 @@ describe("ConversationTabs localStorage behavior", () => {
         name: "Local Test",
         host: "http://localhost:8000",
         apiKey: "",
-        kind: "local",
+        kind: "agent-server",
       });
 
       // Act
@@ -507,7 +507,7 @@ describe("ConversationTabs localStorage behavior", () => {
         name: "Local Test",
         host: "http://localhost:8000",
         apiKey: "",
-        kind: "local",
+        kind: "agent-server",
       });
 
       // Act

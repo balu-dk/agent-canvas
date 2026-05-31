@@ -115,8 +115,7 @@ describe("conversation-panel-list-helpers", () => {
       updated_at: "2024-01-03T00:00:00.000Z",
     };
     const localGroups = groupConversations(
-      [trailingSlash, whitespaceOnly, rootOnly],
-      "local",
+      [trailingSlash, whitespaceOnly, rootOnly], "agent-server",
       "updated",
       { emptyWorkspace: "No workspace", emptyRepository: "No repository" },
     );
@@ -246,13 +245,9 @@ describe("conversation-panel-list-helpers", () => {
       expanded: false,
       activeConversationId: "c-5",
     });
-    expect(withActiveBeyondPreview.visibleConversations.map((c) => c.id)).toEqual([
-      "c-0",
-      "c-1",
-      "c-2",
-      "c-3",
-      "c-5",
-    ]);
+    expect(
+      withActiveBeyondPreview.visibleConversations.map((c) => c.id),
+    ).toEqual(["c-0", "c-1", "c-2", "c-3", "c-5"]);
     expect(GROUP_CONVERSATIONS_PREVIEW_LIMIT).toBe(5);
   });
 
@@ -298,8 +293,7 @@ describe("conversation-panel-list-helpers", () => {
     };
 
     const groups = groupConversations(
-      [sameWsA, sameWsB, otherWs, none],
-      "local",
+      [sameWsA, sameWsB, otherWs, none], "agent-server",
       "updated",
       { emptyWorkspace: "No workspace", emptyRepository: "No repository" },
     );

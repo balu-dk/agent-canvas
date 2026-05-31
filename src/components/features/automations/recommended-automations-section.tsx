@@ -35,7 +35,7 @@ import ClockIcon from "#/icons/clock.svg?react";
 import { StatusBadge } from "./status-badge";
 
 interface RecommendedAutomationsSectionProps {
-  backendKind: "local" | "cloud";
+  backendKind: "agent-server" | "cloud";
   installedServers: MCPServerConfig[];
   query?: string;
   onSelect: (automation: RecommendedAutomation) => void;
@@ -84,7 +84,7 @@ function automationMatchesQuery(
 
 function isAutomationAvailable(
   automation: RecommendedAutomation,
-  backendKind: "local" | "cloud",
+  backendKind: "agent-server" | "cloud",
 ) {
   return getRequiredEntries(automation).every((entry) =>
     isMarketplaceEntryAvailable(entry, backendKind),

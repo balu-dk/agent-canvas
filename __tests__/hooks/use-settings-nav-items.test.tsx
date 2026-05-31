@@ -7,9 +7,9 @@ import { WebClientConfig } from "#/api/option-service/option.types";
 const useConfigMock = vi.fn();
 const useSettingsMock = vi.fn();
 const useActiveBackendMock = vi.fn<
-  () => { backend: { kind: "local" | "cloud" }; orgId: string | null }
+  () => { backend: { kind: "agent-server" | "cloud" }; orgId: string | null }
 >(() => ({
-  backend: { kind: "local" },
+  backend: { kind: "agent-server" },
   orgId: null,
 }));
 
@@ -55,7 +55,7 @@ describe("useSettingsNavItems", () => {
     vi.clearAllMocks();
     useSettingsMock.mockReturnValue({ data: openHandsSettings });
     useActiveBackendMock.mockReturnValue({
-      backend: { kind: "local" },
+      backend: { kind: "agent-server" },
       orgId: null,
     });
   });

@@ -1,56 +1,70 @@
 import { makeDefaultLocalBackend } from "./default-backend";
 import { hasConfiguredAgentServerDefaults } from "../agent-server-config";
-import type { Backend, BackendKind, BackendSelection } from "./types";
+import type {
+  AgentServerTransport,
+  Backend,
+  BackendKind,
+  BackendSelection,
+} from "./types";
 
 export const BACKENDS_STORAGE_KEY = "openhands-backends";
 export const ACTIVE_BACKEND_STORAGE_KEY = "openhands-active-backend";
 
-function isValidKind(value: unknown): value is BackendKind {
-  return value === "local" || value === "cloud";
+function normalizeBackendKind(value: unknown): BackendKind | null {
+  if (value === "agent-server" || value === "cloud") return value;
+  if (value === "local") return "agent-server";
+  return null;
 }
 
-function isValidBackend(value: unknown): value is Backend {
-  if (typeof value !== "object" || value === null) return false;
+function normalizeAgentServerTransport(
+  value: unknown,
+): AgentServerTransport | null {
+  if (value === "same-origin" || value === "remote") return value;
+  if (value === "packaged") return "same-origin";
+  if (value === "separate") return "remote";
+  return null;
+}
+
+function normalizeBackend(value: unknown): Backend | null {
+  if (typeof value !== "object" || value === null) return null;
   const v = value as Partial<Backend>;
-  return (
+  const rawKind = (value as { kind?: unknown }).kind;
+  const rawAgentServerTransport = (
+    value as {
+      agentServerTransport?: unknown;
+      agentServerSource?: unknown;
+    }
+  ).agentServerTransport;
+  const rawAgentServerSource = (value as { agentServerSource?: unknown })
+    .agentServerSource;
+  if (
     typeof v.id === "string" &&
     v.id.length > 0 &&
     typeof v.name === "string" &&
     typeof v.host === "string" &&
     typeof v.apiKey === "string" &&
-    isValidKind(v.kind)
-  );
-}
-
-function normalizeHostForComparison(host: string): string {
-  try {
-    return new URL(host).origin;
-  } catch {
-    return host.replace(/\/+$/, "");
-  }
-}
-
-function syncDefaultLocalBackendAuth(backend: Backend): Backend {
-  const defaultBackend = makeDefaultLocalBackend();
-
-  if (
-    backend.id !== defaultBackend.id ||
-    backend.kind !== "local" ||
-    !defaultBackend.apiKey ||
-    normalizeHostForComparison(backend.host) !==
-      normalizeHostForComparison(defaultBackend.host)
+    normalizeBackendKind(rawKind)
   ) {
-    return backend;
+    const kind = normalizeBackendKind(rawKind);
+    if (!kind) return null;
+    const agentServerTransport =
+      kind === "agent-server"
+        ? normalizeAgentServerTransport(
+            rawAgentServerTransport ?? rawAgentServerSource,
+          )
+        : undefined;
+
+    return {
+      id: v.id,
+      name: v.name,
+      host: v.host,
+      apiKey: v.apiKey,
+      kind,
+      ...(agentServerTransport ? { agentServerTransport } : {}),
+    };
   }
 
-  if (backend.apiKey === defaultBackend.apiKey) {
-    return backend;
-  }
-
-  return {
-    ...backend,
-    apiKey: defaultBackend.apiKey,
-  };
+  return null;
 }
 
 export function writeStoredBackends(backends: Backend[]): void {
@@ -67,9 +81,9 @@ export function readStoredBackends(): Backend[] {
   try {
     const raw = window.localStorage.getItem(BACKENDS_STORAGE_KEY);
 
-    // First install: only seed a default local backend when deployment
-    // config actually provided backend defaults. Frontend-only dev should
-    // start with an empty registry so no backend looks preconfigured.
+    // First install: only seed a package-provided agent-server backend when
+    // deployment config actually provided backend defaults. Frontend-only dev
+    // should start with an empty registry so no backend looks preconfigured.
     if (raw === null) {
       if (!hasConfiguredAgentServerDefaults()) return [];
       const seeded = [makeDefaultLocalBackend()];
@@ -79,7 +93,9 @@ export function readStoredBackends(): Backend[] {
 
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const valid = parsed.filter(isValidBackend);
+    const valid = parsed
+      .map(normalizeBackend)
+      .filter((backend): backend is Backend => backend !== null);
 
     // If the stored array is empty (or everything in it failed validation),
     // re-seed only when deployment config provided backend defaults.
@@ -90,12 +106,7 @@ export function readStoredBackends(): Backend[] {
       return seeded;
     }
 
-    const synced = valid.map(syncDefaultLocalBackendAuth);
-    if (synced.some((backend, index) => backend !== valid[index])) {
-      writeStoredBackends(synced);
-    }
-
-    return synced;
+    return valid;
   } catch {
     return [];
   }

@@ -45,12 +45,14 @@ function makeWrapper() {
   };
 }
 
-const makeBackend = (kind: "local" | "cloud") => ({
+const makeBackend = (kind: "agent-server" | "cloud") => ({
   backend: {
     id: "backend-id",
-    name: kind === "local" ? "Local" : "Production",
+    name: kind === "agent-server" ? "Local" : "Production",
     host:
-      kind === "local" ? "http://127.0.0.1:8000" : "https://app.all-hands.dev",
+      kind === "agent-server"
+        ? "http://127.0.0.1:8000"
+        : "https://app.all-hands.dev",
     apiKey: "test-key",
     kind,
   },
@@ -116,7 +118,7 @@ describe("useLocalGitInfo", () => {
 
   it("probes git metadata via the bash runner on a local backend when conversation metadata is incomplete", async () => {
     // Arrange
-    useActiveBackendMock.mockReturnValue(makeBackend("local"));
+    useActiveBackendMock.mockReturnValue(makeBackend("agent-server"));
     // The consolidated script returns remote URL and branch on separate lines.
     runCommandMock.mockResolvedValueOnce({
       exit_code: 0,

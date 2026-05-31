@@ -2,8 +2,9 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ServerClient } from "@openhands/typescript-client/clients";
 import { getCurrentCloudApiKey } from "#/api/cloud/organization-service.api";
-import type { Backend } from "#/api/backend-registry/types";
+import { getBackendBaseUrl, type Backend } from "#/api/backend-registry/types";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
+import { getBackendSessionApiKey } from "#/api/backend-registry/auth";
 import {
   getHealthSnapshot,
   recordBackendFailure,
@@ -40,8 +41,8 @@ async function probeBackend(backend: Backend): Promise<true> {
 
   await new ServerClient(
     getAgentServerClientOptions({
-      host: backend.host,
-      sessionApiKey: backend.apiKey || null,
+      host: getBackendBaseUrl(backend),
+      sessionApiKey: getBackendSessionApiKey(backend),
       timeout: PROBE_TIMEOUT_MS,
     }),
   ).getServerInfo();
@@ -108,7 +109,7 @@ export function useBackendsHealth(
           "backend-health",
           b.id,
           b.kind,
-          b.host,
+          getBackendBaseUrl(b),
           b.apiKey ?? "",
         ] as const,
         queryFn: async () => {

@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import { resetTestHandlersMockSettings } from "#/mocks/settings-handlers";
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AGENT_SERVER_TRANSPORT", "same-origin");
+  __resetActiveStoreForTests();
   resetTestHandlersMockSettings();
+});
+
+afterEach(() => {
+  __resetActiveStoreForTests();
+  vi.unstubAllEnvs();
 });
 
 describe("mock settings handlers", () => {

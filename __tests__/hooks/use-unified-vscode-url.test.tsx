@@ -56,7 +56,7 @@ const localBackend: ResolvedActiveBackend = {
     name: "Local",
     host: "http://localhost:8000",
     apiKey: "key",
-    kind: "local",
+    kind: "agent-server",
   },
   orgId: null,
 };
