@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import {
-  buildAutomationRuntimeServicesInfo,
   c,
   logError,
   logService,
@@ -40,28 +39,16 @@ export function buildFrontend(config, args = {}) {
   );
 
   const cmd = buildNpmScriptCommand("build:app");
+  const env = { ...process.env };
+  delete env.VITE_AGENT_SERVER_TRANSPORT;
+  delete env.VITE_SESSION_API_KEY;
+  delete env.VITE_RUNTIME_SERVICES_INFO;
+  delete env.VITE_WORKING_DIR;
+
   const result = spawnSync(cmd.command, cmd.args, {
     cwd: config.canvasPath,
     stdio: "inherit",
-    env: {
-      ...process.env,
-      // Bake the same default workspace path that the dynamic launcher passes
-      // to Vite.
-      VITE_WORKING_DIR:
-        config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
-      VITE_AGENT_SERVER_TRANSPORT: "same-origin",
-      // Bake the session API key — used by the frontend for both agent-server
-      // and automation auth via the `X-Session-API-Key` header.
-      VITE_SESSION_API_KEY: config.sessionApiKey,
-      // Bake a description of the runtime services in this dev stack so the
-      // frontend can populate the agent's <RUNTIME_SERVICES> system-prompt
-      // block when creating a conversation.
-      VITE_RUNTIME_SERVICES_INFO: JSON.stringify(
-        buildAutomationRuntimeServicesInfo(config),
-      ),
-      // Same-origin transport keeps the build portable across localhost, LAN
-      // hosts, and tunnels such as ngrok; the ingress handles API routing.
-    },
+    env,
   });
 
   if (result.status !== 0) {

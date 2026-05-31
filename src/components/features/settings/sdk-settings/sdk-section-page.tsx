@@ -85,7 +85,7 @@ const getSchemaUnavailableMessage = (
   }
 
   if (error.response?.status === 401) {
-    return `${fallbackMessage} This agent server requires X-Session-API-Key. Set VITE_SESSION_API_KEY in the frontend to the same value used by the backend SESSION_API_KEY or OH_SESSION_API_KEYS_0.`;
+    return `${fallbackMessage} This agent server requires X-Session-API-Key. For same-origin launchers, restart with a matching launcher session key. For remote backends, update the backend API key in the backend manager.`;
   }
 
   if (error.response?.status === 404) {

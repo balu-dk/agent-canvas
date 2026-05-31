@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL } from "#/api/agent-canvas-runtime-config";
 import {
   AGENT_SERVER_CONFIG_STORAGE_KEY,
   DEFAULT_WORKING_DIR,
@@ -24,6 +25,9 @@ function mockWindowLocation(url: string) {
 
 afterEach(() => {
   window.localStorage.clear();
+  delete (window as unknown as Record<string, unknown>)[
+    AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL
+  ];
   vi.unstubAllEnvs();
   Object.defineProperty(window, "location", {
     configurable: true,
@@ -46,6 +50,26 @@ describe("agent server config", () => {
 
     expect(getAgentServerBaseUrl()).toBe("https://canvas.example.dev");
     expect(getAgentServerTransport()).toBe("same-origin");
+    expect(hasConfiguredAgentServerDefaults()).toBe(true);
+  });
+
+  it("uses runtime launcher config for a static same-origin agent server", () => {
+    (window as unknown as Record<string, unknown>)[
+      AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL
+    ] = {
+      agentServer: {
+        transport: "same-origin",
+        sessionApiKey: "runtime-session-key",
+        workingDir: "/tmp/runtime-workspaces",
+      },
+    };
+    vi.stubEnv("VITE_SESSION_API_KEY", "build-time-session-key");
+    mockWindowLocation("https://canvas.example.dev/settings");
+
+    expect(getAgentServerBaseUrl()).toBe("https://canvas.example.dev");
+    expect(getAgentServerTransport()).toBe("same-origin");
+    expect(getAgentServerSessionApiKey()).toBe("runtime-session-key");
+    expect(getAgentServerWorkingDir()).toBe("/tmp/runtime-workspaces");
     expect(hasConfiguredAgentServerDefaults()).toBe(true);
   });
 
@@ -138,7 +162,7 @@ describe("agent server config", () => {
     expect(getAgentServerSessionApiKey()).toBe("saved-session-key");
   });
 
-  it("persists same-origin transport without storing a remote base URL", () => {
+  it("does not treat stored same-origin UI config as launcher config", () => {
     mockWindowLocation("https://canvas.example.dev/settings");
 
     saveAgentServerConfig({
@@ -147,8 +171,8 @@ describe("agent server config", () => {
       transport: "same-origin",
     });
 
-    expect(getAgentServerBaseUrl()).toBe("https://canvas.example.dev");
-    expect(getAgentServerTransport()).toBe("same-origin");
+    expect(getAgentServerBaseUrl()).toBe("");
+    expect(getAgentServerTransport()).toBe("remote");
     expect(
       JSON.parse(window.localStorage.getItem(AGENT_SERVER_CONFIG_STORAGE_KEY)!),
     ).toEqual({

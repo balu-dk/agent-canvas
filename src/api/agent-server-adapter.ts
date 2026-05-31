@@ -11,6 +11,7 @@ import {
   getAgentServerWorkingDir,
   shouldLoadPublicSkills,
 } from "./agent-server-config";
+import { getAgentCanvasRuntimeConfig } from "./agent-canvas-runtime-config";
 import { getEffectiveLocalBackend } from "./backend-registry/active-store";
 import { buildAuthHeaders } from "./backend-registry/auth";
 import {
@@ -123,7 +124,15 @@ interface RuntimeServicesInfo {
 }
 
 function parseRuntimeServicesInfo(): RuntimeServicesInfo | null {
-  const raw = import.meta.env.VITE_RUNTIME_SERVICES_INFO?.trim();
+  const runtimeInfo = getAgentCanvasRuntimeConfig().runtimeServicesInfo;
+  if (runtimeInfo && typeof runtimeInfo === "object") {
+    return runtimeInfo as RuntimeServicesInfo;
+  }
+
+  const raw =
+    typeof runtimeInfo === "string"
+      ? runtimeInfo.trim()
+      : import.meta.env.VITE_RUNTIME_SERVICES_INFO?.trim();
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as RuntimeServicesInfo;

@@ -86,17 +86,18 @@ npm run dev:frontend
 
 The frontend-only workflow does not preconfigure a backend. On first load, the
 app opens the backend manager so you can add one from the UI without restarting
-the frontend.
+the frontend. Remote agent-server API keys are stored through that UI, not
+through launcher env vars.
 
-If you start the backend with `SESSION_API_KEY` or `OH_SESSION_API_KEYS_0`, every `/api/*` route is authenticated with `X-Session-API-Key`. In that case the frontend must send the same key via `VITE_SESSION_API_KEY`.
-
-Set `VITE_AGENT_SERVER_TRANSPORT=same-origin` when the browser should reach the
-agent server through the same origin that serves the frontend. In frontend-only
-dev, also set `VITE_AGENT_SERVER_PROXY_TARGET` so Vite can proxy same-origin
-`/api`, `/server_info`, and `/sockets` requests to that backend. When the
-browser should call an agent server on another origin, add that remote backend
-through the UI; backends added there are stored in local browser storage and can
-be switched from the backend selector.
+Set `VITE_AGENT_SERVER_TRANSPORT=same-origin` only when the browser should reach
+an existing agent server through the same origin that serves the frontend. In
+frontend-only dev, also set `VITE_AGENT_SERVER_PROXY_TARGET` so Vite can proxy
+same-origin `/api`, `/server_info`, and `/sockets` requests to that backend. If
+that backend uses `SESSION_API_KEY` or `OH_SESSION_API_KEYS_0`, set
+`VITE_SESSION_API_KEY` to the same value. When the browser should call an agent
+server on another origin, add that remote backend through the UI; backends added
+there are stored in local browser storage and can be switched from the backend
+selector.
 
 ### Mock mode
 
@@ -154,9 +155,9 @@ You can create a `.env` file in the project directory with these variables based
 
 | Variable                    | Description                                                                        | Default Value          |
 | --------------------------- | ---------------------------------------------------------------------------------- | ---------------------- |
-| `VITE_AGENT_SERVER_TRANSPORT` | Agent-server browser transport: `same-origin` or `remote`                         | -                      |
-| `VITE_AGENT_SERVER_PROXY_TARGET` | Backend host used by the Vite dev proxy when set                              | -                      |
-| `VITE_SESSION_API_KEY`      | Optional `X-Session-API-Key` header value for authenticated agent_server instances | -                      |
+| `VITE_AGENT_SERVER_TRANSPORT` | Build-time launcher transport. Set to `same-origin` only for a launcher-managed/proxied agent server. | -                      |
+| `VITE_AGENT_SERVER_PROXY_TARGET` | Backend host used by the Vite dev proxy for same-origin dev                  | -                      |
+| `VITE_SESSION_API_KEY`      | Same-origin launcher `X-Session-API-Key` value; remote backend keys belong in the UI | -                      |
 | `VITE_WORKING_DIR`          | Workspace path sent when starting new conversations                                | `workspace/project`    |
 | `VITE_WORKER_URLS`          | Optional comma-separated worker/app URLs for the Browser tab                       | -                      |
 | `VITE_ENABLE_BROWSER_TOOLS` | Set to `false` to omit `BrowserToolSet` from new conversation payloads             | `true`                 |

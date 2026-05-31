@@ -20,9 +20,9 @@ export const DEFAULT_LOCAL_BACKEND_ID = "default-local";
 export const DEFAULT_LOCAL_BACKEND_NAME = "Local";
 
 /**
- * Construct the package-provided agent-server backend from environment
- * config (`VITE_AGENT_SERVER_TRANSPORT`, `VITE_SESSION_API_KEY`, plus the
- * `openhands-agent-server-config` localStorage overrides).
+ * Construct the package-provided agent-server backend from launcher config.
+ * Vite dev launchers provide this through build-time `VITE_*` values; static
+ * launchers provide it through `window.__AGENT_CANVAS_RUNTIME_CONFIG__`.
  *
  * Used in two places:
  *   1. As the seed entry written to `openhands-backends` on first load.

@@ -92,7 +92,8 @@ describe("static-server.mjs", () => {
 
       expect(response.status).toBe(200);
       const body = await response.text();
-      expect(body).toContain("openhands-agent-server-config");
+      expect(body).toContain("__AGENT_CANVAS_RUNTIME_CONFIG__");
+      expect(body).toContain('"transport":"same-origin"');
       expect(body).toContain("test-session-key");
       expect(body).toContain("sessionApiKey");
     });
@@ -187,7 +188,8 @@ describe("static-server.mjs", () => {
       expect(response.status).toBe(200);
       const body = await response.text();
       expect(body).toContain("no-head-key");
-      expect(body).toContain("openhands-agent-server-config");
+      expect(body).toContain("__AGENT_CANVAS_RUNTIME_CONFIG__");
+      expect(body).toContain('"transport":"same-origin"');
       // Script should appear before </body>, not at the very front of the document
       expect(body.indexOf("no-head-key")).toBeLessThan(body.indexOf("</body>"));
       expect(body.indexOf("no-head-key")).toBeGreaterThan(0);

@@ -12,6 +12,7 @@ import {
   removeStoredConversationMetadata,
   setStoredConversationMetadata,
 } from "#/api/conversation-metadata-store";
+import { AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL } from "#/api/agent-canvas-runtime-config";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 
 const {
@@ -693,6 +694,9 @@ describe("toAppConversation", () => {
 describe("buildRuntimeServicesSystemSuffix", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    delete (window as unknown as Record<string, unknown>)[
+      AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL
+    ];
   });
 
   it("returns undefined when VITE_RUNTIME_SERVICES_INFO is unset", () => {
@@ -707,6 +711,40 @@ describe("buildRuntimeServicesSystemSuffix", () => {
   it("returns undefined when the JSON has no services", () => {
     vi.stubEnv("VITE_RUNTIME_SERVICES_INFO", JSON.stringify({ mode: "x" }));
     expect(buildRuntimeServicesSystemSuffix()).toBeUndefined();
+  });
+
+  it("uses runtime-injected services info before build-time env", () => {
+    (window as unknown as Record<string, unknown>)[
+      AGENT_CANVAS_RUNTIME_CONFIG_GLOBAL
+    ] = {
+      runtimeServicesInfo: {
+        mode: "agent-canvas",
+        services: {
+          agent_server: { url_from_agent: "http://localhost:18000" },
+          frontend: {
+            kind: "static",
+            url_from_agent: "http://localhost:3001",
+          },
+        },
+      },
+    };
+    vi.stubEnv(
+      "VITE_RUNTIME_SERVICES_INFO",
+      JSON.stringify({
+        mode: "build-time",
+        services: {
+          agent_server: { url_from_agent: "http://localhost:9999" },
+        },
+      }),
+    );
+
+    const suffix = buildRuntimeServicesSystemSuffix();
+
+    expect(suffix).toContain("agent-canvas");
+    expect(suffix).toContain("http://localhost:18000");
+    expect(suffix).toContain("http://localhost:3001");
+    expect(suffix).not.toContain("build-time");
+    expect(suffix).not.toContain("http://localhost:9999");
   });
 
   it("renders a <RUNTIME_SERVICES> block when an automation entry is present", () => {

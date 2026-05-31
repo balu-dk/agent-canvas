@@ -73,6 +73,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
     dir: "build",
     routes: {},
     sessionApiKey: null,
+    runtimeConfig: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -108,6 +109,23 @@ export function parseArgs(argv = process.argv.slice(2)) {
       case "--session-api-key":
         config.sessionApiKey = argv[++i] || null;
         break;
+      case "--runtime-config": {
+        const raw = argv[++i] || "";
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("runtime config must be a JSON object");
+          }
+          config.runtimeConfig = parsed;
+        } catch (error) {
+          throw new Error(
+            `Invalid --runtime-config JSON: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+        break;
+      }
       case "-h":
       case "--help":
         showHelp();
@@ -136,6 +154,7 @@ OPTIONS:
   --session-api-key <key>      Inject session API key into index.html so the
                                pre-built frontend authenticates to agent-server
                                without needing VITE_SESSION_API_KEY baked in.
+  --runtime-config <json>      Inject runtime launcher config into index.html.
   -h, --help                   Show this help
 
 ROUTING:
@@ -152,30 +171,28 @@ ROUTING:
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build a tiny inline script that seeds the session API key into the
- * `openhands-agent-server-config` localStorage entry the first time the page
- * loads. Only writes if no key is already stored — explicit user overrides
- * (set via Settings > Agent Server in the UI) are always preserved.
- *
- * This lets the pre-built static binary work without needing VITE_SESSION_API_KEY
- * baked into the bundle at publish time: the runtime key is injected here instead.
+ * Build a tiny inline script that exposes launcher/runtime config to the
+ * frontend before app code executes. This lets a pre-built static bundle work
+ * in both modes: unconfigured on a dumb static host, or same-origin when the
+ * local launcher starts an agent server and serves the frontend itself.
  */
-function makeConfigInjectionScript(sessionApiKey) {
-  if (!sessionApiKey) return "";
-  // JSON.stringify produces a properly escaped JS string literal.
-  const keyLiteral = JSON.stringify(sessionApiKey);
+function makeConfigInjectionScript(runtimeConfig, sessionApiKey) {
+  const config =
+    runtimeConfig ??
+    (sessionApiKey
+      ? {
+          agentServer: {
+            transport: "same-origin",
+            sessionApiKey,
+          },
+        }
+      : null);
+  if (!config) return "";
+
+  const configLiteral = JSON.stringify(config).replace(/</g, "\\u003c");
   return (
     `<script>` +
-    `(function(){` +
-    `try{` +
-    `var _k='openhands-agent-server-config',` +
-    `_c=JSON.parse(localStorage.getItem(_k)||'{}');` +
-    `if(!_c.sessionApiKey){` +
-    `_c.sessionApiKey=${keyLiteral};` +
-    `localStorage.setItem(_k,JSON.stringify(_c));` +
-    `}` +
-    `}catch(e){}` +
-    `}());` +
+    `window.__AGENT_CANVAS_RUNTIME_CONFIG__=${configLiteral};` +
     `</script>`
   );
 }
@@ -184,7 +201,7 @@ function makeConfigInjectionScript(sessionApiKey) {
  * Serve index.html with the runtime session key injected into <head>.
  * Returns true if the response was written, false if the file was not found.
  */
-async function serveInjectedIndexHtml(req, res, indexPath, sessionApiKey) {
+async function serveInjectedIndexHtml(req, res, indexPath, config) {
   let content;
   try {
     content = await readFile(indexPath, "utf8");
@@ -192,7 +209,10 @@ async function serveInjectedIndexHtml(req, res, indexPath, sessionApiKey) {
     return false;
   }
 
-  const script = makeConfigInjectionScript(sessionApiKey);
+  const script = makeConfigInjectionScript(
+    config.runtimeConfig,
+    config.sessionApiKey,
+  );
   // Inject right before </head> so the key is available before any app code runs.
   // replace() targets the first (and only) </head> in well-formed HTML.
   const injected = content.includes("</head>")
@@ -393,7 +413,7 @@ async function serveFile(req, res, filePath, urlPath) {
   return true;
 }
 
-async function handleStatic(req, res, dirAbs, sessionApiKey = null) {
+async function handleStatic(req, res, dirAbs, runtimeConfig = {}) {
   const rawPath = req.url.split("?")[0];
   let urlPath;
   try {
@@ -417,9 +437,12 @@ async function handleStatic(req, res, dirAbs, sessionApiKey = null) {
     filePath = resolve(filePath, "index.html");
   }
 
-  // Serve index.html with runtime key injection when a session key is configured.
-  if (sessionApiKey && filePath.endsWith("index.html")) {
-    if (await serveInjectedIndexHtml(req, res, filePath, sessionApiKey)) return;
+  // Serve index.html with runtime config injected before the app bundle runs.
+  if (
+    (runtimeConfig.runtimeConfig || runtimeConfig.sessionApiKey) &&
+    filePath.endsWith("index.html")
+  ) {
+    if (await serveInjectedIndexHtml(req, res, filePath, runtimeConfig)) return;
     // Fall through to regular serveFile (handles 404 path correctly).
   }
 
@@ -431,8 +454,8 @@ async function handleStatic(req, res, dirAbs, sessionApiKey = null) {
     !looksLikeAssetRequest(urlPath)
   ) {
     const indexPath = resolve(dirAbs, "index.html");
-    if (sessionApiKey) {
-      if (await serveInjectedIndexHtml(req, res, indexPath, sessionApiKey))
+    if (runtimeConfig.runtimeConfig || runtimeConfig.sessionApiKey) {
+      if (await serveInjectedIndexHtml(req, res, indexPath, runtimeConfig))
         return;
     } else if (await serveFile(req, res, indexPath, "/")) return;
   }
@@ -448,7 +471,10 @@ async function handleStatic(req, res, dirAbs, sessionApiKey = null) {
 export function startStaticServer(config) {
   const route = createRouter(config.routes);
   const dirAbs = resolve(config.dir);
-  const sessionApiKey = config.sessionApiKey || null;
+  const runtimeConfig = {
+    runtimeConfig: config.runtimeConfig ?? null,
+    sessionApiKey: config.sessionApiKey || null,
+  };
 
   const server = createServer((req, res) => {
     const backend = route(req.url);
@@ -456,7 +482,7 @@ export function startStaticServer(config) {
       proxyRequest(req, res, backend);
       return;
     }
-    handleStatic(req, res, dirAbs, sessionApiKey).catch((err) => {
+    handleStatic(req, res, dirAbs, runtimeConfig).catch((err) => {
       console.error(`Static handler error for ${req.url}:`, err);
       if (!res.headersSent) {
         res.writeHead(500);

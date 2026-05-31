@@ -1030,6 +1030,17 @@ function startStaticFrontend(config, staticDir) {
   logService("static", `Serving from: ${staticDir}`, c.dim);
 
   const staticServerScript = join(projectRoot, "scripts", "static-server.mjs");
+  const runtimeConfig = {
+    agentServer: {
+      transport: "same-origin",
+      sessionApiKey: config.sessionApiKey,
+      workingDir: config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
+    },
+    runtimeServicesInfo: buildAutomationRuntimeServicesInfo({
+      ...config,
+      frontendKind: "static",
+    }),
+  };
   spawnService(
     "static",
     "node",
@@ -1041,12 +1052,8 @@ function startStaticFrontend(config, staticDir) {
       "0.0.0.0",
       "--port",
       String(config.vitePort),
-      // Inject the runtime session key so the pre-built frontend can
-      // authenticate to agent-server without VITE_SESSION_API_KEY being baked
-      // into the bundle at publish time.
-      ...(config.sessionApiKey
-        ? ["--session-api-key", config.sessionApiKey]
-        : []),
+      "--runtime-config",
+      JSON.stringify(runtimeConfig),
       // Proxy routes to backends (same as ingress but for direct access to vitePort)
       "--route",
       `/api/automation=http://localhost:${config.autoBackendPort}`,

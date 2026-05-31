@@ -7,10 +7,10 @@
   - `option-service` fabricates an OSS web-client config and reads models/providers through `@openhands/typescript-client` LLM endpoints.
   - `settings-service` uses `@openhands/typescript-client` settings APIs for persistence; reads schemas from `/api/settings/agent-schema` and `/api/settings/conversation-schema`, fetches settings with optional `X-Expose-Secrets: encrypted` header for conversation start payloads, and saves settings via PATCH with diffs.
   - `agent-server-conversation-service`, `event-service`, `agent-server-git-service`, and `skills-service` route local agent-server access through `@openhands/typescript-client` rather than direct HTTP calls.
-- Supported env vars for deployment:
-  - `VITE_AGENT_SERVER_TRANSPORT=same-origin|remote` for how the browser reaches the agent server.
+- Supported frontend/launcher env vars:
+  - `VITE_AGENT_SERVER_TRANSPORT=same-origin` for launcher-managed same-origin agent servers. Remote agent servers are configured through the UI backend registry.
   - `VITE_AGENT_SERVER_PROXY_TARGET` for the Vite dev proxy target when transport is `same-origin`.
-  - `VITE_SESSION_API_KEY` for optional session auth.
+  - `VITE_SESSION_API_KEY` for same-origin launcher auth. Remote agent-server auth comes from UI config.
   - `VITE_WORKING_DIR` for the default workspace path sent when starting conversations.
   - `VITE_WORKER_URLS` as a comma-separated list of browser worker URLs if you want the Browser tab to probe exposed app hosts.
   - `VITE_ENABLE_BROWSER_TOOLS=false` to omit `BrowserToolSet` from new conversation payloads.
@@ -22,15 +22,15 @@
 
 ## Runtime Services in Dev Stacks
 
-- When the agent-canvas dev launchers (`npm run dev` / `dev:minimal` / the published `agent-canvas` binary) start a stack, they set a `VITE_RUNTIME_SERVICES_INFO` env var on the frontend describing which services are running and how the agent should reach them. The frontend forwards this verbatim as `AgentContext.system_message_suffix` on every `POST /api/conversations`, so conversations land with a `<RUNTIME_SERVICES>` block appended to the system prompt.
+- When the agent-canvas dev launchers (`npm run dev` / `dev:minimal` / the published `agent-canvas` binary) start a stack, they provide runtime-services info describing which services are running and how the agent should reach them. Vite dev mode passes this as `VITE_RUNTIME_SERVICES_INFO`; static mode injects it into `window.__AGENT_CANVAS_RUNTIME_CONFIG__` from `scripts/static-server.mjs`. The frontend forwards this info as `AgentContext.system_message_suffix` on every `POST /api/conversations`, so conversations land with a `<RUNTIME_SERVICES>` block appended to the system prompt.
 - The block lists URLs **from the agent's point of view**:
   - The Agent Server is always reachable as `http://localhost:<port>` from inside the sandbox — but that is _you_, not the automation backend.
   - Host-side services (ingress, Vite, automation) are reachable as `http://localhost:<port>`.
 - Agents should treat the `<RUNTIME_SERVICES>` block as authoritative: don't hardcode `localhost:8000` for "the automation server", and don't probe random ports trying to discover services. If the block says automation is not running, skip `/api/automation` calls; otherwise use the listed `url_from_agent` + `api_prefix` (default `/api/automation`) and the `X-API-Key: $OPENHANDS_AUTOMATION_API_KEY` header.
 - The launcher → frontend → suffix plumbing is:
   - `scripts/dev-safe.mjs::buildRuntimeServicesInfo()` — pure helper that constructs the info object.
-  - `scripts/dev-with-automation.mjs::buildAutomationRuntimeServicesInfo()` — wraps it with automation details; called from both Vite spawn (`startVite`) and the static build (`static-build.mjs`).
-  - `src/api/agent-server-adapter.ts::buildRuntimeServicesSystemSuffix()` reads `VITE_RUNTIME_SERVICES_INFO` and renders the `<RUNTIME_SERVICES>` markdown block; `createAgentFromSettings()` attaches it to `agent_context.system_message_suffix` when present.
+  - `scripts/dev-with-automation.mjs::buildAutomationRuntimeServicesInfo()` — wraps it with automation details; called from Vite spawn (`startVite`) and static server startup.
+  - `src/api/agent-server-adapter.ts::buildRuntimeServicesSystemSuffix()` reads runtime config first, then `VITE_RUNTIME_SERVICES_INFO`, and renders the `<RUNTIME_SERVICES>` markdown block; `createAgentFromSettings()` attaches it to `agent_context.system_message_suffix` when present.
 
 ### `VITE_RUNTIME_SERVICES_INFO` shape
 
@@ -150,7 +150,7 @@ you are running inside of — NOT the automation backend.
 - A pre-built `build/` directory is required. The Playwright webServer command runs `npm run build:app` when `build/index.html` is absent, but CI should run the build step explicitly for caching (`npm run build:app` in `.github/workflows/mock-llm-e2e.yml`).
 - **Single ingress URL**: Tests use one URL for both the browser (`baseURL`) and backend API assertions (`BACKEND_URL`). The ingress proxy routes `/api/*` to the agent-server, `/api/automation/*` to the automation backend, and `/*` to the static frontend. Default ingress port for tests is `18300` (override via `MOCK_LLM_INGRESS_PORT` env var).
 - **State isolation**: `OH_CANVAS_SAFE_STATE_DIR=.tmp/mock-llm-state` isolates test state from the user's real `~/.openhands/agent-canvas/` directory. The directory is cleaned before each test run.
-- **Session API key**: A random key is generated per test run and passed to the stack via `SESSION_API_KEY` / `OH_SESSION_API_KEYS_0` / `VITE_SESSION_API_KEY`. The static server injects it into `index.html` at serve time so the frontend authenticates automatically.
+- **Session API key**: A random key is generated per test run and passed to the stack via `SESSION_API_KEY` / `OH_SESSION_API_KEYS_0`; Vite mode also receives `VITE_SESSION_API_KEY`, while static mode injects the same key through runtime launcher config in `index.html` so the frontend authenticates automatically.
 - **Mock LLM server** (`tests/e2e/mock-llm/scripts/mock-llm-server.py`): Python HTTP server using openhands-sdk's `TestLLM` to return scripted tool-call + text trajectories. Supports admin API endpoints for dynamic trajectory management:
   - `POST /admin/reset` — reset to the default trajectory (terminal printf + text reply)
   - `POST /admin/trajectory/register` — register a named trajectory (JSON body: `{name, turns}` where each turn is `{tool_call: {name, arguments}}` or `{text: "..."}`)
@@ -167,7 +167,7 @@ you are running inside of — NOT the automation backend.
 
 ## Additional Notes
 
-- **Published binary auth fix**: When users install the npm package globally (`npm install -g @openhands/agent-canvas`) and run `agent-canvas`, the pre-built static frontend has a `VITE_SESSION_API_KEY` baked in at publish time that differs from the user's persisted runtime key (`~/.openhands/agent-canvas/session-api-key.txt`). The fix is to inject the runtime session key into `index.html` responses at serve time (not build time). `scripts/static-server.mjs` accepts a `--session-api-key <key>` flag and injects a tiny inline `<script>` before `</head>` that seeds the key into `localStorage['openhands-agent-server-config'].sessionApiKey` — only if no key is already stored (preserving user-set overrides). `scripts/dev-with-automation.mjs` and `scripts/dev-static.mjs` both pass `--session-api-key ${config.sessionApiKey}` when starting the static server.
+- **Published binary auth fix**: When users install the npm package globally (`npm install -g @openhands/agent-canvas`) and run `agent-canvas`, the pre-built static frontend cannot rely on `VITE_SESSION_API_KEY` baked at publish time. The fix is to inject same-origin launcher config into `index.html` responses at serve time. `scripts/static-server.mjs` accepts `--runtime-config <json>` and injects `window.__AGENT_CANVAS_RUNTIME_CONFIG__` before app code runs; the frontend treats that as launcher config, while remote backend UI config remains in localStorage. `scripts/dev-with-automation.mjs` and `scripts/dev-static.mjs` pass same-origin transport, session key, working dir, and runtime-services info through this runtime config when starting the static server.
 
 - Direct `dependencies` and `devDependencies` in `package.json` are exact-pinned (no caret ranges); reproducible installs should use the committed `package-lock.json` plus `npm ci`, and targeted transitive fixes still belong in `overrides`.
 - `package-lock.json` must also retain the optional peer entry for `node_modules/vite-tsconfig-paths/node_modules/typescript@5.9.3`; without that nested lock entry, clean `npm ci` installs on CI fail with `Missing: typescript@5.9.3 from lock file`.
@@ -406,7 +406,7 @@ When adding code that needs a new string, decide up front which rule it falls un
   1. **Agent-server secrets API** (`PUT /api/settings/secrets`) with naming convention `GIT_PROVIDER_{PROVIDER}_TOKEN` - for agent runtime use
   2. **localStorage** (`openhands-agent-server-git-provider-tokens`) - for frontend git API calls (repo search, branches, etc.)
      The `addGitProvider` method stores to server FIRST (must succeed), then updates localStorage. This ensures server-side persistence is the source of truth.
-- Agent server connection settings now live at `Settings > Agent Server` (`/settings/agent-server`). The page reads deployment defaults from `VITE_AGENT_SERVER_TRANSPORT` and `VITE_SESSION_API_KEY`, saves user overrides in the `openhands-agent-server-config` localStorage key, and must stay reachable even when the backend compatibility probe fails so users can recover from missing or wrong backend configuration.
+- Agent server connection settings now live in the backend registry UI. Same-origin launcher defaults come from `VITE_AGENT_SERVER_TRANSPORT` / `VITE_SESSION_API_KEY` in Vite mode or `window.__AGENT_CANVAS_RUNTIME_CONFIG__` in static mode. Remote agent-server overrides are user config stored in localStorage, and recovery UI must stay reachable even when the backend compatibility probe fails.
 - Backend/footer actions that launch modals from inside a dropdown or popover should intercept `onMouseDown` to keep the menu mounted, then perform the actual open on `onClick`. Current examples: `Add backend` / `Manage backends` in `src/components/features/backends/backend-selector.tsx`, plus the mirrored workspace-footer buttons in `src/components/features/conversation-panel/new-conversation-button.tsx`.
 - `BackendSelector`'s cloud-org switch paths should never rethrow from the dropdown `onChange` handler: unexpected non-Axios failures need a generic error toast instead of an unhandled promise rejection, and the malformed `(cloud backend, null org)` self-heal path should fall back to the bundled backend if `/switch` fails.
 - `NewConversationButton` should support keyboard dismissal (`Escape`) for its inline popover, while still keeping the popover open when its modal children (`FolderBrowserModal`, `ManageWorkspacesModal`) are active.
@@ -418,10 +418,10 @@ When adding code that needs a new string, decide up front which rule it falls un
   - `OH_AGENT_SERVER_GIT_REF` — git commit SHA or branch name (takes precedence over version)
   - `OH_AGENT_SERVER_VERSION` — specific PyPI version (e.g., "1.24.0")
   - `OH_SECRET_KEY` — secret key for settings encryption; auto-generated and persisted to `~/.openhands/agent-canvas/secret-key.txt` on first run (same file Docker uses), ensuring dev mode and Docker share the same key when both mount the same `~/.openhands` directory. Override with the env var to pin a specific key.
-  - `SESSION_API_KEY` / `OH_SESSION_API_KEYS_0` / `VITE_SESSION_API_KEY` — session API key for agent-server authentication; auto-generated using `crypto.randomBytes(32)` if not set, passed to both agent-server (`OH_SESSION_API_KEYS_0`) and frontend (`VITE_SESSION_API_KEY`)
+  - `SESSION_API_KEY` / `OH_SESSION_API_KEYS_0` / `VITE_SESSION_API_KEY` — session API key for same-origin agent-server authentication; auto-generated using `crypto.randomBytes(32)` if not set, passed to agent-server (`OH_SESSION_API_KEYS_0`) and to the frontend as launcher config (`VITE_SESSION_API_KEY` in Vite mode, runtime config injection in static mode)
   - Default: released PyPI version `1.24.0` for agent-server SDK libraries
 
-- Security: `scripts/dev-safe.mjs` and `scripts/dev-with-automation.mjs` auto-generate random API keys when needed and persist the defaults so static builds, localStorage, and restarted services stay in sync:
+- Security: `scripts/dev-safe.mjs` and `scripts/dev-with-automation.mjs` auto-generate random API keys when needed and persist the defaults so launcher config and restarted services stay in sync:
   - `SESSION_API_KEY` — 64-character hex (256-bit) for agent-server API authentication; persisted at `~/.openhands/agent-canvas/session-api-key.txt` unless overridden via env var
   - `AUTOMATION_LOCAL_API_KEY` — 64-character hex for automation backend auth; persisted at `~/.openhands/agent-canvas/automation-api-key.txt` unless overridden
   - `OH_SECRET_KEY` — 64-character hex (256-bit) for settings encryption; persisted at `~/.openhands/agent-canvas/secret-key.txt` unless overridden via env var. Same file used by `docker/entrypoint.sh`, so dev mode and Docker share the same key automatically.

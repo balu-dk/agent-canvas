@@ -1,4 +1,5 @@
 import type { AgentServerTransport } from "./backend-registry/types";
+import { getAgentCanvasRuntimeConfig } from "./agent-canvas-runtime-config";
 
 export const AGENT_SERVER_CONFIG_STORAGE_KEY = "openhands-agent-server-config";
 export const DEFAULT_WORKING_DIR = "workspace/project";
@@ -18,6 +19,12 @@ export interface AgentServerFormDefaults {
 
 interface AgentServerConfigUpdate extends AgentServerFormDefaults {
   transport?: AgentServerTransport | null;
+}
+
+interface LauncherAgentServerConfig {
+  transport: "same-origin";
+  sessionApiKey: string | null;
+  workingDir: string | null;
 }
 
 function readStoredConfig(): StoredAgentServerConfig {
@@ -86,6 +93,37 @@ function normalizeTransport(
   return null;
 }
 
+function getRuntimeLauncherConfig(): LauncherAgentServerConfig | null {
+  const agentServer = getAgentCanvasRuntimeConfig().agentServer;
+  const transport = normalizeTransport(agentServer?.transport);
+  if (transport !== "same-origin") return null;
+
+  return {
+    transport,
+    sessionApiKey: trimToNull(agentServer?.sessionApiKey),
+    workingDir: trimToNull(agentServer?.workingDir),
+  };
+}
+
+function getBuildTimeLauncherConfig(): LauncherAgentServerConfig | null {
+  const transport = normalizeTransport(
+    import.meta.env.VITE_AGENT_SERVER_TRANSPORT?.trim(),
+  );
+  if (transport !== "same-origin" && import.meta.env.VITE_MOCK_API !== "true") {
+    return null;
+  }
+
+  return {
+    transport: "same-origin",
+    sessionApiKey: trimToNull(import.meta.env.VITE_SESSION_API_KEY),
+    workingDir: trimToNull(import.meta.env.VITE_WORKING_DIR),
+  };
+}
+
+function getLauncherConfig(): LauncherAgentServerConfig | null {
+  return getRuntimeLauncherConfig() ?? getBuildTimeLauncherConfig();
+}
+
 function getConfiguredBaseUrlOverride(): string | null {
   const storedConfig = readStoredConfig();
   const storedTransport = normalizeTransport(storedConfig.transport);
@@ -96,11 +134,9 @@ function getConfiguredBaseUrlOverride(): string | null {
 
 function getConfiguredTransportOverride(): AgentServerTransport | null {
   const storedTransport = normalizeTransport(readStoredConfig().transport);
-  if (storedTransport) return storedTransport;
+  if (storedTransport === "remote") return storedTransport;
 
-  return normalizeTransport(
-    import.meta.env.VITE_AGENT_SERVER_TRANSPORT?.trim(),
-  );
+  return getLauncherConfig()?.transport ?? null;
 }
 
 function getStoredSessionApiKey(): string | null {
@@ -108,7 +144,7 @@ function getStoredSessionApiKey(): string | null {
 }
 
 function getLauncherSessionApiKey(): string | null {
-  return trimToNull(import.meta.env.VITE_SESSION_API_KEY);
+  return getLauncherConfig()?.sessionApiKey ?? null;
 }
 
 export function getAgentServerTransport(): AgentServerTransport {
@@ -124,8 +160,7 @@ function getConfiguredAgentServerBaseUrl(): string | null {
   const baseUrl = getConfiguredBaseUrlOverride();
   if (baseUrl) return baseUrl;
 
-  const transport = getConfiguredTransportOverride();
-  if (transport === "same-origin" || import.meta.env.VITE_MOCK_API === "true") {
+  if (getLauncherConfig()) {
     return typeof window !== "undefined" ? window.location.origin : null;
   }
 
@@ -172,6 +207,9 @@ export function getAgentServerSessionApiKey(): string | null {
 }
 
 export function getAgentServerWorkingDir(): string {
+  const launcherDir = getLauncherConfig()?.workingDir;
+  if (launcherDir) return launcherDir;
+
   const envDir = import.meta.env.VITE_WORKING_DIR?.trim();
   if (envDir) return envDir;
 

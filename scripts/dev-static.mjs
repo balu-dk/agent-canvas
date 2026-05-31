@@ -59,6 +59,7 @@ import {
 import {
   buildAgentServerAutomationEnv,
   buildAutomationCommand,
+  buildAutomationRuntimeServicesInfo,
   buildConfig,
 } from "./dev-with-automation.mjs";
 
@@ -377,6 +378,17 @@ function startStaticServer(config) {
   // is forwarded to the agent-server instead of falling back to the SPA
   // shell). Without this, /server_info on :3001 returns index.html.
   const staticServerScript = join(projectRoot, "scripts", "static-server.mjs");
+  const runtimeConfig = {
+    agentServer: {
+      transport: "same-origin",
+      sessionApiKey: config.sessionApiKey,
+      workingDir: config.viteWorkingDir ?? join(config.stateDir, "workspaces"),
+    },
+    runtimeServicesInfo: buildAutomationRuntimeServicesInfo({
+      ...config,
+      frontendKind: "static",
+    }),
+  };
   spawnService(
     "static",
     "node",
@@ -388,12 +400,8 @@ function startStaticServer(config) {
       "0.0.0.0",
       "--port",
       String(config.vitePort),
-      // Inject the runtime session key so the pre-built frontend can
-      // authenticate to agent-server without VITE_SESSION_API_KEY being baked
-      // into the bundle at publish time.
-      ...(config.sessionApiKey
-        ? ["--session-api-key", config.sessionApiKey]
-        : []),
+      "--runtime-config",
+      JSON.stringify(runtimeConfig),
       "--route",
       `/api/automation=http://localhost:${config.autoBackendPort}`,
       "--route",
@@ -543,6 +551,8 @@ function printBanner(config) {
 async function main() {
   const args = parseArgs();
   const config = await buildConfig(args);
+  config.mode = "dev:static";
+  config.frontendKind = "static";
 
   console.log("");
   console.log(
