@@ -1,6 +1,6 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
@@ -10,6 +10,16 @@ import {
   type NavigationContextValue,
 } from "#/context/navigation-context";
 import { AddBackendModal } from "#/components/features/backends/add-backend-modal";
+
+const { getServerInfoMock } = vi.hoisted(() => ({
+  getServerInfoMock: vi.fn(),
+}));
+
+vi.mock("@openhands/typescript-client/clients", () => ({
+  ServerClient: vi.fn(function ServerClientMock() {
+    return { getServerInfo: getServerInfoMock };
+  }),
+}));
 
 function renderWithProviders(
   ui: React.ReactElement,
@@ -33,6 +43,8 @@ function renderWithProviders(
 
 beforeEach(() => {
   window.localStorage.clear();
+  getServerInfoMock.mockReset();
+  getServerInfoMock.mockResolvedValue({ version: "1.24.0" });
   __resetActiveStoreForTests();
 });
 
@@ -97,6 +109,10 @@ describe("AddBackendModal – two-column layout", () => {
 
     await user.click(screen.getByTestId("add-backend-submit"));
 
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+
     const stored = JSON.parse(
       window.localStorage.getItem("openhands-backends") ?? "[]",
     );
@@ -145,7 +161,9 @@ describe("AddBackendModal – two-column layout", () => {
 
     await user.click(screen.getByTestId("add-backend-submit"));
 
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
 
     const stored = JSON.parse(
       window.localStorage.getItem("openhands-backends") ?? "[]",
@@ -164,6 +182,31 @@ describe("AddBackendModal – two-column layout", () => {
       window.localStorage.getItem("openhands-active-backend") ?? "null",
     );
     expect(active).toEqual({ backendId: added.id, orgId: null });
+  });
+
+  it("shows an inline error and keeps the dialog open when connection testing fails", async () => {
+    const onClose = vi.fn();
+    getServerInfoMock.mockRejectedValueOnce(new Error("Failed to fetch"));
+    renderWithProviders(<AddBackendModal onClose={onClose} />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByTestId("add-backend-name"), "Bad Scheme");
+    await user.type(
+      screen.getByTestId("add-backend-host"),
+      "https://127.0.0.1:8000",
+    );
+    await user.type(screen.getByTestId("add-backend-api-key"), "k");
+
+    await user.click(screen.getByTestId("add-backend-submit"));
+
+    expect(await screen.findByTestId("add-backend-error")).toHaveTextContent(
+      "BACKEND$CONNECTION_TEST_FAILED",
+    );
+    expect(screen.getByTestId("add-backend-error-detail")).toHaveTextContent(
+      "Failed to fetch",
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("openhands-backends")).toBeNull();
   });
 
   it("closes when the header close button is clicked", async () => {
@@ -220,6 +263,9 @@ describe("AddBackendModal – redirect after adding a backend", () => {
       "http://127.0.0.1:18002",
     );
     await user.click(screen.getByTestId("add-backend-submit"));
+    await waitFor(() => {
+      expect(getServerInfoMock).toHaveBeenCalled();
+    });
   }
 
   it.each([
@@ -235,7 +281,9 @@ describe("AddBackendModal – redirect after adding a backend", () => {
       await addLocalBackend();
 
       // Assert
-      expect(navigate).toHaveBeenCalledWith(expected);
+      await waitFor(() => {
+        expect(navigate).toHaveBeenCalledWith(expected);
+      });
     },
   );
 
@@ -247,6 +295,9 @@ describe("AddBackendModal – redirect after adding a backend", () => {
     await addLocalBackend();
 
     // Assert
+    await waitFor(() => {
+      expect(getServerInfoMock).toHaveBeenCalled();
+    });
     expect(navigate).not.toHaveBeenCalled();
   });
 });

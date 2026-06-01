@@ -135,6 +135,14 @@ function isValidHostUrl(host: string): boolean {
 }
 
 const DEFAULT_OPENHANDS_CLOUD_HOST = "https://app.all-hands.dev";
+const MANUAL_BACKEND_PROBE_TIMEOUT_MS = 5000;
+const BACKEND_HOST_INTERPOLATION_SENTINEL = "__BACKEND_HOST__";
+
+function getConnectionTestFailedMessage(t: TFunction, host: string) {
+  return t(I18nKey.BACKEND$CONNECTION_TEST_FAILED, {
+    host: BACKEND_HOST_INTERPOLATION_SENTINEL,
+  }).replace(BACKEND_HOST_INTERPOLATION_SENTINEL, host);
+}
 
 /**
  * Live status row for the edit form: shows a connection dot, a
@@ -454,6 +462,11 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
   const [name, setName] = React.useState("");
   const [host, setHost] = React.useState("");
   const [apiKey, setApiKey] = React.useState("");
+  const [isConnecting, setIsConnecting] = React.useState(false);
+  const [connectionError, setConnectionError] = React.useState<{
+    title: string;
+    detail: string | null;
+  } | null>(null);
 
   const kind: BackendKind = inferKindFromHost(host);
   const canSubmit =
@@ -461,13 +474,47 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
     isValidHostUrl(host) &&
     (kind === "agent-server" || apiKey.trim().length > 0);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const clearConnectionError = React.useCallback(() => {
+    setConnectionError(null);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit) return;
+    setConnectionError(null);
+
+    const normalizedHost = normalizeHost(host);
+    const trimmedApiKey = apiKey.trim();
+
+    if (kind === "agent-server") {
+      setIsConnecting(true);
+      try {
+        await new ServerClient(
+          getAgentServerClientOptions({
+            host: normalizedHost,
+            sessionApiKey: trimmedApiKey || null,
+            timeout: MANUAL_BACKEND_PROBE_TIMEOUT_MS,
+          }),
+        ).getServerInfo();
+      } catch (error) {
+        const detail =
+          error instanceof Error && error.message.trim()
+            ? error.message.trim()
+            : null;
+        setConnectionError({
+          title: getConnectionTestFailedMessage(t, normalizedHost),
+          detail,
+        });
+        setIsConnecting(false);
+        return;
+      }
+      setIsConnecting(false);
+    }
+
     addBackend({
       name: name.trim(),
-      host: normalizeHost(host),
-      apiKey: apiKey.trim(),
+      host: normalizedHost,
+      apiKey: trimmedApiKey,
       kind,
       agentServerTransport: kind === "agent-server" ? "remote" : undefined,
     });
@@ -488,7 +535,10 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
           type="text"
           label={t(I18nKey.BACKEND$NAME_LABEL)}
           value={name}
-          onChange={setName}
+          onChange={(value) => {
+            setName(value);
+            clearConnectionError();
+          }}
           placeholder="e.g. My Server"
           className="w-full"
         />
@@ -504,7 +554,10 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
           type="text"
           label={t(I18nKey.BACKEND$HOST_LABEL)}
           value={host}
-          onChange={setHost}
+          onChange={(value) => {
+            setHost(value);
+            clearConnectionError();
+          }}
           placeholder="http://localhost:8000"
           className="w-full"
         />
@@ -522,19 +575,42 @@ function ManualConnectionColumn({ onClose }: { onClose: () => void }) {
         type="password"
         label={t(I18nKey.BACKEND$KEY_LABEL)}
         value={apiKey}
-        onChange={setApiKey}
+        onChange={(value) => {
+          setApiKey(value);
+          clearConnectionError();
+        }}
         placeholder="sk-••••••••••"
         className="w-full"
       />
 
+      {connectionError ? (
+        <div
+          role="alert"
+          data-testid="add-backend-error"
+          className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm"
+        >
+          <p className="font-semibold text-red-300">{connectionError.title}</p>
+          {connectionError.detail ? (
+            <p
+              data-testid="add-backend-error-detail"
+              className="mt-1 whitespace-pre-wrap break-words text-xs text-red-300"
+            >
+              {connectionError.detail}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <BrandButton
         type="submit"
         variant="secondary"
-        isDisabled={!canSubmit}
+        isDisabled={!canSubmit || isConnecting}
         testId="add-backend-submit"
         className="w-full text-center"
       >
-        {t(I18nKey.BACKEND$CONNECT)}
+        {isConnecting
+          ? t(I18nKey.ONBOARDING$BACKEND_STATUS_CHECKING)
+          : t(I18nKey.BACKEND$CONNECT)}
       </BrandButton>
     </form>
   );
