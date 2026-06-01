@@ -29,6 +29,14 @@ export type AcpAuthStatus = "authenticated" | "unauthenticated" | "unknown";
 async function probeAcpAuth(): Promise<AcpAuthStatus> {
   let conversationId: string | null = null;
   try {
+    // ``createConversation()`` takes no provider argument on purpose: it builds
+    // the request from the *active* agent settings, which the onboarding flow
+    // has already set to the selected provider (the Choose-agent step persists
+    // ``agent_kind: "acp"`` + ``acp_server`` before this step mounts), and only
+    // one ACP provider is active at a time. So the probe always targets the
+    // provider the user just picked. ``providerKey`` is carried only in the
+    // React Query key (below) to re-probe when the selection changes — it does
+    // not parameterize the probe itself.
     const task = await AgentServerConversationService.createConversation();
     conversationId = task.id;
     return "authenticated";
@@ -37,7 +45,10 @@ async function probeAcpAuth(): Promise<AcpAuthStatus> {
   } finally {
     if (conversationId) {
       // Best-effort teardown of the throwaway probe conversation; this also
-      // terminates the ACP subprocess the agent-server spawned for it.
+      // terminates the ACP subprocess the agent-server spawned for it. If the
+      // delete is lost (network blip / server restart), the agent-server's own
+      // idle-session timeout reaps the orphaned subprocess, so a missed delete
+      // can't leak indefinitely.
       AgentServerConversationService.deleteConversation(conversationId).catch(
         () => {},
       );
@@ -79,6 +90,8 @@ export function useAcpAuthStatus(
   const queryEnabled = enabled && isSupported && !!providerKey;
 
   const query = useQuery<AcpAuthStatus, Error>({
+    // ``providerKey`` discriminates the cache so switching providers re-probes;
+    // the probe itself reads the active settings (see ``probeAcpAuth``).
     queryKey: ["acp-auth-status", active.backend.id, providerKey],
     queryFn: probeAcpAuth,
     enabled: queryEnabled,
