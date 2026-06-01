@@ -5,6 +5,7 @@ import { useClickOutsideElement } from "#/hooks/use-click-outside-element";
 import { ContextMenu } from "#/ui/context-menu";
 import { ContextMenuListItem } from "../../context-menu/context-menu-list-item";
 import { I18nKey } from "#/i18n/declaration";
+import { isManagedBackend } from "#/utils/utils";
 import { ConversationNameContextMenuIconText } from "../../conversation/conversation-name-context-menu-icon-text";
 
 import EditIcon from "#/icons/u-edit.svg?react";
@@ -55,10 +56,12 @@ export function ConversationCardContextMenu({
     onClose,
     ignoreOutsideClickRef,
   );
-  const stopLabelKey =
-    backend.kind === "cloud"
-      ? I18nKey.COMMON$CLOSE_CONVERSATION_STOP_RUNTIME
-      : I18nKey.COMMON$STOP_CONVERSATION;
+  // Managed backends (cloud + k8s sandbox) provision an ephemeral per-
+  // conversation runtime, so stopping closes the conversation AND tears down
+  // the runtime — local backends just stop the agent.
+  const stopLabelKey = isManagedBackend(backend.kind)
+    ? I18nKey.COMMON$CLOSE_CONVERSATION_STOP_RUNTIME
+    : I18nKey.COMMON$STOP_CONVERSATION;
 
   const generateSection = useCallback(
     (items: React.ReactNode[], sectionKey: string, isLast?: boolean) => {

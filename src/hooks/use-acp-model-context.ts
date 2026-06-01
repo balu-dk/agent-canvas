@@ -3,6 +3,7 @@ import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useSettings } from "#/hooks/query/use-settings";
 import { I18nKey } from "#/i18n/declaration";
+import { isManagedBackend } from "#/utils/utils";
 
 export interface AcpModelContext {
   /** The active conversation runs an ACP agent. */
@@ -42,7 +43,9 @@ export function useAcpModelContext(): AcpModelContext {
   const destinationLabel = t(
     isAcpContext
       ? I18nKey.SETTINGS$NAV_AGENT
-      : backend.kind === "cloud"
+      : // Managed backends (cloud + k8s sandbox) own the model server-side, so
+        // they link to LLM settings rather than the (local-only) LLM profiles.
+        isManagedBackend(backend.kind)
         ? I18nKey.SETTINGS$LLM_SETTINGS
         : I18nKey.SETTINGS$LLM_PROFILES,
   );

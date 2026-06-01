@@ -939,7 +939,15 @@ export function ConversationWebSocketProvider({
         }
 
         try {
-          await new ConversationClient(getAgentServerClientOptions()).sendEvent(
+          // Thread the conversation's runtime URL + session key into the
+          // client so the fallback REST send targets the conversation's own
+          // runtime (the cloud/k8s sandbox via its `conversation_url`), not
+          // the bundled local agent-server that `getAgentServerClientOptions()`
+          // resolves to with no override. For local backends both resolve to
+          // the same host, so this is a no-op there.
+          await new ConversationClient(
+            getAgentServerClientOptions({ conversationUrl, sessionApiKey }),
+          ).sendEvent(
             conversationId,
             {
               role: "user",
@@ -972,7 +980,14 @@ export function ConversationWebSocketProvider({
         throw error;
       }
     },
-    [mainSocket, planningAgentSocket, setErrorMessage, conversationId],
+    [
+      mainSocket,
+      planningAgentSocket,
+      setErrorMessage,
+      conversationId,
+      conversationUrl,
+      sessionApiKey,
+    ],
   );
 
   // Track main socket state changes

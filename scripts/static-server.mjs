@@ -21,10 +21,18 @@
  * Usage (mirrors scripts/ingress.mjs's --route flag style):
  *   node scripts/static-server.mjs \
  *     --port 3001 --host 0.0.0.0 --dir build \
+ *     --route "/api/k8s=http://localhost:18002" \
+ *     --route "/sandbox-runtime=http://localhost:18002" \
  *     --route "/api/automation=http://localhost:18001" \
  *     --route "/api=http://localhost:18000" \
  *     --route "/server_info=http://localhost:18000" \
  *     --route "/sockets=http://localhost:18000"
+ *
+ * (The Kubernetes Agent Sandbox broker routes — /api/k8s and /sandbox-runtime
+ * → the broker on :18002 — are injected by scripts/dev-with-automation.mjs only
+ * when OH_ENABLE_K8S_BROKER is set. Longest-prefix routing means /api/k8s
+ * matches before /api, and /sandbox-runtime/.../sockets is proxied as a
+ * WebSocket upgrade.)
  */
 
 import { createServer, request as httpRequest } from "node:http";
@@ -234,6 +242,21 @@ export function createRouter(routes) {
   };
 }
 
+// Errors that are normal during connection teardown and should not be logged
+// at error level (clients/upstreams routinely reset long-lived connections,
+// e.g. the /sandbox-runtime/.../sockets WebSocket to a sandbox). Kept in sync
+// with scripts/ingress.mjs.
+const BENIGN_SOCKET_ERRORS = new Set([
+  "ECONNRESET",
+  "EPIPE",
+  "ECONNABORTED",
+  "ERR_STREAM_PREMATURE_CLOSE",
+]);
+
+function isBenignSocketError(err) {
+  return Boolean(err && BENIGN_SOCKET_ERRORS.has(err.code));
+}
+
 function parseBackendUrl(backendUrl) {
   const url = new URL(backendUrl);
   return {
@@ -289,7 +312,39 @@ function proxyWebSocket(req, socket, head, backendUrl) {
     },
   });
 
+  // Always attach an 'error' handler to the client socket immediately. The
+  // client can drop the connection before the upstream upgrade completes
+  // (e.g. during a slow DNS / connect), and an unhandled 'error' on the raw
+  // TCP socket would crash the entire static server.
+  socket.on("error", (err) => {
+    if (!isBenignSocketError(err)) {
+      console.error(
+        `WebSocket client socket error for ${req.url}:`,
+        err.message,
+      );
+    }
+    proxyReq.destroy();
+  });
+
   proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
+    // Once the upgrade is established, errors on either raw TCP socket must
+    // be handled or Node will throw. ECONNRESET / EPIPE on long-lived
+    // WebSocket connections is routine (browser tab closed, NAT timeout,
+    // mobile network handoff, …) and should never crash the proxy.
+    const teardown = (label) => (err) => {
+      if (err && !isBenignSocketError(err)) {
+        console.error(`WebSocket ${label} error for ${req.url}:`, err.message);
+      }
+      socket.destroy();
+      proxySocket.destroy();
+    };
+    proxySocket.on("error", teardown("upstream socket"));
+    // Note: socket already has an 'error' listener from above; add a second
+    // one that also destroys proxySocket so we don't leak the upstream half.
+    socket.on("error", () => proxySocket.destroy());
+    socket.on("close", () => proxySocket.destroy());
+    proxySocket.on("close", () => socket.destroy());
+
     socket.write(
       `HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n`,
     );
@@ -307,10 +362,12 @@ function proxyWebSocket(req, socket, head, backendUrl) {
   });
 
   proxyReq.on("error", (err) => {
-    console.error(
-      `WebSocket proxy error for ${req.url} -> ${backendUrl}:`,
-      err.message,
-    );
+    if (!isBenignSocketError(err)) {
+      console.error(
+        `WebSocket proxy error for ${req.url} -> ${backendUrl}:`,
+        err.message,
+      );
+    }
     socket.destroy();
   });
 

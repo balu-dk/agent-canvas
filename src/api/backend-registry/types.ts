@@ -1,4 +1,4 @@
-export type BackendKind = "local" | "cloud";
+export type BackendKind = "local" | "cloud" | "k8s";
 
 export interface Backend {
   id: string;

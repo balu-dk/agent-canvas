@@ -23,6 +23,7 @@ import {
   WORKSPACES_HANDLERS,
   resetMockWorkspaces,
 } from "./workspaces-handlers";
+import { K8S_HANDLERS, resetK8sMockData } from "./k8s-handlers";
 
 export const handlers = [
   ...FILE_SERVICE_HANDLERS,
@@ -37,6 +38,7 @@ export const handlers = [
   ...AUTOMATION_HANDLERS,
   ...MCP_HANDLERS,
   ...WORKSPACES_HANDLERS,
+  ...K8S_HANDLERS,
 ];
 
 export {
@@ -44,5 +46,6 @@ export {
   resetTestHandlersMockSettings,
   resetAutomationMockData,
   resetMockWorkspaces,
+  resetK8sMockData,
   setMockGitChanges,
 };

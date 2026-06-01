@@ -28,7 +28,7 @@ import { ToolsContextMenuIconText } from "../../controls/tools-context-menu-icon
 import { ContextMenuListItem } from "../../context-menu/context-menu-list-item";
 import { ContextMenu } from "#/ui/context-menu";
 import { useClickOutsideElement } from "#/hooks/use-click-outside-element";
-import { cn } from "#/utils/utils";
+import { cn, isManagedBackend } from "#/utils/utils";
 import { formControlTransitionClassName } from "#/utils/form-control-classes";
 
 interface ChatInputActionsProps {
@@ -54,9 +54,12 @@ export function ChatInputActions({
   const resumeConversationMutation = useResumeConversation();
   const { conversationId } = useOptionalConversationId();
   const { backend } = useActiveBackend();
-  const isCloud = backend.kind === "cloud";
+  // Managed backends (cloud + k8s sandbox) own the model/runtime server-side,
+  // so the client-side profile picker is replaced by the server-model display
+  // and the change-agent affordance is shown.
+  const isManaged = isManagedBackend(backend.kind);
   const modelState = useChatInputModelState();
-  const showChangeAgentButton = isCloud;
+  const showChangeAgentButton = isManaged;
   const webSocketStatus = useUnifiedWebSocketStatus();
   const { curAgentState } = useAgentState();
   const { conversationMode, setConversationMode } = useConversationStore();
@@ -401,7 +404,7 @@ export function ChatInputActions({
             </div>
           )}
           <div ref={modelRef} className={cn(!showModelInline && "hidden")}>
-            {isCloud || modelState.isAcpContext ? (
+            {isManaged || modelState.isAcpContext ? (
               <ChatInputModel />
             ) : (
               <SwitchProfileButton />

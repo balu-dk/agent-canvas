@@ -32,6 +32,14 @@ import {
   updateCloudConversationPublicFlag,
 } from "../cloud/conversation-service.api";
 import {
+  batchGetK8sConversations,
+  createK8sAppConversation,
+  deleteK8sConversation,
+  getK8sAppConversationStartTask,
+  readK8sConversationFile,
+  searchK8sConversations,
+} from "../k8s/conversation-service.api";
+import {
   DirectConversationInfo,
   buildStartConversationRequestWithEncryptedSettings,
   emptyHooksResponse,
@@ -354,12 +362,15 @@ class AgentServerConversationService {
     agentType?: "default" | "plan",
     sandboxId?: string,
   ): Promise<AppConversationStartTask> {
-    if (getActiveBackend().backend.kind === "cloud") {
-      // Cloud path mirrors OpenHands' frontend: build a flat
-      // AppConversationStartRequest, POST /api/v1/app-conversations
-      // (returns a WORKING task), and let the conversation route's
-      // useTaskPolling drive it to READY. NO encrypted-settings
-      // round-trip — the cloud backend holds secrets server-side.
+    const activeKind = getActiveBackend().backend.kind;
+    if (activeKind === "cloud" || activeKind === "k8s") {
+      // Managed (cloud / k8s) path mirrors OpenHands' frontend: build a flat
+      // AppConversationStartRequest, POST the control-plane app-conversations
+      // endpoint (returns a WORKING task), and let the conversation route's
+      // useTaskPolling drive it to READY. NO encrypted-settings round-trip —
+      // the managed backend holds secrets server-side (cloud) or in the broker
+      // env (k8s), and injects the LLM model at create time, so `llm_model` is
+      // deliberately omitted from the request.
       const request: AppConversationStartRequest = {
         initial_message: initialUserMsg
           ? {
@@ -376,7 +387,9 @@ class AgentServerConversationService {
         agent_type: agentType,
         sandbox_id: sandboxId ?? null,
       };
-      return createCloudAppConversation(request);
+      return activeKind === "k8s"
+        ? createK8sAppConversation(request)
+        : createCloudAppConversation(request);
     }
 
     const settings = await SettingsService.getSettings();
@@ -434,8 +447,12 @@ class AgentServerConversationService {
   static async getStartTask(
     taskId: string,
   ): Promise<AppConversationStartTask | null> {
-    if (getActiveBackend().backend.kind === "cloud") {
+    const activeKind = getActiveBackend().backend.kind;
+    if (activeKind === "cloud") {
       return getCloudAppConversationStartTask(taskId);
+    }
+    if (activeKind === "k8s") {
+      return getK8sAppConversationStartTask(taskId);
     }
     // Local agent-server creates conversations synchronously — every
     // local "task" is already READY when createConversation returns, so
@@ -485,8 +502,12 @@ class AgentServerConversationService {
   ): Promise<(AppConversation | null)[]> {
     if (ids.length === 0) return [];
 
-    if (getActiveBackend().backend.kind === "cloud") {
+    const activeKind = getActiveBackend().backend.kind;
+    if (activeKind === "cloud") {
       return batchGetCloudConversations(ids);
+    }
+    if (activeKind === "k8s") {
+      return batchGetK8sConversations(ids);
     }
 
     const data = await new ConversationClient(
@@ -535,15 +556,19 @@ class AgentServerConversationService {
     conversationId: string,
     filePath?: string,
   ): Promise<string> {
-    if (getActiveBackend().backend.kind === "cloud") {
-      // Cloud exposes a per-conversation file endpoint; the sandbox
-      // working dir is fixed (`/workspace/project`), so PLAN.md lives at
-      // a known absolute path. Mirrors OpenHands' readConversationFile.
+    const fileBackendKind = getActiveBackend().backend.kind;
+    if (fileBackendKind === "cloud" || fileBackendKind === "k8s") {
+      // Cloud and the k8s broker both expose a per-conversation file
+      // endpoint; the sandbox working dir is fixed (`/workspace/project`),
+      // so PLAN.md lives at a known absolute path. Mirrors OpenHands'
+      // readConversationFile.
       const path = requirePathInsideDirectory(
         filePath ?? "/workspace/project/.agents_tmp/PLAN.md",
         "/workspace/project",
       );
-      return readCloudConversationFile(conversationId, path);
+      return fileBackendKind === "k8s"
+        ? readK8sConversationFile(conversationId, path)
+        : readCloudConversationFile(conversationId, path);
     }
 
     const workingDir = await this.resolveConversationWorkingDir(conversationId);
@@ -622,8 +647,12 @@ class AgentServerConversationService {
     limit: number = 20,
     pageId?: string,
   ): Promise<AppConversationPage> {
-    if (getActiveBackend().backend.kind === "cloud") {
+    const activeKind = getActiveBackend().backend.kind;
+    if (activeKind === "cloud") {
       return searchCloudConversations(limit, pageId);
+    }
+    if (activeKind === "k8s") {
+      return searchK8sConversations(limit, pageId);
     }
 
     const data = await new ConversationClient(
@@ -638,8 +667,11 @@ class AgentServerConversationService {
   }
 
   static async deleteConversation(conversationId: string): Promise<void> {
-    if (getActiveBackend().backend.kind === "cloud") {
+    const activeKind = getActiveBackend().backend.kind;
+    if (activeKind === "cloud") {
       await deleteCloudConversation(conversationId);
+    } else if (activeKind === "k8s") {
+      await deleteK8sConversation(conversationId);
     } else {
       await new ConversationClient(
         getAgentServerClientOptions(),

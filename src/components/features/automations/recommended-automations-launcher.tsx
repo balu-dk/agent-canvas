@@ -10,6 +10,8 @@ import {
   setPendingTaskDraft,
 } from "#/utils/conversation-local-storage";
 import type { RecommendedAutomation } from "@openhands/extensions/automations";
+import type { BackendKind } from "#/api/backend-registry/types";
+import { isManagedBackend } from "#/utils/utils";
 import { parseMcpConfig } from "#/utils/mcp-config";
 import { flattenMcpConfig } from "#/utils/mcp-installed-servers";
 import {
@@ -47,7 +49,7 @@ function trimTrailingSlashes(value: string): string {
 
 export function buildAutomationPrompt(
   basePrompt: string,
-  backendKind: "local" | "cloud",
+  backendKind: BackendKind,
   backendHost?: string,
 ): string {
   if (backendKind === "cloud") {
@@ -210,9 +212,11 @@ export function RecommendedAutomationsLauncher({
 
   const installEntry = installQueue[0] ?? null;
 
-  // Recommended automations are a local-backend-only feature; cloud
-  // automations are managed elsewhere.
-  if (activeBackend.backend.kind === "cloud") return null;
+  // Recommended automations are a local-backend-only feature. They are hidden
+  // for every managed backend (cloud + k8s): the automation sidecar API the
+  // generated prompt targets is part of the local stack and is not reachable
+  // from inside a managed/sandboxed runtime.
+  if (isManagedBackend(activeBackend.backend.kind)) return null;
 
   return (
     <>

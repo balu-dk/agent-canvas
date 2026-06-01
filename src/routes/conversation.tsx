@@ -30,6 +30,7 @@ import { WebSocketProviderWrapper } from "#/contexts/websocket-provider-wrapper"
 import { useErrorMessageStore } from "#/stores/error-message-store";
 import { I18nKey } from "#/i18n/declaration";
 import { resumeCloudSandbox } from "#/api/cloud/conversation-service.api";
+import { resumeK8sSandbox } from "#/api/k8s/conversation-service.api";
 
 function AppContent() {
   const { t } = useTranslation("openhands");
@@ -159,14 +160,19 @@ function AppContent() {
   const resumeTriggeredForRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!isFetched || !conversation) return;
-    if (active.backend.kind !== "cloud") return;
+    // Managed backends (cloud + k8s) provision a pausable sandbox per
+    // conversation; local has no sandbox to resume.
+    if (active.backend.kind !== "cloud" && active.backend.kind !== "k8s")
+      return;
     if (conversation.sandbox_status !== "PAUSED") return; // only resume PAUSED sandboxes
     if (!conversation.sandbox_id) return; // no sandbox to resume
     if (resumeTriggeredForRef.current === conversation.id) return; // already sent
 
     resumeTriggeredForRef.current = conversation.id;
 
-    resumeCloudSandbox(conversation.sandbox_id).catch(() => {
+    const resumeSandbox =
+      active.backend.kind === "cloud" ? resumeCloudSandbox : resumeK8sSandbox;
+    resumeSandbox(conversation.sandbox_id).catch(() => {
       displayErrorToast(t(I18nKey.CONVERSATION$FAILED_TO_START_FROM_TASK));
     });
   }, [

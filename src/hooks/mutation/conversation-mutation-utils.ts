@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { ConversationClient } from "@openhands/typescript-client/clients";
 import { getActiveBackend } from "#/api/backend-registry/active-store";
 import { pauseCloudSandbox } from "#/api/cloud/conversation-service.api";
+import { pauseK8sSandbox } from "#/api/k8s/conversation-service.api";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import { AppConversation } from "#/api/conversation-service/agent-server-conversation-service.types";
@@ -34,20 +35,27 @@ const fetchConversationData = async (
 
 /**
  * Stop a running conversation.
- * - Cloud mode: Pauses the sandbox (waits for current LLM call to finish).
+ * - Managed mode (cloud + k8s): Pauses the sandbox — for cloud it waits for the
+ *   current LLM call to finish; for k8s it scales the sandbox pod to 0 (state
+ *   is preserved on the PVC and restored on resume).
  * - Local mode: Interrupts immediately (cancels in-flight requests).
  */
 export const pauseConversation = async (conversationId: string) => {
   const { conversationUrl, sessionApiKey, sandboxId } =
     await fetchConversationData(conversationId);
 
-  if (getActiveBackend().backend.kind === "cloud") {
+  const kind = getActiveBackend().backend.kind;
+  if (kind === "cloud" || kind === "k8s") {
     if (!sandboxId) {
       throw new Error(
-        `Cannot stop runtime: cloud conversation ${conversationId} has no sandbox_id.`,
+        `Cannot stop runtime: ${kind} conversation ${conversationId} has no sandbox_id.`,
       );
     }
-    await pauseCloudSandbox(sandboxId);
+    if (kind === "cloud") {
+      await pauseCloudSandbox(sandboxId);
+    } else {
+      await pauseK8sSandbox(sandboxId);
+    }
     return { success: true };
   }
 

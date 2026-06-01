@@ -91,6 +91,40 @@ vi.mock("#/api/settings-service/settings-service.api", () => ({
   },
 }));
 
+// Mock the k8s control-plane client module so we can assert the router
+// dispatches to it (and with what arguments) when the active backend is k8s,
+// without any broker/network. Each fn is a plain spy.
+const {
+  mockCreateK8sAppConversation,
+  mockBatchGetK8sConversations,
+  mockSearchK8sConversations,
+  mockDeleteK8sConversation,
+  mockGetK8sAppConversationStartTask,
+  mockReadK8sConversationFile,
+} = vi.hoisted(() => ({
+  mockCreateK8sAppConversation: vi.fn(),
+  mockBatchGetK8sConversations: vi.fn(),
+  mockSearchK8sConversations: vi.fn(),
+  mockDeleteK8sConversation: vi.fn(),
+  mockGetK8sAppConversationStartTask: vi.fn(),
+  mockReadK8sConversationFile: vi.fn(),
+}));
+
+vi.mock("#/api/k8s/conversation-service.api", () => ({
+  createK8sAppConversation: (...args: unknown[]) =>
+    mockCreateK8sAppConversation(...args),
+  batchGetK8sConversations: (...args: unknown[]) =>
+    mockBatchGetK8sConversations(...args),
+  searchK8sConversations: (...args: unknown[]) =>
+    mockSearchK8sConversations(...args),
+  deleteK8sConversation: (...args: unknown[]) =>
+    mockDeleteK8sConversation(...args),
+  getK8sAppConversationStartTask: (...args: unknown[]) =>
+    mockGetK8sAppConversationStartTask(...args),
+  readK8sConversationFile: (...args: unknown[]) =>
+    mockReadK8sConversationFile(...args),
+}));
+
 describe("AgentServerConversationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -767,6 +801,169 @@ describe("AgentServerConversationService", () => {
       expect(upstream.method).toBe("GET");
       expect(upstream.path).toBe(
         "/api/v1/app-conversations/conv-cloud-1/file?file_path=%2Fworkspace%2Fproject%2F.agents_tmp%2FPLAN.md",
+      );
+    });
+  });
+
+  describe("k8s branches", () => {
+    const k8sBackend: Backend = {
+      id: "orbstack",
+      name: "Kubernetes Agent Sandbox",
+      host: "http://localhost:8000",
+      apiKey: "broker-session-key",
+      kind: "k8s",
+    };
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      __resetActiveStoreForTests();
+      setRegisteredBackends([k8sBackend]);
+      setActiveSelection({ backendId: k8sBackend.id });
+      mockCreateK8sAppConversation.mockReset();
+      mockBatchGetK8sConversations.mockReset();
+      mockSearchK8sConversations.mockReset();
+      mockDeleteK8sConversation.mockReset();
+      mockGetK8sAppConversationStartTask.mockReset();
+      mockReadK8sConversationFile.mockReset();
+    });
+
+    afterEach(() => {
+      window.localStorage.clear();
+      __resetActiveStoreForTests();
+    });
+
+    it("routes createConversation to createK8sAppConversation with the flat request and no llm_model", async () => {
+      const task = {
+        id: "task-k8s",
+        status: "WORKING",
+      } as unknown as Awaited<
+        ReturnType<typeof AgentServerConversationService.createConversation>
+      >;
+      mockCreateK8sAppConversation.mockResolvedValue(task);
+
+      const result = await AgentServerConversationService.createConversation(
+        "hello sandbox",
+        "My title",
+        undefined,
+        {
+          selected_repository: "OpenHands/agent-canvas",
+          selected_branch: "main",
+          git_provider: "github",
+        },
+        undefined,
+        "parent-k8s",
+        "plan",
+        "sandbox-k8s",
+      );
+
+      // Dispatched to the k8s control-plane, NOT the cloud proxy (axios.post)
+      // or the local encrypted-settings path.
+      expect(mockCreateK8sAppConversation).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(axios.post)).not.toHaveBeenCalled();
+      expect(result).toBe(task);
+
+      const request = mockCreateK8sAppConversation.mock.calls[0][0] as Record<
+        string,
+        unknown
+      >;
+      expect(request).toMatchObject({
+        title: "My title",
+        selected_repository: "OpenHands/agent-canvas",
+        selected_branch: "main",
+        git_provider: "github",
+        parent_conversation_id: "parent-k8s",
+        agent_type: "plan",
+        sandbox_id: "sandbox-k8s",
+      });
+      expect(request.initial_message).toEqual({
+        role: "user",
+        content: [{ type: "text", text: "hello sandbox" }],
+      });
+      // The broker injects the model — the request must NOT carry one.
+      expect("llm_model" in request).toBe(false);
+    });
+
+    it("routes getStartTask to getK8sAppConversationStartTask", async () => {
+      const task = { id: "t", status: "READY" } as unknown as Awaited<
+        ReturnType<typeof AgentServerConversationService.getStartTask>
+      >;
+      mockGetK8sAppConversationStartTask.mockResolvedValue(task);
+
+      const result = await AgentServerConversationService.getStartTask("t");
+
+      expect(mockGetK8sAppConversationStartTask).toHaveBeenCalledWith("t");
+      expect(result).toBe(task);
+    });
+
+    it("routes batchGetAppConversations to batchGetK8sConversations", async () => {
+      mockBatchGetK8sConversations.mockResolvedValue([null]);
+
+      await AgentServerConversationService.batchGetAppConversations(["c1"]);
+
+      expect(mockBatchGetK8sConversations).toHaveBeenCalledWith(["c1"]);
+    });
+
+    it("routes searchConversations to searchK8sConversations", async () => {
+      mockSearchK8sConversations.mockResolvedValue({
+        items: [],
+        next_page_id: null,
+      });
+
+      await AgentServerConversationService.searchConversations(15, "page-x");
+
+      expect(mockSearchK8sConversations).toHaveBeenCalledWith(15, "page-x");
+    });
+
+    it("routes deleteConversation to deleteK8sConversation", async () => {
+      mockDeleteK8sConversation.mockResolvedValue(undefined);
+
+      await AgentServerConversationService.deleteConversation("c1");
+
+      expect(mockDeleteK8sConversation).toHaveBeenCalledWith("c1");
+    });
+
+    it("routes readConversationFile to readK8sConversationFile with the fixed sandbox path", async () => {
+      mockReadK8sConversationFile.mockResolvedValue("# PLAN content");
+
+      const content =
+        await AgentServerConversationService.readConversationFile("c1");
+
+      expect(content).toBe("# PLAN content");
+      expect(mockReadK8sConversationFile).toHaveBeenCalledWith(
+        "c1",
+        "/workspace/project/.agents_tmp/PLAN.md",
+      );
+    });
+
+    it("does not enter the cloud branch for sendMessage — uses ConversationClient with the runtime override", async () => {
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      mockConversationClient.mockReturnValue({ sendEvent });
+
+      await AgentServerConversationService.sendMessage(
+        "c1",
+        { role: "user", content: [{ type: "text", text: "hi" }] },
+        {
+          // The broker-proxy runtime URL shape from the plan:
+          // http://localhost:8000/sandbox-runtime/<uuid>
+          conversationUrl: "http://localhost:8000/sandbox-runtime/c1",
+          sessionApiKey: "runtime-key",
+        },
+      );
+
+      // Cloud proxy must NOT be touched for k8s data-plane sends.
+      expect(vi.mocked(axios.post)).not.toHaveBeenCalled();
+      // ConversationClient targets the runtime host derived from the override
+      // (host + reverse-proxy path prefix), with the per-sandbox session key.
+      expect(ConversationClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: "http://localhost:8000/sandbox-runtime/c1",
+          apiKey: "runtime-key",
+        }),
+      );
+      expect(sendEvent).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ role: "user" }),
+        { run: true },
       );
     });
   });

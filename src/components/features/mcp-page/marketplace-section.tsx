@@ -15,9 +15,10 @@ import {
   extensionModuleCardGridClassName,
   extensionModuleCardGridContainerClassName,
 } from "#/utils/extension-module-card-classes";
+import type { BackendKind } from "#/api/backend-registry/types";
 
 interface MarketplaceSectionProps {
-  backendKind: "local" | "cloud";
+  backendKind: BackendKind;
   onSelect: (entry: MarketplaceEntry) => void;
   onAdd: (entry: MarketplaceEntry) => void;
   /** Empty string = no filter. */

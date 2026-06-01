@@ -9,6 +9,7 @@ import {
   resolveEffectiveAcpModel,
   type ACPModelOption,
 } from "#/constants/acp-providers";
+import { isManagedBackend } from "#/utils/utils";
 
 export interface ChatInputModelState {
   isAcpContext: boolean;
@@ -63,8 +64,12 @@ export function useChatInputModelState(): ChatInputModelState {
       ? (labelForAcpModel(acpServerKey, currentModelId) ?? currentModelId)
       : currentModelId;
   const availableAcpModels = acpProvider?.available_models ?? [];
+  // Managed backends (cloud + k8s sandbox) control the model server-side, so
+  // the client-side ACP model picker is suppressed just as it is for cloud.
   const showAcpPicker =
-    isAcpContext && backend.kind !== "cloud" && availableAcpModels.length > 0;
+    isAcpContext &&
+    !isManagedBackend(backend.kind) &&
+    availableAcpModels.length > 0;
   const switchConversationId = isActiveAcpConversation
     ? (conversationId ?? null)
     : null;

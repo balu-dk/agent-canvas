@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { ServerClient } from "@openhands/typescript-client/clients";
-import { type Backend } from "#/api/backend-registry/types";
+import { type Backend, type BackendKind } from "#/api/backend-registry/types";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { ConfirmationModal } from "#/components/shared/modals/confirmation-modal";
@@ -26,6 +26,18 @@ import { BackendStatusDot } from "./backend-status-dot";
 
 const ROW_ACTION_BUTTON_CLASS =
   "inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted transition-colors hover:bg-interactive-hover hover:text-white";
+
+/** Map a backend kind to its i18n display-label key. */
+function backendKindLabelKey(kind: BackendKind): I18nKey {
+  switch (kind) {
+    case "cloud":
+      return I18nKey.BACKEND$KIND_CLOUD;
+    case "k8s":
+      return I18nKey.BACKEND$KIND_K8S;
+    default:
+      return I18nKey.BACKEND$KIND_LOCAL;
+  }
+}
 
 function BackendVersion({ backend }: { backend: Backend }) {
   const { t } = useTranslation("openhands");
@@ -93,9 +105,7 @@ function BackendRow({ backend, health, onEdit, onRemove }: BackendRowProps) {
         </span>
       </div>
       <span className="px-2 py-1 rounded-full text-[11px] uppercase tracking-wide text-[var(--oh-text-tertiary)] bg-[var(--oh-surface)] border border-[var(--oh-border)]">
-        {backend.kind === "cloud"
-          ? t(I18nKey.BACKEND$KIND_CLOUD)
-          : t(I18nKey.BACKEND$KIND_LOCAL)}
+        {t(backendKindLabelKey(backend.kind))}
       </span>
       <div className="flex shrink-0 items-center gap-0.5">
         <button

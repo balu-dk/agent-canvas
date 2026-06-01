@@ -1,4 +1,5 @@
 import { MCPServerConfig } from "#/types/mcp-server";
+import type { BackendKind } from "#/api/backend-registry/types";
 import type {
   IntegrationCatalogEntry as MarketplaceEntry,
   IntegrationConnectionOption,
@@ -149,11 +150,14 @@ function transportMatchesServer(
 
 export function isMarketplaceEntryAvailable(
   entry: MarketplaceEntry,
-  backendKind: "local" | "cloud",
+  backendKind: BackendKind,
 ): boolean {
   if (!entry.runtimeAvailability || entry.runtimeAvailability === "all")
     return true;
-  return entry.runtimeAvailability === backendKind;
+  // A k8s sandbox is a full agent-server runtime (bash, editor, …) like the
+  // local backend, so entries gated to "local" availability apply to it too.
+  const mode = backendKind === "k8s" ? "local" : backendKind;
+  return entry.runtimeAvailability === mode;
 }
 
 function normalize(query: string): string {

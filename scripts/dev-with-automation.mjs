@@ -85,6 +85,30 @@ const DEFAULT_AUTOMATION_VERSION = SHARED_DEFAULTS.versions.automation;
 const DEFAULT_AUTOMATION_SDK_VERSION = SHARED_DEFAULTS.versions.automationSdk;
 const DEFAULT_BACKEND_PORT = SHARED_DEFAULTS.ports.agentServer;
 const DEFAULT_AUTOMATION_PORT = SHARED_DEFAULTS.ports.automation;
+const DEFAULT_BROKER_PORT = SHARED_DEFAULTS.ports.broker;
+
+// Kubernetes Agent Sandbox broker config (single source of truth: defaults.json).
+// The broker is gated behind OH_ENABLE_K8S_BROKER so the default dev stack
+// keeps working with no cluster available.
+const K8S_DEFAULTS = SHARED_DEFAULTS.k8s ?? {};
+
+/**
+ * Whether the Kubernetes Agent Sandbox broker should be started. Gated behind
+ * the OH_ENABLE_K8S_BROKER env var so the default dev stack runs unchanged
+ * (no cluster required) unless the user explicitly opts in.
+ */
+function isBrokerEnabled(env = process.env) {
+  const value = env.OH_ENABLE_K8S_BROKER;
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return (
+    normalized !== "" &&
+    normalized !== "0" &&
+    normalized !== "false" &&
+    normalized !== "no" &&
+    normalized !== "off"
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Terminal Styling
@@ -291,14 +315,23 @@ async function buildConfig(args, env = process.env) {
   const preferredAutomationPort =
     parseInt(env.OH_CANVAS_SAFE_AUTOMATION_PORT, 10) || DEFAULT_AUTOMATION_PORT;
   const preferredVitePort = parseInt(env.OH_CANVAS_SAFE_VITE_PORT, 10) || 3001;
+  // Broker port (only reserved/checked when the k8s broker is enabled).
+  const preferredBrokerPort =
+    parseInt(env.OH_CANVAS_BROKER_PORT, 10) || DEFAULT_BROKER_PORT;
+  const brokerEnabled = isBrokerEnabled(env);
 
-  // Fail fast if any preferred port is already in use.
+  // Fail fast if any preferred port is already in use. The broker port is only
+  // included when the broker is enabled so the default stack doesn't fail on a
+  // port it never binds.
   logStep("ports", "Checking ports...");
   await assertPortsFree([
     { name: "ingress", port: preferredIngressPort },
     { name: "agent-server", port: preferredBackendPort },
     { name: "automation", port: preferredAutomationPort },
     { name: "vite", port: preferredVitePort },
+    ...(brokerEnabled
+      ? [{ name: "broker", port: preferredBrokerPort }]
+      : []),
   ]);
 
   const vscodePort = preferredBackendPort + 1000;
@@ -325,6 +358,10 @@ async function buildConfig(args, env = process.env) {
     autoBackendPort: preferredAutomationPort,
     vitePort: preferredVitePort,
     vscodePort,
+
+    // Kubernetes Agent Sandbox broker (gated behind OH_ENABLE_K8S_BROKER)
+    brokerPort: preferredBrokerPort,
+    brokerEnabled,
 
     // Paths
     canvasPath: projectRoot,
@@ -624,6 +661,61 @@ function startAutomationBackend(config) {
   );
 }
 
+/**
+ * Start the Kubernetes Agent Sandbox broker (control plane + runtime reverse
+ * proxy). Mirrors startAgentServer's spawn pattern. Runs `npx tsx
+ * broker/src/index.ts` from the project root.
+ *
+ * Gated by the caller behind config.brokerEnabled (OH_ENABLE_K8S_BROKER) so the
+ * default dev stack runs unchanged with no cluster available.
+ *
+ * The LLM model/key/base-url are intentionally NOT in config/defaults.json
+ * (they are secrets) — they are passed through from the launching environment
+ * (OH_K8S_LLM_MODEL / OH_K8S_LLM_API_KEY / OH_K8S_LLM_BASE_URL).
+ */
+function startBroker(config) {
+  logService("broker", `Starting on port ${config.brokerPort}...`, c.cyan);
+
+  const proc = spawnService(
+    "broker",
+    "npx",
+    ["tsx", join("broker", "src", "index.ts")],
+    {
+      cwd: projectRoot,
+      env: {
+        PORT: String(config.brokerPort),
+        // Cluster targeting (from config/defaults.json k8s block).
+        KUBE_CONTEXT: K8S_DEFAULTS.context,
+        NAMESPACE: K8S_DEFAULTS.namespace,
+        // Reuse the dev stack's shared session API key so the browser's
+        // X-Session-API-Key header authenticates against the broker too.
+        BROKER_SESSION_API_KEY: config.sessionApiKey,
+        // Agent-server image the broker stamps into each Sandbox CR.
+        AGENT_SERVER_IMAGE: K8S_DEFAULTS.agentServerImage,
+        AGENT_SERVER_IMAGE_TAG: K8S_DEFAULTS.agentServerImageTag,
+        SANDBOX_API_VERSION: K8S_DEFAULTS.sandboxApiVersion,
+        // Broker-held LLM secrets — injected into each sandbox conversation at
+        // create time. Passed through from the launching env (never persisted
+        // to defaults.json).
+        LLM_MODEL: process.env.OH_K8S_LLM_MODEL,
+        LLM_API_KEY: process.env.OH_K8S_LLM_API_KEY,
+        LLM_BASE_URL: process.env.OH_K8S_LLM_BASE_URL,
+      },
+      color: c.cyan,
+    },
+  );
+
+  // Ensure the broker process tree is torn down on shutdown, mirroring how the
+  // other long-lived services are reaped.
+  registerShutdownHook(() => {
+    if (isProcessRunning(proc)) {
+      signalProcessTree(proc, "SIGKILL");
+    }
+  });
+
+  return proc;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════════════
@@ -669,6 +761,17 @@ function startIngress(config) {
       ingressScript,
       "--port",
       config.ingressPort.toString(),
+      // Kubernetes Agent Sandbox broker routes (only when enabled). Listed
+      // before the more general /api route and the --default. Longest-prefix
+      // routing means /api/k8s matches before /api.
+      ...(config.brokerEnabled
+        ? [
+            "--route",
+            `/api/k8s=http://localhost:${config.brokerPort}`,
+            "--route",
+            `/sandbox-runtime=http://localhost:${config.brokerPort}`,
+          ]
+        : []),
       "--route",
       `/api/automation=http://localhost:${config.autoBackendPort}`,
       "--route",
@@ -1016,7 +1119,14 @@ async function main(options = {}) {
   // 5. Wait for services to be ready
   await delay(2000);
 
-  // 6. Start ingress proxy (routes traffic to all backends)
+  // 6. Start the Kubernetes Agent Sandbox broker (only when explicitly
+  // enabled via OH_ENABLE_K8S_BROKER). Must come before the ingress so the
+  // broker is listening when ingress routes /api/k8s + /sandbox-runtime to it.
+  if (config.brokerEnabled) {
+    startBroker(config);
+  }
+
+  // 7. Start ingress proxy (routes traffic to all backends)
   startIngress(config);
 
   // Wait for ingress to start
@@ -1046,6 +1156,17 @@ function startStaticFrontend(config, staticDir) {
       // into the bundle at publish time.
       ...(config.sessionApiKey
         ? ["--session-api-key", config.sessionApiKey]
+        : []),
+      // Kubernetes Agent Sandbox broker routes (only when enabled). Listed
+      // before the more general /api route. Longest-prefix routing means
+      // /api/k8s matches before /api.
+      ...(config.brokerEnabled
+        ? [
+            "--route",
+            `/api/k8s=http://localhost:${config.brokerPort}`,
+            "--route",
+            `/sandbox-runtime=http://localhost:${config.brokerPort}`,
+          ]
         : []),
       // Proxy routes to backends (same as ingress but for direct access to vitePort)
       "--route",

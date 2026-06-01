@@ -59,8 +59,19 @@ function buildOptions(
 
   const locals = registered.filter((b) => b.kind === "local");
   const clouds = registered.filter((b) => b.kind === "cloud");
+  // k8s backends render flat, like locals — the in-app sandbox broker has no
+  // org concept, so there is no per-org expansion (unlike cloud).
+  const k8s = registered.filter((b) => b.kind === "k8s");
 
   for (const b of locals) {
+    options.push({
+      value: makeOptionValue(b.id, null),
+      label: b.name,
+      prefix: buildStatusPrefix(healthByBackendId[b.id]),
+    });
+  }
+
+  for (const b of k8s) {
     options.push({
       value: makeOptionValue(b.id, null),
       label: b.name,

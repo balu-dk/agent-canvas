@@ -40,6 +40,23 @@ function inferKindFromHost(host: string): BackendKind {
 }
 
 /**
+ * Map a backend kind to its i18n display-label key. The k8s broker shares the
+ * `localhost:8000` host with the local agent server, so its kind can never be
+ * inferred from the host — it is set explicitly when registered via the
+ * dedicated "Kubernetes Agent Sandbox" affordance below.
+ */
+function backendKindLabelKey(kind: BackendKind): I18nKey {
+  switch (kind) {
+    case "cloud":
+      return I18nKey.BACKEND$KIND_CLOUD;
+    case "k8s":
+      return I18nKey.BACKEND$KIND_K8S;
+    default:
+      return I18nKey.BACKEND$KIND_LOCAL;
+  }
+}
+
+/**
  * Returns true for hostnames that represent a local / private-network address.
  * Used by normalizeHost to choose http:// instead of https://.
  */
@@ -161,10 +178,7 @@ function BackendStatusBadge({
     statusLabel = t(I18nKey.ONBOARDING$BACKEND_STATUS_CHECKING);
   }
 
-  const kindLabel =
-    backend.kind === "cloud"
-      ? t(I18nKey.BACKEND$KIND_CLOUD)
-      : t(I18nKey.BACKEND$KIND_LOCAL);
+  const kindLabel = t(backendKindLabelKey(backend.kind));
 
   return (
     <div className="flex flex-col gap-2">
@@ -598,6 +612,81 @@ function CloudLoginColumn({ onClose }: { onClose: () => void }) {
   );
 }
 
+/**
+ * Compact registration affordance for the in-app Kubernetes Agent Sandbox
+ * broker. The broker is served same-origin (it shares `localhost:8000` with
+ * the local agent server via the ingress proxy), so its host can never be
+ * inferred from a user-typed host string — we hard-code `kind: "k8s"` and
+ * `host: window.location.origin` and only collect the broker session key.
+ */
+function K8sConnectionColumn({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation("openhands");
+  const { addBackend } = useActiveBackendContext();
+  const redirectAfterAdd = useRedirectAfterAddBackend();
+
+  const [apiKey, setApiKey] = React.useState("");
+  const canSubmit = apiKey.trim().length > 0;
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    addBackend({
+      name: "Kubernetes Agent Sandbox",
+      host: window.location.origin,
+      apiKey: apiKey.trim(),
+      kind: "k8s",
+    });
+    redirectAfterAdd();
+    onClose();
+  };
+
+  return (
+    <form
+      data-testid="add-backend-k8s-form"
+      onSubmit={handleSubmit}
+      className="flex flex-1 min-w-0 flex-col gap-3"
+    >
+      <div className="flex flex-col gap-1">
+        <h4
+          className="text-lg font-medium text-white"
+          data-testid="add-backend-k8s-title"
+        >
+          {t(I18nKey.BACKEND$K8S_TITLE)}
+        </h4>
+        <p className="text-sm leading-relaxed text-[var(--oh-muted)]">
+          {t(I18nKey.BACKEND$K8S_DESCRIPTION)}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <SettingsInput
+          testId="add-backend-k8s-api-key"
+          name="add-backend-k8s-api-key"
+          type="password"
+          label={t(I18nKey.BACKEND$K8S_KEY_LABEL)}
+          value={apiKey}
+          onChange={setApiKey}
+          placeholder="sk-••••••••••"
+          className="w-full"
+        />
+        <p className="text-xs text-[var(--oh-muted)]">
+          {t(I18nKey.BACKEND$K8S_KEY_HELPER)}
+        </p>
+      </div>
+
+      <BrandButton
+        type="submit"
+        variant="secondary"
+        isDisabled={!canSubmit}
+        testId="add-backend-k8s-submit"
+        className="w-full text-center"
+      >
+        {t(I18nKey.BACKEND$K8S_CONNECT)}
+      </BrandButton>
+    </form>
+  );
+}
+
 // ── Modal wrappers ──────────────────────────────────────────────────
 
 /**
@@ -635,7 +724,7 @@ export function BackendFormModal({
             </h2>
           </div>
 
-          {/* Two-column body */}
+          {/* Three-column body */}
           <div className="flex gap-6 px-6 pb-6 pt-2">
             {/* Left: manual connection */}
             <div className="flex-1 min-w-0">
@@ -651,9 +740,23 @@ export function BackendFormModal({
               <div className="flex-1 w-px bg-[var(--oh-border)]" />
             </div>
 
-            {/* Right: cloud login */}
+            {/* Middle: cloud login */}
             <div className="flex-1 min-w-0">
               <CloudLoginColumn onClose={onClose} />
+            </div>
+
+            {/* Vertical OR divider */}
+            <div className="flex shrink-0 flex-col items-center">
+              <div className="flex-1 w-px bg-[var(--oh-border)]" />
+              <span className="py-3 text-xs uppercase text-[var(--oh-muted)]">
+                {t(I18nKey.BACKEND$LOGIN_OR)}
+              </span>
+              <div className="flex-1 w-px bg-[var(--oh-border)]" />
+            </div>
+
+            {/* Right: Kubernetes Agent Sandbox */}
+            <div className="flex-1 min-w-0">
+              <K8sConnectionColumn onClose={onClose} />
             </div>
           </div>
         </div>

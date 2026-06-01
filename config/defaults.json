@@ -15,7 +15,16 @@
   "ports": {
     "agentServer": 18000,
     "automation": 18001,
+    "broker": 18002,
     "proxy": 8000
+  },
+
+  "k8s": {
+    "context": "orbstack",
+    "namespace": "agent-canvas",
+    "agentServerImage": "ghcr.io/openhands/agent-server",
+    "agentServerImageTag": "1.24.0-python",
+    "sandboxApiVersion": "v1alpha1"
   },
 
   "paths": {

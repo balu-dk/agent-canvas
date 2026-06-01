@@ -2,6 +2,7 @@ import { RemoteWorkspace } from "@openhands/typescript-client/workspace/remote-w
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import { getActiveBackend } from "#/api/backend-registry/active-store";
 import { batchGetCloudConversations } from "#/api/cloud/conversation-service.api";
+import { batchGetK8sConversations } from "#/api/k8s/conversation-service.api";
 import type { AppConversation } from "#/api/conversation-service/agent-server-conversation-service.types";
 import type { FileUploadSuccessResponse } from "#/api/open-hands.types";
 import {
@@ -37,8 +38,19 @@ export async function resolveConversationRuntime(
     };
   }
 
-  if (getActiveBackend().backend.kind === "cloud") {
+  const activeKind = getActiveBackend().backend.kind;
+  if (activeKind === "cloud") {
     const [conversation] = await batchGetCloudConversations([conversationId]);
+    return {
+      conversationUrl: conversation?.conversation_url?.trim() ?? null,
+      sessionApiKey: conversation?.session_api_key?.trim() ?? null,
+    };
+  }
+  if (activeKind === "k8s") {
+    // k8s conversations live only on the provisioned sandbox runtime, reached
+    // through the broker proxy. The control-plane batch-get returns the
+    // conversation's broker `conversation_url` + per-sandbox `session_api_key`.
+    const [conversation] = await batchGetK8sConversations([conversationId]);
     return {
       conversationUrl: conversation?.conversation_url?.trim() ?? null,
       sessionApiKey: conversation?.session_api_key?.trim() ?? null,
@@ -68,6 +80,10 @@ function requireCloudRuntime(
 /**
  * Upload attachments into the conversation workspace. Local conversations use
  * the bundled agent-server; cloud conversations target the provisioned runtime.
+ * k8s conversations also target a provisioned runtime (the sandbox, via the
+ * broker proxy), but reuse the local runtime upload path with the
+ * `{ conversationUrl, sessionApiKey }` override resolved above — only cloud
+ * needs the strict "sandbox still starting" guard before uploading.
  */
 export async function uploadFilesToConversation(
   conversationId: string,

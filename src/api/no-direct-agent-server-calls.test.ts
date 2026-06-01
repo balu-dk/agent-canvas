@@ -7,6 +7,11 @@ const EXCLUDED_SEGMENTS = new Set(["mocks", "routeTree.gen.ts"]);
 const ALLOWED_AD_HOC_HTTP_FILES = new Set([
   "api/automation-service/automation-service.api.ts",
   "api/cloud/proxy.ts",
+  // The k8s sandbox broker client is the control-plane envelope (the
+  // analogue of api/cloud/proxy.ts). It talks same-origin to the broker at
+  // `${host}/api/k8s/*` with plain axios; the typed SDK client only models
+  // the local agent-server protocol, not the broker control-plane.
+  "api/k8s/broker-client.ts",
 ]);
 
 function collectSourceFiles(dir: string): string[] {

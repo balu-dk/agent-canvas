@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { BackendKind } from "#/api/backend-registry/types";
 import { Provider } from "#/types/settings";
 import { SuggestedTaskGroup } from "#/utils/types";
 import { ConversationStatus } from "#/types/conversation-status";
@@ -166,6 +167,22 @@ export const getFileExtension = (fileName: string): string => {
 };
 
 /**
+ * Whether the given backend kind is a *managed* backend — one where the
+ * server (not the browser) owns the model/runtime and provisions one
+ * ephemeral agent-server per conversation with pause/resume.
+ *
+ * Both "cloud" (OpenHands Cloud) and "k8s" (the in-app Kubernetes Agent
+ * Sandbox broker) are managed and share most UI gating semantics: hide the
+ * client-side model/profile picker, treat their AppConversation cache like
+ * cloud, and group conversations by repository. "local" is not managed.
+ *
+ * Use this instead of `kind === "cloud"` wherever the distinction is
+ * "server controls the runtime" rather than "specifically OpenHands Cloud".
+ */
+export const isManagedBackend = (kind: BackendKind): kind is "cloud" | "k8s" =>
+  kind === "cloud" || kind === "k8s";
+
+/**
  * Whether to use the installation-scoped repo flow
  * (`/api/v1/git/installations/search` → `/api/v1/git/repositories/search?installation_id=…`)
  * for the given provider/backend combo.
@@ -175,12 +192,13 @@ export const getFileExtension = (fileName: string): string => {
  *   - github → installation-based ONLY when the active backend is cloud
  *   - gitlab / azure_devops / forgejo → direct (search) flow
  *
- * `appMode` accepts the active backend `kind` ("local" | "cloud") so call
- * sites can hand it through directly.
+ * `appMode` accepts the active backend `kind`; only "cloud" enables the
+ * github installation flow ("local" and "k8s" use the direct flow, since k8s
+ * reuses the local fallback backend for git).
  */
 export const shouldUseInstallationRepos = (
   provider: Provider | null | undefined,
-  appMode?: "local" | "cloud",
+  appMode?: BackendKind,
 ) => {
   if (!provider) return false;
 

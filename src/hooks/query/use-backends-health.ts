@@ -2,6 +2,7 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ServerClient } from "@openhands/typescript-client/clients";
 import { getCurrentCloudApiKey } from "#/api/cloud/organization-service.api";
+import { pingBroker } from "#/api/k8s/broker-client";
 import type { Backend } from "#/api/backend-registry/types";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import {
@@ -28,6 +29,10 @@ const PROBE_TIMEOUT_MS = 4000;
  *    legacy-key 400 fallback so we treat that as "connected" too.
  *    Any other failure (network, 401, 5xx, …) means the backend is
  *    not reachable / not usable from the GUI.
+ *  - k8s: GET `/api/k8s/health` on the in-app sandbox broker (no auth).
+ *    `pingBroker` returns a boolean rather than throwing, so we throw
+ *    here on `false` to keep the React Query "throws on failure"
+ *    contract the other branches rely on.
  *
  * Throws on failure so React Query marks the query as errored — the
  * dropdown reads `isSuccess` to flip the indicator green.
@@ -35,6 +40,14 @@ const PROBE_TIMEOUT_MS = 4000;
 async function probeBackend(backend: Backend): Promise<true> {
   if (backend.kind === "cloud") {
     await getCurrentCloudApiKey(backend);
+    return true;
+  }
+
+  if (backend.kind === "k8s") {
+    const ok = await pingBroker(backend);
+    if (!ok) {
+      throw new Error("Kubernetes sandbox broker health check failed.");
+    }
     return true;
   }
 
