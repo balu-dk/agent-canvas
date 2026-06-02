@@ -1,10 +1,15 @@
 import axios from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  __resetActiveStoreForTests,
+  setRegisteredBackends,
+} from "#/api/backend-registry/active-store";
+import {
   getCloudOrganizations,
   getCurrentCloudApiKey,
 } from "#/api/cloud/organization-service.api";
 import type { Backend } from "#/api/backend-registry/types";
+import { localProxyBackend } from "./test-backends";
 
 vi.mock("axios");
 
@@ -18,10 +23,14 @@ const cloudBackend: Backend = {
 
 beforeEach(() => {
   window.localStorage.clear();
+  __resetActiveStoreForTests();
+  setRegisteredBackends([localProxyBackend]);
   vi.mocked(axios.post).mockReset();
 });
 
 afterEach(() => {
+  window.localStorage.clear();
+  __resetActiveStoreForTests();
   vi.mocked(axios.post).mockReset();
 });
 

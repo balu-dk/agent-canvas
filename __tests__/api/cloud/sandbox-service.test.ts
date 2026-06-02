@@ -7,6 +7,7 @@ import {
 } from "#/api/backend-registry/active-store";
 import { batchGetCloudSandboxes } from "#/api/cloud/sandbox-service.api";
 import type { Backend } from "#/api/backend-registry/types";
+import { localProxyBackend } from "./test-backends";
 
 vi.mock("axios");
 
@@ -21,7 +22,7 @@ const cloudBackend: Backend = {
 beforeEach(() => {
   window.localStorage.clear();
   __resetActiveStoreForTests();
-  setRegisteredBackends([cloudBackend]);
+  setRegisteredBackends([localProxyBackend, cloudBackend]);
   setActiveSelection({ backendId: cloudBackend.id });
   vi.mocked(axios.post).mockReset();
   vi.mocked(axios.post).mockResolvedValue({ data: [] });

@@ -6,6 +6,7 @@ import {
   setRegisteredBackends,
 } from "#/api/backend-registry/active-store";
 import type { Backend } from "#/api/backend-registry/types";
+import { localProxyBackend } from "./test-backends";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 
 vi.mock("axios");
@@ -21,7 +22,7 @@ const cloudBackend: Backend = {
 beforeEach(() => {
   window.localStorage.clear();
   __resetActiveStoreForTests();
-  setRegisteredBackends([cloudBackend]);
+  setRegisteredBackends([localProxyBackend, cloudBackend]);
   setActiveSelection({ backendId: cloudBackend.id });
   vi.mocked(axios.post).mockReset();
 });

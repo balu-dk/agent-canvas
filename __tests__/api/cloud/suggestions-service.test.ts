@@ -7,6 +7,7 @@ import {
 } from "#/api/backend-registry/active-store";
 import { getCloudSuggestedTasks } from "#/api/cloud/suggestions-service.api";
 import type { Backend } from "#/api/backend-registry/types";
+import { localProxyBackend } from "./test-backends";
 
 vi.mock("axios");
 
@@ -20,7 +21,7 @@ const cloudBackend: Backend = {
 
 beforeEach(() => {
   __resetActiveStoreForTests();
-  setRegisteredBackends([cloudBackend]);
+  setRegisteredBackends([localProxyBackend, cloudBackend]);
   setActiveSelection({ backendId: cloudBackend.id });
   vi.mocked(axios.post).mockReset();
   vi.mocked(axios.post).mockResolvedValue({
