@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetActiveStoreForTests,
   getActiveBackend,
+  getEffectiveLocalBackend,
   NO_BACKEND_ID,
   setActiveSelection,
   setRegisteredBackends,
@@ -82,6 +83,20 @@ describe("active-store", () => {
     setActiveSelection(null);
 
     expect(getActiveBackend().backend).toEqual(cloudBackend);
+  });
+
+  it("uses the active local backend as the effective local backend", () => {
+    setRegisteredBackends([localBackend, cloudBackend]);
+    setActiveSelection({ backendId: localBackend.id });
+
+    expect(getEffectiveLocalBackend()).toEqual(localBackend);
+  });
+
+  it("does not borrow a registered local backend when the active backend is cloud", () => {
+    setRegisteredBackends([localBackend, cloudBackend]);
+    setActiveSelection({ backendId: cloudBackend.id });
+
+    expect(getEffectiveLocalBackend()).toBeNull();
   });
 
   it("notifies subscribers when selection changes", () => {

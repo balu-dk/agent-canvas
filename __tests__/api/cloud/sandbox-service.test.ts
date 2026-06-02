@@ -7,7 +7,6 @@ import {
 } from "#/api/backend-registry/active-store";
 import { batchGetCloudSandboxes } from "#/api/cloud/sandbox-service.api";
 import type { Backend } from "#/api/backend-registry/types";
-import { localProxyBackend } from "./test-backends";
 
 vi.mock("axios");
 
@@ -22,16 +21,16 @@ const cloudBackend: Backend = {
 beforeEach(() => {
   window.localStorage.clear();
   __resetActiveStoreForTests();
-  setRegisteredBackends([localProxyBackend, cloudBackend]);
+  setRegisteredBackends([cloudBackend]);
   setActiveSelection({ backendId: cloudBackend.id });
-  vi.mocked(axios.post).mockReset();
-  vi.mocked(axios.post).mockResolvedValue({ data: [] });
+  vi.mocked(axios.request).mockReset();
+  vi.mocked(axios.request).mockResolvedValue({ data: [] });
 });
 
 afterEach(() => {
   window.localStorage.clear();
   __resetActiveStoreForTests();
-  vi.mocked(axios.post).mockReset();
+  vi.mocked(axios.request).mockReset();
 });
 
 describe("batchGetCloudSandboxes", () => {
@@ -45,13 +44,13 @@ describe("batchGetCloudSandboxes", () => {
     // Act
     await batchGetCloudSandboxes(ids);
 
-    // Assert — the cloud-proxy envelope encodes a GET against
-    // /api/v1/sandboxes?id=sandbox-a&id=sandbox-b on the cloud backend.
-    const [, body] = vi.mocked(axios.post).mock.calls[0]!;
-    const upstream = body as { method: string; path: string };
-    expect(upstream.method).toBe("GET");
-    expect(upstream.path).toBe(
-      "/api/v1/sandboxes?id=sandbox-a&id=sandbox-b",
+    const [config] = vi.mocked(axios.request).mock.calls[0]!;
+    expect(config).toMatchObject({
+      method: "GET",
+      headers: { Authorization: "Bearer bearer-token" },
+    });
+    expect((config as { url: string }).url).toBe(
+      `${cloudBackend.host}/api/v1/sandboxes?id=sandbox-a&id=sandbox-b`,
     );
   });
 });

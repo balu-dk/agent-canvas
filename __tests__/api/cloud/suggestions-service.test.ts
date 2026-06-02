@@ -7,7 +7,6 @@ import {
 } from "#/api/backend-registry/active-store";
 import { getCloudSuggestedTasks } from "#/api/cloud/suggestions-service.api";
 import type { Backend } from "#/api/backend-registry/types";
-import { localProxyBackend } from "./test-backends";
 
 vi.mock("axios");
 
@@ -21,17 +20,17 @@ const cloudBackend: Backend = {
 
 beforeEach(() => {
   __resetActiveStoreForTests();
-  setRegisteredBackends([localProxyBackend, cloudBackend]);
+  setRegisteredBackends([cloudBackend]);
   setActiveSelection({ backendId: cloudBackend.id });
-  vi.mocked(axios.post).mockReset();
-  vi.mocked(axios.post).mockResolvedValue({
+  vi.mocked(axios.request).mockReset();
+  vi.mocked(axios.request).mockResolvedValue({
     data: { items: [], next_page_id: null },
   });
 });
 
 afterEach(() => {
   __resetActiveStoreForTests();
-  vi.mocked(axios.post).mockReset();
+  vi.mocked(axios.request).mockReset();
 });
 
 describe("getCloudSuggestedTasks", () => {
@@ -40,10 +39,10 @@ describe("getCloudSuggestedTasks", () => {
     await getCloudSuggestedTasks({ limit: 10, pageId: "p2" });
 
     // Assert
-    const [, body] = vi.mocked(axios.post).mock.calls[0]!;
-    const path = (body as { path: string }).path;
-    expect(path).toContain("/api/v1/git/suggested-tasks/search");
-    expect(path).toContain("limit=10");
-    expect(path).toContain("page_id=p2");
+    const [config] = vi.mocked(axios.request).mock.calls[0]!;
+    const url = (config as { url: string }).url;
+    expect(url).toContain("/api/v1/git/suggested-tasks/search");
+    expect(url).toContain("limit=10");
+    expect(url).toContain("page_id=p2");
   });
 });

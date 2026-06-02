@@ -50,22 +50,13 @@ afterEach(() => {
 });
 
 describe("loadAgentServerInfo", () => {
-  it("targets the bundled local backend even when the active backend is cloud", async () => {
+  it("does not borrow a registered local backend when the active backend is cloud", async () => {
     setRegisteredBackends([localBackend, cloudBackend]);
     setActiveSelection({ backendId: cloudBackend.id });
 
-    await loadAgentServerInfo();
+    const result = await loadAgentServerInfo();
 
-    expect(ServerClient).toHaveBeenCalledOnce();
-    const callArgs = vi.mocked(ServerClient).mock.calls[0] as unknown as [
-      { host?: string; apiKey?: string | null },
-    ];
-    const overrides = callArgs[0];
-
-    // Must NOT use the cloud host — that endpoint doesn't exist on cloud
-    // and would fail with a CORS preflight error.
-    expect(overrides.host).toBeDefined();
-    expect(overrides.host).not.toBe(cloudBackend.host);
-    expect(overrides.host).not.toContain("all-hands.dev");
+    expect(result).toBeNull();
+    expect(ServerClient).not.toHaveBeenCalled();
   });
 });

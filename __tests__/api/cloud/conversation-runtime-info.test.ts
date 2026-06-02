@@ -6,7 +6,6 @@ import {
   setRegisteredBackends,
 } from "#/api/backend-registry/active-store";
 import type { Backend } from "#/api/backend-registry/types";
-import { localProxyBackend } from "./test-backends";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 
 vi.mock("axios");
@@ -60,7 +59,7 @@ describe("AgentServerConversationService.getRuntimeConversation", () => {
   describe("cloud mode", () => {
     beforeEach(() => {
       __resetActiveStoreForTests();
-      setRegisteredBackends([localProxyBackend, cloudBackend]);
+      setRegisteredBackends([cloudBackend]);
       setActiveSelection({ backendId: cloudBackend.id });
       vi.mocked(axios.post).mockReset();
     });
@@ -72,11 +71,12 @@ describe("AgentServerConversationService.getRuntimeConversation", () => {
         "http://abc123.runtime.all-hands.dev/api/conversations/conv-abc";
 
       // Act
-      const result = await AgentServerConversationService.getRuntimeConversation(
-        "conv-abc",
-        conversationUrl,
-        "session-xyz",
-      );
+      const result =
+        await AgentServerConversationService.getRuntimeConversation(
+          "conv-abc",
+          conversationUrl,
+          "session-xyz",
+        );
 
       // Assert
       expect(axios.post).toHaveBeenCalledOnce();
@@ -115,11 +115,12 @@ describe("AgentServerConversationService.getRuntimeConversation", () => {
         "http://192.168.1.42:8888/api/conversations/conv-abc";
 
       // Act
-      const result = await AgentServerConversationService.getRuntimeConversation(
-        "conv-abc",
-        conversationUrl,
-        "session-xyz",
-      );
+      const result =
+        await AgentServerConversationService.getRuntimeConversation(
+          "conv-abc",
+          conversationUrl,
+          "session-xyz",
+        );
 
       // Assert
       expect(axios.post).not.toHaveBeenCalled();

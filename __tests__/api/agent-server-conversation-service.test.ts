@@ -691,20 +691,12 @@ describe("AgentServerConversationService", () => {
       kind: "cloud",
     };
 
-    const localBackend: Backend = {
-      id: "local",
-      name: "Local",
-      host: "http://localhost:9000",
-      apiKey: "local-key",
-      kind: "local",
-    };
-
     beforeEach(() => {
       window.localStorage.clear();
       __resetActiveStoreForTests();
-      setRegisteredBackends([localBackend, cloudBackend]);
+      setRegisteredBackends([cloudBackend]);
       setActiveSelection({ backendId: cloudBackend.id });
-      vi.mocked(axios.post).mockReset();
+      vi.mocked(axios.request).mockReset();
     });
 
     afterEach(() => {
@@ -714,7 +706,7 @@ describe("AgentServerConversationService", () => {
 
     it("forwards parent_conversation_id, agent_type, and sandbox_id to the cloud createConversation payload", async () => {
       // Arrange
-      vi.mocked(axios.post).mockResolvedValue({
+      vi.mocked(axios.request).mockResolvedValue({
         data: {
           id: "task-1",
           status: "WORKING",
@@ -739,13 +731,13 @@ describe("AgentServerConversationService", () => {
       );
 
       // Assert
-      const [, body] = vi.mocked(axios.post).mock.calls[0]!;
-      const upstream = body as {
-        path: string;
-        body: Record<string, unknown>;
-      };
-      expect(upstream.path).toBe("/api/v1/app-conversations");
-      expect(upstream.body).toMatchObject({
+      const [config] = vi.mocked(axios.request).mock.calls[0]!;
+      expect(config).toMatchObject({
+        url: `${cloudBackend.host}/api/v1/app-conversations`,
+        method: "POST",
+        headers: { Authorization: "Bearer bearer-token" },
+      });
+      expect((config as { data: Record<string, unknown> }).data).toMatchObject({
         parent_conversation_id: "parent-conv-1",
         agent_type: "plan",
         sandbox_id: "sandbox-9",
@@ -754,7 +746,7 @@ describe("AgentServerConversationService", () => {
 
     it("routes readConversationFile to the cloud file endpoint with the file_path query param", async () => {
       // Arrange
-      vi.mocked(axios.post).mockResolvedValue({ data: "# PLAN content" });
+      vi.mocked(axios.request).mockResolvedValue({ data: "# PLAN content" });
 
       // Act
       const content =
@@ -764,11 +756,13 @@ describe("AgentServerConversationService", () => {
 
       // Assert
       expect(content).toBe("# PLAN content");
-      const [, body] = vi.mocked(axios.post).mock.calls[0]!;
-      const upstream = body as { method: string; path: string };
-      expect(upstream.method).toBe("GET");
-      expect(upstream.path).toBe(
-        "/api/v1/app-conversations/conv-cloud-1/file?file_path=%2Fworkspace%2Fproject%2F.agents_tmp%2FPLAN.md",
+      const [config] = vi.mocked(axios.request).mock.calls[0]!;
+      expect(config).toMatchObject({
+        method: "GET",
+        headers: { Authorization: "Bearer bearer-token" },
+      });
+      expect((config as { url: string }).url).toBe(
+        `${cloudBackend.host}/api/v1/app-conversations/conv-cloud-1/file?file_path=%2Fworkspace%2Fproject%2F.agents_tmp%2FPLAN.md`,
       );
     });
   });

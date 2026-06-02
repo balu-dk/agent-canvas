@@ -88,15 +88,13 @@ export function getActiveBackend(): ResolvedActiveBackend {
  *
  * Most of the GUI's services (settings reads/writes, conversation CRUD,
  * skills/MCP/secrets, etc.) speak the local agent-server's protocol —
- * they would fail against a cloud host. When the user has chosen a
- * cloud backend as active, those calls fall back to the first registered
- * local backend. If no local backend is registered, callers should skip
- * local-only work instead of synthesizing one.
+ * they would fail against a cloud host. Only the active backend is eligible:
+ * a cloud selection must not borrow another registered local backend.
  */
 export function getEffectiveLocalBackend(): Backend | null {
   const active = snapshot.active.backend;
   if (active.kind === "local" && !isNoBackend(active)) return active;
-  return snapshot.backends.find((backend) => backend.kind === "local") ?? null;
+  return null;
 }
 
 export function getRegisteredBackends(): Backend[] {
