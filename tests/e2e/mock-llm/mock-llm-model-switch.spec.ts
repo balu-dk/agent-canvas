@@ -174,19 +174,21 @@ test.describe("mock-LLM /model slash command", () => {
   }) => {
     test.setTimeout(120_000);
 
-    // Track whether the switch_profile POST was intercepted.
-    let switchProfileCalled = false;
-    let switchProfileBody: Record<string, unknown> | null = null;
+    // Track whether the switch_llm POST was intercepted.
+    // The switchProfile service method fetches the full profile config and
+    // then calls conversationClient.switchLLM(), which POSTs to
+    // /api/conversations/{id}/switch_llm with the resolved LLM config.
+    let switchLlmCalled = false;
+    let switchLlmBody: Record<string, unknown> | null = null;
     page.on("request", (req) => {
       const url = new URL(req.url());
-      // The switch_profile endpoint is POST /api/conversations/{id}/switch_profile
       if (
         req.method() === "POST" &&
-        url.pathname.match(/\/api\/conversations\/[^/]+\/switch_profile/)
+        url.pathname.match(/\/api\/conversations\/[^/]+\/switch_llm/)
       ) {
-        switchProfileCalled = true;
+        switchLlmCalled = true;
         try {
-          switchProfileBody = req.postDataJSON();
+          switchLlmBody = req.postDataJSON();
         } catch {
           // non-JSON body
         }
@@ -232,19 +234,21 @@ test.describe("mock-LLM /model slash command", () => {
       await waitForNonUserMessageText(page, PROFILE_B_NAME, 30_000);
     });
 
-    // ── Verify: the switch_profile POST was made ──
+    // ── Verify: the switch_llm POST was made ──
 
-    await test.step("verify switch_profile API was called", async () => {
+    await test.step("verify switch_llm API was called", async () => {
       expect(
-        switchProfileCalled,
-        "POST /switch_profile should have been called",
+        switchLlmCalled,
+        "POST /switch_llm should have been called",
       ).toBe(true);
-      expect(switchProfileBody).toBeTruthy();
-      // The switch_profile API uses { profile_name: "..." }
+      expect(switchLlmBody).toBeTruthy();
+      // The switch_llm API sends the resolved LLM config with model field
+      const llm = switchLlmBody!.llm as Record<string, unknown> | undefined;
+      expect(llm, "switch_llm body should contain an llm object").toBeTruthy();
       expect(
-        switchProfileBody!.profile_name,
-        `switch_profile body.profile_name should be "${PROFILE_B_NAME}"`,
-      ).toBe(PROFILE_B_NAME);
+        llm!.model,
+        `switch_llm body.llm.model should be "${MODEL_B}"`,
+      ).toBe(MODEL_B);
     });
 
     // ── Send a follow-up message to verify conversation still works ──
