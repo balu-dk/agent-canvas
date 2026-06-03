@@ -158,13 +158,46 @@ function createMainWindow() {
     mainWin?.maximize();
   });
 
-  // Open external links in the system browser rather than a new Electron window.
+  // Route window.open() calls appropriately.
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")) {
+    // The "Login with OpenHands Cloud" device-flow opens about:blank immediately
+    // on the user's click (to beat popup blockers), then navigates the popup to
+    // the OAuth verification URL once it has one.  We must allow about:blank
+    // through so window.open() returns a non-null WindowProxy; the did-create-window
+    // handler below redirects the popup to the system browser when it navigates.
+    if (url === "about:blank") {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: { width: 800, height: 700 },
+      };
+    }
+    // All other external URLs open directly in the system browser.
+    if (
+      !url.startsWith("http://localhost") &&
+      !url.startsWith("http://127.0.0.1")
+    ) {
       shell.openExternal(url);
       return { action: "deny" };
     }
     return { action: "allow" };
+  });
+
+  // When the renderer opens a popup (the about:blank above), watch for its
+  // first navigation away from about:blank.  That navigation will be to the
+  // OAuth verification URL — open it in the system browser and close the
+  // now-unneeded Electron popup.
+  mainWin.webContents.on("did-create-window", (popupWin) => {
+    popupWin.webContents.on("will-navigate", (_event, url) => {
+      if (
+        url !== "about:blank" &&
+        !url.startsWith("http://localhost") &&
+        !url.startsWith("http://127.0.0.1")
+      ) {
+        _event.preventDefault();
+        shell.openExternal(url);
+        popupWin.close();
+      }
+    });
   });
 
   mainWin.on("closed", () => {
