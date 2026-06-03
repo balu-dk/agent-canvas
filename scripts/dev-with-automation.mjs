@@ -387,7 +387,7 @@ function commandExists(cmd) {
   return result.status === 0;
 }
 
-function checkPrerequisites({ checkFrontendDependencies = true } = {}) {
+function checkPrerequisites({ checkFrontendDependencies = true, skipNpmCheck = false } = {}) {
   logStep("1/2", "Checking prerequisites...");
 
   if (!commandExists("uvx")) {
@@ -396,11 +396,13 @@ function checkPrerequisites({ checkFrontendDependencies = true } = {}) {
   }
   logSuccess("uvx found");
 
-  if (!commandExists("npm")) {
-    logError("npm is required but not found");
-    process.exit(1);
+  if (!skipNpmCheck) {
+    if (!commandExists("npm")) {
+      logError("npm is required but not found");
+      process.exit(1);
+    }
+    logSuccess("npm found");
   }
-  logSuccess("npm found");
 
   if (checkFrontendDependencies) {
     try {
@@ -958,6 +960,9 @@ async function main(options = {}) {
     // When true, enable public mode (require LOCAL_BACKEND_API_KEY,
     // don't bake session key into frontend).
     isPublic: isPublicOverride,
+    // When true, skip the npm prerequisite check. Used by the Electron desktop
+    // launcher where npm is not needed at runtime in static mode.
+    skipNpmCheck = false,
   } = options;
 
   const args = parseArgs();
@@ -985,6 +990,7 @@ async function main(options = {}) {
   checkPrerequisites({
     checkFrontendDependencies:
       !useStaticMode || typeof buildStaticFrontend === "function",
+    skipNpmCheck,
   });
 
   // Fail fast on an obviously bad OH_AGENT_SERVER_LOCAL_PATH so we don't waste
