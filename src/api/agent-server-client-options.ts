@@ -41,12 +41,12 @@ function normalizeHost(host: string): string {
 
 function resolveHost(
   overrides: AgentServerClientOverrides,
-  backend: Backend,
+  backend: Backend | null,
 ): string {
   if (overrides.host) return normalizeHost(overrides.host);
   if (overrides.conversationUrl)
     return normalizeHost(buildHttpBaseUrl(overrides.conversationUrl));
-  return normalizeHost(backend.host);
+  return normalizeHost(backend?.host ?? "");
 }
 
 export function getAgentServerClientOptions(
@@ -57,21 +57,11 @@ export function getAgentServerClientOptions(
     throw new NoBackendAvailableError();
   }
 
-  const fallbackBackend: Backend = backend ?? {
-    id: "override-only",
-    name: "Override",
-    host: "",
-    apiKey: "",
-    kind: "local",
-  };
   const apiKey =
-    overrides.sessionApiKey ??
-    overrides.apiKey ??
-    fallbackBackend.apiKey ??
-    undefined;
+    overrides.sessionApiKey ?? overrides.apiKey ?? backend?.apiKey ?? undefined;
 
   return {
-    host: resolveHost(overrides, fallbackBackend),
+    host: resolveHost(overrides, backend),
     ...(apiKey ? { apiKey } : {}),
     workingDir: overrides.workingDir ?? getAgentServerWorkingDir(),
     ...(overrides.timeout !== undefined ? { timeout: overrides.timeout } : {}),

@@ -117,15 +117,15 @@ function isValidHostUrl(host: string): boolean {
 }
 
 const DEFAULT_OPENHANDS_CLOUD_HOST = "https://app.all-hands.dev";
-const CONNECTION_TEST_HOST_SENTINEL = "__AGENT_CANVAS_BACKEND_HOST__";
 
 function getConnectionTestFailedTitle(
   t: ReturnType<typeof useTranslation>["t"],
   host: string,
 ): string {
   return t(I18nKey.BACKEND$CONNECTION_TEST_FAILED, {
-    host: CONNECTION_TEST_HOST_SENTINEL,
-  }).replace(CONNECTION_TEST_HOST_SENTINEL, host);
+    host,
+    interpolation: { escapeValue: false },
+  });
 }
 
 function getConnectionErrorDetail(error: unknown): string | null {
@@ -142,6 +142,7 @@ function getConnectionTestFailedMessage(title: string, error: unknown): string {
 async function testBackendConnection(
   backend: Pick<Backend, "host" | "apiKey" | "kind">,
 ): Promise<void> {
+  // Cloud backends authenticate via OAuth; preflight GET is not applicable.
   if (backend.kind !== "local") return;
 
   await new ServerClient(
