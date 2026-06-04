@@ -431,6 +431,9 @@ export async function resetMockLLM(request: APIRequestContext) {
  * rendering (e.g. a non-default base_url forces the LLM form into
  * "Advanced" view instead of "Basic"). Calling this before a spec
  * that needs virgin settings ensures test-order independence.
+ *
+ * The agent-server validates field types (rejects null), so we send
+ * empty strings to clear the values.
  */
 export async function resetAgentServerLLMSettings(
   request: APIRequestContext,
@@ -443,9 +446,9 @@ export async function resetAgentServerLLMSettings(
     data: {
       agent_settings_diff: {
         llm: {
-          model: null,
-          api_key: null,
-          base_url: null,
+          model: "",
+          api_key: "",
+          base_url: "",
         },
       },
     },

@@ -14,11 +14,12 @@ import {
 test.describe.configure({ mode: "serial" });
 
 test.describe("onboarding recent regressions", () => {
-  // Reset the agent-server's LLM settings before each test so the
-  // onboarding flow sees a genuinely clean state — no stale base_url,
-  // model, or api_key left behind by earlier specs. This makes the
-  // tests order-independent without brittle response patching.
-  test.beforeEach(async ({ request }) => {
+  // Reset the agent-server's LLM settings once before this describe
+  // block so the onboarding flow sees a genuinely clean state — no
+  // stale base_url, model, or api_key left behind by earlier specs.
+  // Using beforeAll (not beforeEach) avoids unnecessary resets between
+  // the serial tests in this block, which share the same clean state.
+  test.beforeAll(async ({ request }) => {
     await resetAgentServerLLMSettings(request);
   });
 
