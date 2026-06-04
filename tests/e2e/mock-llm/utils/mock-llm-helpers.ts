@@ -423,17 +423,17 @@ export async function resetMockLLM(request: APIRequestContext) {
 }
 
 /**
- * Reset the agent-server's LLM settings to a clean state.
+ * Reset the agent-server's LLM base_url to its default.
  *
  * Earlier specs (conversation, automation, etc.) configure the real
- * agent-server with custom LLM settings (model, base_url, api_key).
- * That stale state leaks into later specs and can change component
- * rendering (e.g. a non-default base_url forces the LLM form into
- * "Advanced" view instead of "Basic"). Calling this before a spec
- * that needs virgin settings ensures test-order independence.
+ * agent-server with a custom llm.base_url pointing at the mock LLM
+ * server. That stale URL causes LlmSettingsScreen's getInitialView
+ * to select "Advanced" view instead of "Basic", hiding the
+ * ModelSelector dropdowns the onboarding tests assert against.
  *
- * The agent-server validates field types (rejects null), so we send
- * empty strings to clear the values.
+ * We only clear base_url — model and api_key are left alone because
+ * the agent-server validates them strictly (rejects empty strings).
+ * The base_url is the only field that affects view-mode selection.
  */
 export async function resetAgentServerLLMSettings(
   request: APIRequestContext,
@@ -446,8 +446,6 @@ export async function resetAgentServerLLMSettings(
     data: {
       agent_settings_diff: {
         llm: {
-          model: "",
-          api_key: "",
           base_url: "",
         },
       },
