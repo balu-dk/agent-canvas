@@ -36,6 +36,13 @@
  *
  * The bundled uv binary (resources/bin/) lands in <Resources>/bin/ via
  * extraResources so Electron can inject it into PATH on startup.
+ *
+ * The bundled npm CLI (resources/npm/) lands in <Resources>/npm/ via
+ * extraResources. Electron creates thin `npm` and `npx` wrappers at
+ * startup that run Electron-as-Node against <Resources>/npm/bin/{npm,npx}-cli.js
+ * — that's what lets stdio MCP servers like `npx -y @zencoderai/slack-mcp-server`
+ * spawn correctly when the .app is launched from Finder/Spotlight on macOS
+ * (where the OS gives the app a minimal PATH of /usr/bin:/bin only).
  */
 
 import { rm } from "node:fs/promises";
@@ -165,11 +172,18 @@ const config = {
     { from: "../tools", to: "tools" },
   ],
 
-  // Bundled uv binary — placed in <Resources>/bin/ so Electron can inject
-  // it into PATH before starting the backend stack.
+  // Bundled prerequisites — placed in <Resources>/ so Electron can put
+  // them on PATH before starting the backend stack.
+  //   bin/  — uv + uvx (downloaded by `npm run download-uv`)
+  //   npm/  — npm CLI tarball, used to provide `npm` / `npx` to stdio MCP
+  //           servers via Electron-as-Node wrappers in main.mjs (downloaded
+  //           by `npm run download-npm`)
   // `from` is relative to the project root (not directories.app).
-  // Run `npm run download-uv` (called by build:desktop) to populate this.
-  extraResources: [{ from: "resources/bin/", to: "bin/", filter: ["**/*"] }],
+  // build:desktop calls both download scripts before invoking electron-builder.
+  extraResources: [
+    { from: "resources/bin/", to: "bin/", filter: ["**/*"] },
+    { from: "resources/npm/", to: "npm/", filter: ["**/*"] },
+  ],
 
   // ── macOS ──────────────────────────────────────────────────────────────────
   //
