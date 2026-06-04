@@ -123,9 +123,13 @@ const config = {
 
   // Treat electron/ as the app root. electron/package.json provides the
   // Electron entry point without touching the npm-published root package.json.
+  // `buildResources` points at electron/build-resources so electron-builder
+  // can auto-discover icon.png (1024×1024 OpenHands raised-hands app icon)
+  // and generate the platform-specific icon.icns / icon.ico from it.
   directories: {
     app: "electron",
     output: "dist-electron",
+    buildResources: "electron/build-resources",
   },
 
   // Do not pack into asar — scripts are spawned as child processes by
@@ -144,6 +148,10 @@ const config = {
   files: [
     // electron/ base files (main.mjs, loading.html, package.json)
     "**/*",
+    // Bundle the raw 1024×1024 PNG into Resources/app/build-resources/ so
+    // main.mjs can set it as the BrowserWindow icon at runtime (used for the
+    // Linux taskbar; macOS reads from the .icns inside the .app bundle).
+    "build-resources/icon.png",
     // Scripts from project root — Node.js built-ins only, no node_modules needed.
     { from: "../scripts", to: "scripts", filter: ["**/*.mjs", "**/*.cjs"] },
     // Centralised version / port / path config
@@ -185,8 +193,8 @@ const config = {
         ],
       },
     ],
-    // Add icon: "electron/build-resources/icon.icns" once a 512×512 source
-    // image is available. Run: electron-icon-builder --input=icon.png --output=electron/build-resources
+    // Icon auto-discovered from directories.buildResources/icon.png
+    // (electron-builder generates icon.icns from the 1024×1024 PNG).
   },
 
   dmg: {
@@ -201,7 +209,8 @@ const config = {
   // ── Windows ────────────────────────────────────────────────────────────────
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
-    // Add icon: "electron/build-resources/icon.ico" once artwork is available.
+    // Icon auto-discovered from directories.buildResources/icon.png
+    // (electron-builder generates icon.ico from the 1024×1024 PNG).
   },
 
   nsis: {
@@ -219,7 +228,7 @@ const config = {
       { target: "deb", arch: ["x64"] },
     ],
     category: "Development",
-    // Add icon: "electron/build-resources/icon.png" once artwork is available.
+    // Icon auto-discovered from directories.buildResources/icon.png.
   },
 };
 
