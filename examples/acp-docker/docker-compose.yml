@@ -36,6 +36,14 @@ services:
       # OH_EXTRA_PYTHON_PATH at conversation creation. Without the mount below +
       # this var, conversation creation fails to import ``canvas_ui_tool``.
       - OH_EXTRA_PYTHON_PATH=/canvas-tools
+      # Optional cipher key. ACP conversations work without it (Canvas sends ACP
+      # provider credentials as plaintext StaticSecrets and does NOT flag the
+      # request secrets_encrypted). Set it to (a) persist saved secrets across
+      # container restarts and (b) enable the encrypted-settings path used by
+      # OpenHands-agent (non-ACP) conversations. Generate one with
+      # `python -c "import secrets;print(secrets.token_urlsafe(32))"`.
+      # - OH_SECRET_KEY=${OH_SECRET_KEY}
+      #
       # The agent-server's CORS already allows localhost origins, so no extra
       # config is needed for the browser to reach it directly.
       #

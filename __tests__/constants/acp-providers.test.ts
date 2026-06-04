@@ -8,6 +8,7 @@ import {
   getAcpProvider,
   getAcpProviderDisplayName,
   getAcpProviderSecrets,
+  getAllReservedAcpFileSecretNames,
   getReservedAcpSecretNames,
 } from "#/constants/acp-providers";
 
@@ -166,6 +167,23 @@ describe("getReservedAcpSecretNames", () => {
   it("returns [] for non-ACP / unknown keys", () => {
     expect(getReservedAcpSecretNames("openhands")).toEqual([]);
     expect(getReservedAcpSecretNames(null)).toEqual([]);
+  });
+});
+
+describe("getAllReservedAcpFileSecretNames", () => {
+  it("collects the multiline file-content blobs across all providers", () => {
+    // These are the only reserved creds the SDK materialises to disk; they must
+    // never travel as LookupSecrets (eager materialisation would time out).
+    expect(new Set(getAllReservedAcpFileSecretNames())).toEqual(
+      new Set(["CODEX_AUTH_JSON", "GOOGLE_APPLICATION_CREDENTIALS_JSON"]),
+    );
+  });
+
+  it("excludes the non-file reserved creds (tokens, project, API keys)", () => {
+    const fileNames = getAllReservedAcpFileSecretNames();
+    expect(fileNames).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+    expect(fileNames).not.toContain("GOOGLE_CLOUD_PROJECT");
+    expect(fileNames).not.toContain("ANTHROPIC_API_KEY");
   });
 });
 

@@ -390,6 +390,29 @@ export function getReservedAcpSecretNames(
 }
 
 /**
+ * Every reserved **file-content** credential name across all providers (the
+ * multiline ``*_JSON`` blobs the SDK materialises to disk: Codex
+ * ``CODEX_AUTH_JSON``, Gemini ``GOOGLE_APPLICATION_CREDENTIALS_JSON``).
+ *
+ * These must only ever reach the agent-server as inline ``StaticSecret``s for
+ * the *active* provider — never as a ``LookupSecret``. The SDK materialises
+ * them eagerly at spawn time by resolving the secret source; a ``LookupSecret``
+ * resolution (server-side fetch) stalls and times out, failing the whole
+ * conversation. So the conversation-start path drops any such name it isn't
+ * sending inline — e.g. a leftover ``CODEX_AUTH_JSON`` from a prior Codex
+ * onboarding must not leak into (and break) a Claude conversation.
+ */
+export function getAllReservedAcpFileSecretNames(): string[] {
+  const names = new Set<string>();
+  for (const provider of ACP_PROVIDERS) {
+    for (const field of getAcpProviderSecrets(provider.key)) {
+      if (field.reserved && field.multiline) names.add(field.name);
+    }
+  }
+  return [...names];
+}
+
+/**
  * Look up a built-in ACP provider config by its registry key.
  *
  * Returns ``undefined`` for an empty / null key, for the ``"custom"`` preset

@@ -3,6 +3,7 @@ import { ExecutionStatus } from "#/types/agent-server/core";
 import { Settings, SettingsValue } from "#/types/settings";
 import {
   getAcpProvider,
+  getAllReservedAcpFileSecretNames,
   getReservedAcpSecretNames,
   resolveEffectiveAcpModel,
 } from "#/constants/acp-providers";
@@ -801,7 +802,16 @@ export function buildStartConversationRequest(
     payload.tags = { [ACP_SERVER_TAG_KEY]: acpServerTag };
   }
 
-  if (options.secretsEncrypted) {
+  // ``secrets_encrypted`` tells the agent-server the request's secret values are
+  // cipher-encrypted and must be run through ``cipher.decrypt()`` at conversation
+  // start. Suppress it for ACP: an ACP agent carries no encrypted agent secret
+  // (no LLM api_key), and its reserved provider credentials ride as **plaintext**
+  // StaticSecrets read back from the backend store. Flagging those as encrypted
+  // makes the server decrypt plaintext — which silently drops the value (decrypt
+  // fails → None) when a cipher is set, and hard-fails ("cipher not configured")
+  // on a backend without ``OH_SECRET_KEY`` (e.g. a fresh container, this PR's
+  // target). Non-ACP conversations still need it for their encrypted LLM key.
+  if (options.secretsEncrypted && !acpMode) {
     payload.secrets_encrypted = true;
   }
 
@@ -840,6 +850,17 @@ export function buildStartConversationRequest(
 
   const secrets: Record<string, ConversationSecret> = {};
 
+  // Reserved file-content credentials (Codex/Gemini ``*_JSON`` blobs) must never
+  // ride as LookupSecrets in an ACP conversation: the SDK materialises them
+  // eagerly at spawn and a LookupSecret resolution stalls/times out, failing the
+  // conversation. The active provider's blob is sent inline as a StaticSecret
+  // below; a *different* provider's leftover blob (e.g. a saved CODEX_AUTH_JSON
+  // when running Claude) is irrelevant and is dropped here so it can't break the
+  // spawn. Non-ACP conversations are unaffected.
+  const lookupSkip = acpMode
+    ? new Set(getAllReservedAcpFileSecretNames())
+    : new Set<string>();
+
   // Global Settings → Secrets entries: the agent-server fetches each value back
   // from the canvas/agent-server store at resolution time via a host-relative
   // LookupSecret URL (authenticated with the active backend's headers).
@@ -848,6 +869,7 @@ export function buildStartConversationRequest(
     const headers = backend ? buildAuthHeaders(backend) : {};
 
     for (const secret of options.customSecrets) {
+      if (lookupSkip.has(secret.name)) continue;
       const lookupSecret: LookupSecret = {
         kind: "LookupSecret",
         url: `/api/settings/secrets/${encodeURIComponent(secret.name)}`,
