@@ -376,16 +376,12 @@ describe("buildStartConversationRequest", () => {
     });
   });
 
-  it("mirrors conversation secrets onto agent_settings.agent_context.secrets for ACP", () => {
-    // Until canvas pins to an agent-server build that includes
-    // software-agent-sdk PR #3299, the bare ``payload.secrets`` channel
-    // only reaches ``secret_registry`` server-side — ``ACPAgent``'s
-    // spawn-time env loop reads from ``agent_context.secrets``, not
-    // from the registry, so a Settings → Secrets entry like
-    // ``ANTHROPIC_API_KEY`` would silently fail to land in the ACP
-    // CLI's environment. Mirror the same LookupSecret map onto
-    // ``agent_settings.agent_context.secrets`` so the existing SDK loop picks
-    // it up. Mirrors OpenHands' app-server bridging.
+  it("does NOT mirror conversation secrets onto agent_context for ACP — request.secrets is the sole channel", () => {
+    // The pinned minimum agent-server (1.25.0) injects the ACP spawn env from
+    // ``secret_registry``, which is seeded from ``request.secrets``
+    // (sdk#3299/#3464; the agent_context drain is gone entirely in sdk#3528).
+    // Mirroring the map onto ``agent_context.secrets`` would keep a second,
+    // dead credential channel alive (agent-canvas#1039 wants exactly one).
     const payload = buildStartConversationRequest({
       settings: {
         ...DEFAULT_SETTINGS,
@@ -402,19 +398,13 @@ describe("buildStartConversationRequest", () => {
       secrets: Record<string, unknown>;
     };
 
-    // Same LookupSecret object lands in both places — the bare-secrets
-    // channel (for any non-ACP consumer / for SDK #3299 once it lands)
-    // and the agent_context bridge (for current ACPAgent spawns).
     expect(payload.secrets.ANTHROPIC_API_KEY).toBeDefined();
-    expect(
-      payload.agent_settings.agent_context?.secrets?.ANTHROPIC_API_KEY,
-    ).toEqual(payload.secrets.ANTHROPIC_API_KEY);
+    expect(payload.agent_settings.agent_context?.secrets).toBeUndefined();
   });
 
   it("does not synthesize agent_context.secrets for ACP when no custom secrets are set", () => {
     // Empty/absent customSecrets must not introduce an empty
-    // ``agent_context.secrets`` map on the ACPAgent payload — the
-    // bridge only fires when there's something to bridge.
+    // ``agent_context.secrets`` map on the ACPAgent payload.
     const payload = buildStartConversationRequest({
       settings: {
         ...DEFAULT_SETTINGS,
@@ -462,7 +452,7 @@ describe("buildStartConversationRequest", () => {
       },
     });
 
-    it("delivers provider credentials and user secrets uniformly as LookupSecrets, mirrored onto agent_context", () => {
+    it("delivers provider credentials and user secrets uniformly as LookupSecrets in request.secrets only", () => {
       // Provider credentials (e.g. a saved CODEX_AUTH_JSON) are no longer special
       // on the wire — they ride as LookupSecrets like any custom secret. The SDK
       // resolves them off the event loop at spawn, so the loopback fetch is safe
@@ -480,11 +470,9 @@ describe("buildStartConversationRequest", () => {
 
       expect(payload.secrets.CODEX_AUTH_JSON?.kind).toBe("LookupSecret");
       expect(payload.secrets.MY_TOKEN?.kind).toBe("LookupSecret");
-      // The same LookupSecret map is mirrored onto agent_context (the channel
-      // ACPAgent's spawn-time env loop reads).
-      expect(
-        payload.agent_settings.agent_context?.secrets?.CODEX_AUTH_JSON?.kind,
-      ).toBe("LookupSecret");
+      // ``request.secrets`` is the sole channel — no agent_context mirror
+      // (the ≥1.25.0 agent-server injects the spawn env from secret_registry).
+      expect(payload.agent_settings.agent_context?.secrets).toBeUndefined();
       // The configured model rides along unchanged.
       expect(payload.agent_settings.acp_model).toBe("gpt-5.5/medium");
     });

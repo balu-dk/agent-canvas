@@ -590,7 +590,7 @@ function buildConfiguredAcpAgentSettings(
     // ``acp_model`` is resolved separately below so a saved ``null`` still
     // falls back to the provider's default rather than being dropped.
     if (key === "acp_model") continue;
-    // ``acp_env`` is deprecated — provider creds now route via agent_context.secrets.
+    // ``acp_env`` is deprecated — provider creds now route via ``request.secrets``.
     if (key === "acp_env") continue;
     const value =
       key === "acp_command"
@@ -857,6 +857,11 @@ export function buildStartConversationRequest(
   // user secrets — for ACP and non-ACP alike. (ACP resolution happens off the
   // event loop in the SDK, so the loopback fetch does not deadlock; see
   // software-agent-sdk#3510.)
+  //
+  // ``request.secrets`` is the SOLE channel: the agent-server seeds
+  // ``secret_registry`` from it and injects the ACP spawn env from the
+  // registry on every supported pin (≥1.25.0), so nothing is mirrored onto
+  // ``agent_context.secrets`` (agent-canvas#1039 single-channel).
   const secrets: Record<string, LookupSecret> = {};
   if (options.customSecrets && options.customSecrets.length > 0) {
     const backend = getEffectiveLocalBackend();
@@ -879,17 +884,6 @@ export function buildStartConversationRequest(
 
   if (Object.keys(secrets).length > 0) {
     payload.secrets = secrets;
-
-    // ACPAgent's spawn-time env loop reads from ``agent_context.secrets`` (not
-    // the bare ``secrets`` registry channel), so mirror the same map there for
-    // ACP conversations. Non-ACP agents read the registry directly and must not
-    // get a surprise agent_context.secrets map.
-    if (acpMode) {
-      payload.agent_settings.agent_context = {
-        ...payload.agent_settings.agent_context,
-        secrets,
-      };
-    }
   }
 
   return payload;
