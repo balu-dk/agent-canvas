@@ -1,16 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AxiosError } from "axios";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSettings } from "#/hooks/query/use-settings";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
+import { useCreateSecret } from "#/hooks/mutation/use-create-secret";
+import { useSearchSecrets } from "#/hooks/query/use-get-secrets";
 import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input";
 import { SettingsInput } from "#/components/features/settings/settings-input";
 import { SettingsSwitch } from "#/components/features/settings/settings-switch";
+import { OptionalTag } from "#/components/features/settings/optional-tag";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
-import { formControlSwitchDescriptionClassName } from "#/utils/form-control-classes";
+import {
+  formControlSwitchDescriptionClassName,
+  formControlMultilineFieldClassName,
+} from "#/utils/form-control-classes";
 import { cn } from "#/utils/utils";
 import { SettingsFieldSchema } from "#/types/settings";
 import {
@@ -27,11 +34,146 @@ import {
   ACP_CUSTOM_PRESET_KEY,
   buildAcpAgentSettingsDiff,
   getAcpProvider,
+  getAcpProviderSecrets,
   type ACPProviderConfig,
 } from "#/constants/acp-providers";
 import { parseCommand, formatCommand } from "#/utils/acp-command";
 
 export const handle = { hideTitle: true };
+
+function AcpCredentialsSection({ providerKey }: { providerKey: string }) {
+  const { t } = useTranslation("openhands");
+  const queryClient = useQueryClient();
+  const { mutateAsync: createSecret } = useCreateSecret();
+  const { data: existingSecrets } = useSearchSecrets();
+  const fields = React.useMemo(
+    () => getAcpProviderSecrets(providerKey),
+    [providerKey],
+  );
+  const [values, setValues] = React.useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  // Reset local values when provider changes
+  React.useEffect(() => {
+    setValues({});
+  }, [providerKey]);
+
+  if (fields.length === 0) return null;
+
+  const secretExists = (name: string) =>
+    (existingSecrets ?? []).some((s) => s.name === name);
+
+  const isDirty = fields.some((f) => Boolean(values[f.name]?.trim()));
+
+  const handleSave = async () => {
+    const toSave = fields
+      .map((f) => ({ field: f, value: values[f.name]?.trim() }))
+      .filter((e): e is { field: (typeof fields)[0]; value: string } =>
+        Boolean(e.value),
+      );
+    if (toSave.length === 0) return;
+    setIsSaving(true);
+    try {
+      for (const { field, value } of toSave) {
+        await createSecret({ name: field.name, value });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["secrets-search"] });
+      await queryClient.invalidateQueries({ queryKey: ["secrets"] });
+      setValues({});
+      displaySuccessToast(t(I18nKey.SETTINGS$SAVED));
+    } catch (error) {
+      const message = retrieveAxiosErrorMessage(error as AxiosError);
+      displayErrorToast(message || t(I18nKey.ERROR$GENERIC));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <Typography.Text className="text-sm font-medium text-white">
+          {t(I18nKey.SETTINGS$ACP_CREDENTIALS_TITLE)}
+        </Typography.Text>
+        <Typography.Text className="text-xs text-[#717888]">
+          {t(I18nKey.SETTINGS$ACP_CREDENTIALS_DESCRIPTION)}
+        </Typography.Text>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        {fields.map((field) => {
+          const alreadySet = secretExists(field.name);
+          const placeholder = alreadySet
+            ? t(I18nKey.ONBOARDING$ACP_SECRET_ALREADY_SET)
+            : "";
+          return (
+            <div key={field.name} className="flex flex-col gap-1.5">
+              {field.multiline ? (
+                <label className="flex flex-col gap-2.5">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-mono text-white">
+                      {field.name}
+                    </span>
+                    <OptionalTag />
+                  </span>
+                  <textarea
+                    data-testid={`settings-acp-secret-${field.name}`}
+                    name={field.name}
+                    rows={4}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    value={values[field.name] ?? ""}
+                    placeholder={placeholder}
+                    onChange={(e) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        [field.name]: e.target.value,
+                      }))
+                    }
+                    className={cn(
+                      formControlMultilineFieldClassName,
+                      "font-mono text-xs",
+                    )}
+                  />
+                </label>
+              ) : (
+                <SettingsInput
+                  testId={`settings-acp-secret-${field.name}`}
+                  name={field.name}
+                  label={field.name}
+                  labelClassName="font-mono"
+                  type={field.secret ? "password" : "text"}
+                  value={values[field.name] ?? ""}
+                  onChange={(value) =>
+                    setValues((prev) => ({ ...prev, [field.name]: value }))
+                  }
+                  showOptionalTag
+                  placeholder={placeholder}
+                />
+              )}
+              <span className="text-xs text-[var(--oh-muted)]">
+                {t(field.hint_key, field.hint_values)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <BrandButton
+        testId="acp-credentials-save-button"
+        type="button"
+        variant="primary"
+        isDisabled={isSaving || !isDirty}
+        onClick={handleSave}
+      >
+        {isSaving
+          ? t(I18nKey.SETTINGS$SAVING)
+          : t(I18nKey.SETTINGS$SAVE_CHANGES)}
+      </BrandButton>
+    </div>
+  );
+}
 
 type AgentType = "openhands" | "acp";
 
@@ -470,6 +612,13 @@ function AgentSettingsScreen() {
               {t(I18nKey.SETTINGS$AGENT_MODEL_HINT)}
             </Typography.Text>
           </div>
+        </>
+      )}
+
+      {isAcp && selectedPreset !== ACP_CUSTOM_PRESET_KEY && (
+        <>
+          <hr className="border-[#3D4046]" />
+          <AcpCredentialsSection providerKey={selectedPreset} />
         </>
       )}
 
