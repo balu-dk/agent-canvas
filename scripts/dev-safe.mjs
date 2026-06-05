@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
@@ -747,6 +747,61 @@ export function buildAgentServerEnv(config) {
   };
 }
 
+const EXTENSIONS_REPO_URL = "https://github.com/OpenHands/extensions.git";
+const SHA_RE = /^[0-9a-f]{40}$/i;
+
+/**
+ * Pre-seed the public-skills git cache so the agent-server SDK finds
+ * an existing clone instead of attempting a fresh one.
+ *
+ * Why: the SDK's `_clone_repository` runs
+ *   `git clone --depth 1 --branch <ref> <url>`
+ * but `--branch` only accepts branch/tag names — raw 40-char commit SHAs
+ * cause `fatal: Remote branch <sha> not found in upstream origin`.
+ * Once the cache directory already exists, the SDK takes the update path
+ * (`fetch` + `checkout`) which handles SHAs fine.
+ *
+ * Cache location: `~/.openhands/cache/skills/public-skills`
+ * (hardcoded in the SDK's `get_skills_cache_dir()`).
+ *
+ * @param {string | null} sha  40-char commit SHA, or null to skip.
+ */
+export function preseedExtensionsCache(sha) {
+  if (!sha || !SHA_RE.test(sha)) return;
+
+  const cacheDir = path.join(homedir(), ".openhands", "cache", "skills");
+  const repoDir = path.join(cacheDir, "public-skills");
+
+  // Cache already exists — SDK update path can handle it.
+  if (existsSync(path.join(repoDir, ".git"))) return;
+
+  // Fresh clone via git-init + fetch-by-SHA + checkout (works with SHAs).
+  mkdirSync(cacheDir, { recursive: true });
+
+  const steps = [
+    { args: ["init", repoDir] },
+    { args: ["remote", "add", "origin", EXTENSIONS_REPO_URL], cwd: repoDir },
+    { args: ["fetch", "--depth=1", "origin", sha], cwd: repoDir, timeout: 120_000 },
+    { args: ["checkout", "FETCH_HEAD"], cwd: repoDir },
+  ];
+
+  for (const { args, cwd, timeout } of steps) {
+    const res = spawnSync("git", args, {
+      cwd,
+      encoding: "utf-8",
+      timeout: timeout ?? 30_000,
+      stdio: "pipe",
+    });
+    if (res.status !== 0) {
+      console.warn(
+        `[extensions-cache] pre-seed failed: git ${args.join(" ")} → ${(res.stderr || "").trim()}`,
+      );
+      return;
+    }
+  }
+  console.log(`[extensions-cache] seeded public-skills cache at ${sha.slice(0, 8)}`);
+}
+
 // Re-export so existing importers (dev-with-automation.mjs, tests) keep
 // resolving `buildRuntimeServicesInfo` from this module. The implementation
 // now lives in ./runtime-services-info.mjs (imported at the top of this file).
@@ -907,6 +962,9 @@ async function main() {
       `  state dir:    ${config.stateDir}`,
     ].join("\n"),
   );
+
+  // Pre-seed public-skills cache before the agent-server starts (see JSDoc).
+  preseedExtensionsCache(DEFAULT_EXTENSIONS_REF);
 
   const backend = spawnProcess(
     agentServerCmd.command,

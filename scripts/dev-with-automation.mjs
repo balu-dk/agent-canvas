@@ -57,8 +57,10 @@ import {
   buildAgentServerEnv,
   buildNpmScriptCommand,
   buildRuntimeServicesInfo,
+  DEFAULT_EXTENSIONS_REF,
   formatMissingUvxGuidance,
   getOrCreatePersistedApiKey,
+  preseedExtensionsCache,
   validateFrontendDependencies,
   validateLocalAgentServerPath,
 } from "./dev-safe.mjs";
@@ -723,6 +725,11 @@ function startAgentServer(config) {
     `Starting on port ${config.agentServerPort}...`,
     c.blue,
   );
+
+  // Pre-seed the public-skills cache when EXTENSIONS_REF is a raw commit SHA.
+  // The SDK's clone path uses `git clone --branch <ref>` which fails for SHAs;
+  // pre-seeding ensures the cache exists so the SDK takes the update path.
+  preseedExtensionsCache(DEFAULT_EXTENSIONS_REF);
 
   const agentServerCmd = buildAgentServerCommand(process.env);
   logService("agent-server", `Using ${agentServerCmd.source}`, c.dim);

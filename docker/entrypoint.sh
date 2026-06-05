@@ -133,6 +133,26 @@ export OH_EXTRA_PYTHON_PATH="${OH_EXTRA_PYTHON_PATH:-/opt/agent-canvas/tools}"
 # when EXTENSIONS_REF is already present in its local cache.
 export EXTENSIONS_REF="${EXTENSIONS_REF:-${CONFIG_EXTENSIONS_REF:-}}"
 
+# Pre-seed the public-skills git cache when EXTENSIONS_REF is a raw commit SHA.
+# The SDK's _clone_repository runs `git clone --branch <ref>` which only accepts
+# branch/tag names — raw SHAs fail with "Remote branch <sha> not found".
+# Pre-seeding via git-init + fetch-by-SHA ensures the cache directory exists so
+# the SDK takes its update path (fetch + checkout) which handles SHAs fine.
+SKILLS_CACHE_DIR="${HOME}/.openhands/cache/skills"
+SKILLS_REPO_DIR="${SKILLS_CACHE_DIR}/public-skills"
+if [ -n "$EXTENSIONS_REF" ] && echo "$EXTENSIONS_REF" | grep -qE '^[0-9a-f]{40}$' && [ ! -d "${SKILLS_REPO_DIR}/.git" ]; then
+  log "Pre-seeding public-skills cache at ${EXTENSIONS_REF:0:8}..."
+  mkdir -p "$SKILLS_CACHE_DIR"
+  if git init "$SKILLS_REPO_DIR" \
+    && git -C "$SKILLS_REPO_DIR" remote add origin "https://github.com/OpenHands/extensions.git" \
+    && git -C "$SKILLS_REPO_DIR" fetch --depth=1 origin "$EXTENSIONS_REF" \
+    && git -C "$SKILLS_REPO_DIR" checkout FETCH_HEAD; then
+    log "Public-skills cache seeded."
+  else
+    log "Warning: failed to pre-seed public-skills cache; skills may be unavailable."
+  fi
+fi
+
 # Track child PIDs so we can clean up on exit.
 PIDS=()
 
