@@ -74,7 +74,7 @@ agent-canvas --backend-only   # agent server + automation backend + ingress only
 
 **macOS / Linux:**
 ```sh
-docker pull ghcr.io/openhands/agent-canvas:1.0.0-rc.4
+docker pull ghcr.io/openhands/agent-canvas:1.0.0-rc.5
 
 export PROJECTS_PATH="$HOME/projects"  # directory containing your project folders
 mkdir -p "$PROJECTS_PATH" "$HOME/.openhands"
@@ -83,7 +83,7 @@ docker run -it --rm \
   -p 8000:8000 \
   -v "$HOME/.openhands:/home/openhands/.openhands" \
   -v "${PROJECTS_PATH}:/projects" \
-  ghcr.io/openhands/agent-canvas:1.0.0-rc.4
+  ghcr.io/openhands/agent-canvas:1.0.0-rc.5
 ```
 
 **Windows (PowerShell / Windows Terminal):** See [README.windows.md](./README.windows.md) for the equivalent commands.
