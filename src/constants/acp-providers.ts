@@ -191,27 +191,16 @@ export interface ACPProviderSecretField {
    * secret-name pattern ``^[a-zA-Z][a-zA-Z0-9_]{0,63}$``. */
   name: string;
   /** Render as a masked password input (API keys, OAuth tokens, credential
-   * blobs) rather than a plain-text input (base URLs, project IDs). Every field
-   * is optional regardless — the whole step is skippable — so this only
-   * controls masking, not whether the field gates. */
+   * blobs) rather than a plain-text input (base URLs, project IDs). Doubles as
+   * "this is an actual credential": when the onboarding step is required, only
+   * a ``secret`` field satisfies it — a base URL or GCP scalar alone can't
+   * authenticate anything. */
   secret?: boolean;
   /** Render as a multi-line textarea rather than a single-line input. Set for
    * file-content credentials the user pastes verbatim (Codex ``auth.json``,
-   * Gemini Vertex service-account / ADC JSON). */
+   * Gemini Vertex service-account / ADC JSON) — the ones the SDK materialises
+   * to disk, which a cloud backend can't consume yet (agent-canvas#1016). */
   multiline?: boolean;
-  /**
-   * Marks a provider-specific credential a fresh container needs (subscription
-   * token, Codex ``auth.json``, Gemini Vertex SA) — as opposed to a generic API
-   * key or base URL. This is an **onboarding/validation** concept only: it
-   * drives which fields the credential step prompts for and which are required
-   * per backend capability (see ``backendRequiresAcpCredentials``). It does
-   * **not** affect the wire — every saved credential travels uniformly as a
-   * ``LookupSecret`` resolved from the agent-server's store at spawn time (off
-   * the event loop, software-agent-sdk#3510). Set ``true`` for every credential
-   * canvas collects here except the optional base URL (see the
-   * {@link getAcpProviderSecrets} note on ``ANTHROPIC_BASE_URL``).
-   */
-  reserved?: boolean;
   /** i18n key for the one-line helper text under the field. */
   hint_key: I18nKey;
   /**
@@ -223,22 +212,14 @@ export interface ACPProviderSecretField {
 }
 
 /**
- * Reserved credentials — beyond the registry's API key / base URL — that canvas
- * collects per provider so a *containerized* agent-server (no host login state)
- * can authenticate the ACP CLI. These are the file-content blobs and Vertex
- * config the SDK's ``acp_file_secrets`` materialisation consumes; they have no
- * registry env-var entry because they're a deployment concern, not a model
- * registry field. Keyed by ACP provider registry key.
- *
- * Sourced from the validated container contract (agent-canvas#1013/#1014):
- *   - Codex subscription → ``CODEX_AUTH_JSON`` (contents of ``~/.codex/auth.json``;
- *     materialised back to ``auth.json`` under ``CODEX_HOME``).
- *   - Claude subscription → ``CLAUDE_CODE_OAUTH_TOKEN`` (Pro/Max OAuth token).
- *   - Gemini Vertex → ``GOOGLE_APPLICATION_CREDENTIALS_JSON`` (SA / ADC JSON,
- *     materialised to a file referenced by ``GOOGLE_APPLICATION_CREDENTIALS``)
- *     plus ``GOOGLE_CLOUD_PROJECT`` / ``GOOGLE_CLOUD_LOCATION`` /
- *     ``GOOGLE_GENAI_USE_VERTEXAI`` (the last three are plain config / a routing
- *     flag, not secrets; grouped here only because they travel with the SA blob).
+ * Container credentials — beyond the registry's API key / base URL — that
+ * canvas collects per provider so a *containerized* agent-server (no host login
+ * state) can authenticate the ACP CLI: subscription tokens plus the file-content
+ * blobs and Vertex config the SDK's ``acp_file_secrets`` materialisation
+ * consumes (agent-canvas#1013/#1014). They have no registry env-var entry
+ * because they're a deployment concern, not a model registry field. The Gemini
+ * project/location/flag are plain config, not secrets — grouped here because
+ * they travel with the SA blob.
  */
 const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
   codex: [
@@ -246,7 +227,6 @@ const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
       name: "CODEX_AUTH_JSON",
       secret: true,
       multiline: true,
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_FILE_BLOB_HINT,
       hint_values: { file: "~/.codex/auth.json" },
     },
@@ -255,7 +235,6 @@ const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
     {
       name: "CLAUDE_CODE_OAUTH_TOKEN",
       secret: true,
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_OAUTH_TOKEN_HINT,
     },
   ],
@@ -264,7 +243,6 @@ const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
       name: "GOOGLE_APPLICATION_CREDENTIALS_JSON",
       secret: true,
       multiline: true,
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_FILE_BLOB_HINT,
       hint_values: {
         file: "~/.config/gcloud/application_default_credentials.json",
@@ -272,35 +250,58 @@ const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
     },
     {
       name: "GOOGLE_CLOUD_PROJECT",
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_GCP_PROJECT_HINT,
     },
     {
       name: "GOOGLE_CLOUD_LOCATION",
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_GCP_LOCATION_HINT,
     },
     {
       name: "GOOGLE_GENAI_USE_VERTEXAI",
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_VERTEXAI_FLAG_HINT,
     },
   ],
 };
 
 /**
+ * Credential pairs that break each other at runtime, keyed by provider.
+ * Claude's OAuth token authenticates against Anthropic directly; an
+ * ``ANTHROPIC_BASE_URL`` set alongside it silently routes requests elsewhere
+ * and breaks the token's bearer auth (see docs/ACP_AGENTS.md).
+ */
+const ACP_CREDENTIAL_CONFLICTS: Record<string, Array<[string, string]>> = {
+  "claude-code": [["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL"]],
+};
+
+/**
+ * The ``[credential, conflicting]`` pairs the user currently has set for
+ * ``providerKey``. ``hasValue`` should cover both typed and already-saved
+ * values, since a previously saved secret conflicts just the same.
+ */
+export function getAcpCredentialConflicts(
+  key: string | null | undefined,
+  hasValue: (name: string) => boolean,
+): Array<[string, string]> {
+  if (!key) return [];
+  return (ACP_CREDENTIAL_CONFLICTS[key] ?? []).filter(
+    ([credential, conflicting]) =>
+      hasValue(credential) && hasValue(conflicting),
+  );
+}
+
+/**
  * Vertex AI-safe ``acp_model`` for Gemini.
  *
- * When ``acp_model`` is left unset, gemini-cli falls back to its own internal
- * default (``gemini-3-flash-preview``), which 404s in the many Google Cloud
- * projects that don't have the preview models enabled. ``gemini-2.5-flash`` is
- * broadly available on Vertex AND on the API-key / Google-login paths, so canvas
- * preselects it as the concrete default rather than relying on gemini-cli's
- * preview pick. Users can still choose a stronger model (e.g. ``gemini-2.5-pro``)
- * from the Settings → Agent picker. Kept as a named constant so the onboarding
- * selection and any other model-default consumer agree.
+ * Left unset, gemini-cli falls back to its own internal default — a preview
+ * flash model that 404s on Google Cloud projects without preview access. And a
+ * ``*-flash`` id is no safer to pin: gemini-cli re-resolves flash ids at
+ * generation time to its *current default* flash (software-agent-sdk#3532), so
+ * a pinned ``gemini-2.5-flash`` still ran ``gemini-3-flash``. Only a non-flash
+ * id sticks; ``gemini-2.5-pro`` is broadly available on Vertex and the
+ * API-key / Google-login paths, so canvas preselects it. Kept as a named
+ * constant so every model-default consumer agrees.
  */
-export const ACP_VERTEX_SAFE_MODEL = "gemini-2.5-flash";
+export const ACP_VERTEX_SAFE_MODEL = "gemini-2.5-pro";
 
 /**
  * The ``acp_model`` canvas preselects for ``providerKey`` when the user picks it.
@@ -326,27 +327,24 @@ export function getAcpPreferredDefaultModel(
  * provider. The API-key and base-URL field *names* track the SDK registry's
  * ``api_key_env_var`` / ``base_url_env_var`` (mirrored via
  * ``@openhands/typescript-client``) so they can't drift as providers are added
- * or renamed; the per-provider reserved credentials (subscription / Vertex
+ * or renamed; the per-provider container credentials (subscription / Vertex
  * blobs) come from {@link ACP_RESERVED_CREDENTIALS}, since those are a
  * containerized-deployment concern with no model-registry entry. Each field
  * name equals the env var the agent-server exports into the provider subprocess
- * (which is what makes a saved secret reach the CLI).
+ * (which is what makes a saved secret reach the CLI). On the wire none of this
+ * is special — every saved credential travels uniformly as a ``LookupSecret``.
  *
- * Field order is: reserved subscription/Vertex credentials → API key → optional
- * base URL. Everything except the base URL is {@link ACPProviderSecretField.reserved}
- * (a credential a fresh container needs; an onboarding/validation marker, not a
- * wire distinction — all of them ride as ``LookupSecret``s).
+ * Field order is: container subscription/Vertex credentials → API key →
+ * optional base URL. Every field is optional at the UI level — the step is
+ * skippable, and a subscription / OAuth login on the backend takes precedence
+ * over a key at runtime. (Whether the *step* is required is a
+ * backend-capability decision the onboarding modal makes; see
+ * ``backendRequiresAcpCredentials``.)
  *
- * Every field is optional at the UI level — the step is skippable, and a
- * subscription / OAuth login on the backend takes precedence over a key at
- * runtime. (Whether the *step* is required is a backend-capability decision the
- * onboarding modal makes; see ``backendRequiresAcpCredentials``.)
- *
- * NB: the base URL is deliberately **not** ``reserved``. Sending
- * ``ANTHROPIC_BASE_URL`` alongside a ``CLAUDE_CODE_OAUTH_TOKEN`` silently breaks
- * the token's bearer auth (an inherited LiteLLM base URL routes the request away
- * from Anthropic), so canvas never auto-promotes it to a request secret — it only
- * travels if the user explicitly set it as a global secret.
+ * NB: the base URL is rendered plain-text (not ``secret``), so it never counts
+ * toward a required credential step — setting ``ANTHROPIC_BASE_URL`` alongside
+ * a ``CLAUDE_CODE_OAUTH_TOKEN`` breaks the token's bearer auth, which the forms
+ * surface via {@link getAcpCredentialConflicts}.
  *
  * Returns ``[]`` for OpenHands, the ``"custom"`` preset, any unknown key, and a
  * future OAuth-only provider whose registry entry has no ``api_key_env_var`` —
@@ -366,7 +364,6 @@ export function getAcpProviderSecrets(
     fields.push({
       name: info.api_key_env_var,
       secret: true,
-      reserved: true,
       hint_key: I18nKey.ONBOARDING$ACP_SECRET_API_KEY_HINT,
     });
   }

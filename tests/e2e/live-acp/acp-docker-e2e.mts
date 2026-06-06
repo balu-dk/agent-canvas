@@ -74,7 +74,7 @@ interface ProviderPlan {
   /** acp_model to send (a model the account/Vertex project supports). */
   model: string;
   expectedToken: string;
-  /** Reserved-credential map (name -> value) or null when creds are missing. */
+  /** Container-credential map (name -> value) or null when creds are missing. */
   collectSecrets: () => Record<string, string> | null;
   /**
    * Optional ``acp_session_mode`` override (env-driven). Canvas itself sends
@@ -149,7 +149,7 @@ const PLANS: ProviderPlan[] = [
   {
     id: "gemini",
     acpServer: "gemini-cli",
-    model: process.env.ACP_E2E_GEMINI_MODEL ?? "gemini-2.5-flash",
+    model: process.env.ACP_E2E_GEMINI_MODEL ?? "gemini-2.5-pro",
     expectedToken: "ACPOK-GEMINI",
     collectSecrets: () => {
       const adc = readFileTrimmed(

@@ -576,15 +576,12 @@ function buildConfiguredAcpAgentSettings(
     agent_context: buildAgentContext(agentSettings),
   };
 
-  // TODO(#1019): set ``acp_isolate_data_dir: true`` here for a
-  // containerized backend so concurrent same-provider conversations in one
-  // container don't race on a shared HOME (CLI auth/config/locks). The SDK
-  // supports it (software-agent-sdk#3492), but it's an ``ACPAgent`` field that
-  // the released ``@openhands/typescript-client`` (1.24.3) does NOT yet surface
-  // on ``ACPAgentSettings`` — it's absent from both ``ACP_SETTINGS_KEYS`` and
-  // ``ACPProviderInfo`` — so sending it now risks a Pydantic validation error
-  // on older servers. Wire it in (gated on the local/Docker backend) once the
-  // client exposes it; OpenHands-cloud grouping isolation is separate (#1016).
+  // TODO(#1014): set ``acp_isolate_data_dir: true`` here for a containerized
+  // backend so concurrent same-provider conversations don't race on a shared
+  // HOME. The SDK supports it (software-agent-sdk#3492), but the released
+  // ``@openhands/typescript-client`` (1.24.3) doesn't surface it on
+  // ``ACPAgentSettings`` yet, so sending it risks a validation error on older
+  // servers. Cloud grouping isolation is separate (agent-canvas#1016).
 
   for (const key of ACP_SETTINGS_KEYS) {
     // ``acp_model`` is resolved separately below so a saved ``null`` still
@@ -850,23 +847,16 @@ export function buildStartConversationRequest(
     payload.agent_definitions = conversationSettings.agent_definitions;
   }
 
-  // Every custom secret rides as a LookupSecret: the agent-server resolves each
-  // value back from its own store at resolution time via a host-relative URL
-  // (authenticated with the active backend's headers). This is uniform across
-  // env-var credentials, file-content blobs the SDK materialises to disk, and
-  // user secrets — for ACP and non-ACP alike. (ACP resolution happens off the
-  // event loop in the SDK, so the loopback fetch does not deadlock; see
-  // software-agent-sdk#3510.)
-  //
-  // ``request.secrets`` is the SOLE channel: the agent-server seeds
-  // ``secret_registry`` from it and injects the ACP spawn env from the
-  // registry on every supported pin (≥1.25.0), so nothing is mirrored onto
-  // ``agent_context.secrets`` (agent-canvas#1039 single-channel).
-  const secrets: Record<string, LookupSecret> = {};
+  // Every saved secret rides as a LookupSecret the agent-server resolves back
+  // from its own store at spawn time — ``request.secrets`` is the sole channel,
+  // uniform for ACP and non-ACP (agent-canvas#1039). For ACP the resolution
+  // runs off the event loop (software-agent-sdk#3510, ≥1.25.0), so the loopback
+  // fetch can't deadlock.
   if (options.customSecrets && options.customSecrets.length > 0) {
     const backend = getEffectiveLocalBackend();
     const headers = backend ? buildAuthHeaders(backend) : {};
 
+    const secrets: Record<string, LookupSecret> = {};
     for (const secret of options.customSecrets) {
       const lookupSecret: LookupSecret = {
         kind: "LookupSecret",
@@ -880,9 +870,7 @@ export function buildStartConversationRequest(
 
       secrets[secret.name] = lookupSecret;
     }
-  }
 
-  if (Object.keys(secrets).length > 0) {
     payload.secrets = secrets;
   }
 

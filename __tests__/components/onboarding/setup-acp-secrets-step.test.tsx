@@ -322,6 +322,85 @@ describe("SetupAcpSecretsStep", () => {
       screen.getByTestId("onboarding-acp-secrets-next"),
     ).not.toBeDisabled();
   });
+
+  it("stays blocked when only a non-credential field is filled", async () => {
+    // GOOGLE_CLOUD_LOCATION (or a base URL) alone can't authenticate anything —
+    // only a masked ``secret`` field (blob / token / API key) satisfies a
+    // required credential step.
+    acpAuthStatusMock.mockReturnValue({
+      status: "unauthenticated",
+      isChecking: false,
+      isSupported: true,
+    });
+    const { user } = renderStep("gemini-cli");
+
+    await user.type(
+      screen.getByTestId("onboarding-acp-secret-GOOGLE_CLOUD_LOCATION"),
+      "us-central1",
+    );
+
+    expect(
+      screen.getByTestId("onboarding-acp-secrets-blocked"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-acp-secrets-next")).toBeDisabled();
+
+    await user.type(
+      screen.getByTestId("onboarding-acp-secret-GEMINI_API_KEY"),
+      "AIza-key",
+    );
+
+    expect(
+      screen.queryByTestId("onboarding-acp-secrets-blocked"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("warns when the Claude OAuth token and base URL are both set (bearer-auth conflict)", async () => {
+    const { user } = renderStep("claude-code");
+
+    expect(
+      screen.queryByTestId("acp-credential-conflict-warning"),
+    ).not.toBeInTheDocument();
+
+    await user.type(
+      screen.getByTestId("onboarding-acp-secret-CLAUDE_CODE_OAUTH_TOKEN"),
+      "oauth-token",
+    );
+    await user.type(
+      screen.getByTestId("onboarding-acp-secret-ANTHROPIC_BASE_URL"),
+      "https://proxy.example.com",
+    );
+
+    expect(
+      screen.getByTestId("acp-credential-conflict-warning"),
+    ).toBeInTheDocument();
+  });
+
+  it("counts an already-saved secret toward the conflict warning", async () => {
+    // A previously saved ANTHROPIC_BASE_URL conflicts just the same as a typed
+    // one — the warning must consider the secret store, not just the form.
+    vi.spyOn(SecretsService, "getSecrets").mockResolvedValue([
+      { name: "ANTHROPIC_BASE_URL" },
+    ]);
+    const { user } = renderStep("claude-code");
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByTestId(
+            "onboarding-acp-secret-ANTHROPIC_BASE_URL",
+          ) as HTMLInputElement
+        ).placeholder.length,
+      ).toBeGreaterThan(0),
+    );
+
+    await user.type(
+      screen.getByTestId("onboarding-acp-secret-CLAUDE_CODE_OAUTH_TOKEN"),
+      "oauth-token",
+    );
+
+    expect(
+      screen.getByTestId("acp-credential-conflict-warning"),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("backendRequiresAcpCredentials", () => {
@@ -331,12 +410,16 @@ describe("backendRequiresAcpCredentials", () => {
   });
 
   it("always requires credentials on a cloud backend (no host login)", () => {
-    expect(backendRequiresAcpCredentials("cloud", "unauthenticated")).toBe(true);
+    expect(backendRequiresAcpCredentials("cloud", "unauthenticated")).toBe(
+      true,
+    );
     expect(backendRequiresAcpCredentials("cloud", "unknown")).toBe(true);
   });
 
   it("requires credentials on a logged-out local backend (a fresh container)", () => {
-    expect(backendRequiresAcpCredentials("local", "unauthenticated")).toBe(true);
+    expect(backendRequiresAcpCredentials("local", "unauthenticated")).toBe(
+      true,
+    );
   });
 
   it("stays permissive on a local backend the probe can't classify", () => {

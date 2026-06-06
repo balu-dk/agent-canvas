@@ -195,8 +195,9 @@ describe("ChooseAgentStep", () => {
       (call.agent_settings_diff as Record<string, unknown>).acp_server,
     ).toBe(expected);
     // Canvas preselects the *preferred* default model — the registry default
-    // for Codex, but the Vertex-safe override (gemini-2.5-flash) for Gemini, so
-    // a fresh container doesn't hit gemini-cli's preview default that 404s.
+    // for Codex, but the Vertex-safe override (gemini-2.5-pro) for Gemini:
+    // gemini-cli re-resolves flash ids to its own default, which 404s on many
+    // Vertex projects (software-agent-sdk#3532).
     expect(
       (call.agent_settings_diff as Record<string, unknown>).acp_model,
     ).toBe(getAcpPreferredDefaultModel(expected));

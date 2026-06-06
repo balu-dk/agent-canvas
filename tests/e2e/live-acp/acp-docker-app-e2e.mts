@@ -122,7 +122,7 @@ const PLANS: Record<string, ProviderPlan> = {
   gemini: {
     id: "gemini",
     acpServer: "gemini-cli",
-    model: process.env.ACP_E2E_GEMINI_MODEL ?? "gemini-2.5-flash",
+    model: process.env.ACP_E2E_GEMINI_MODEL ?? "gemini-2.5-pro",
     expectedToken: "ACPOK-GEMINI",
     sessionMode: process.env.ACP_E2E_GEMINI_SESSION_MODE,
     collectSecrets: () => {
@@ -182,10 +182,10 @@ async function run(plan: ProviderPlan): Promise<boolean> {
 
   const settingsClient = new SettingsClient(getAgentServerClientOptions());
 
-  // 1) onboarding "Set up credentials" — save each reserved cred as a global
+  // 1) onboarding "Set up credentials" — save each container cred as a global
   //    secret via the SAME service call the SetupAcpSecretsStep makes.
   console.log(
-    `▶️  ${plan.id}: saving reserved creds via SecretsService.createSecret [${Object.keys(
+    `▶️  ${plan.id}: saving container creds via SecretsService.createSecret [${Object.keys(
       secrets,
     ).join(", ")}]`,
   );

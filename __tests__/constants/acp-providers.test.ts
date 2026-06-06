@@ -4,6 +4,7 @@ import {
   ACP_PROVIDERS,
   ACP_VERTEX_SAFE_MODEL,
   buildAcpAgentSettingsDiff,
+  getAcpCredentialConflicts,
   getAcpPreferredDefaultModel,
   getAcpProvider,
   getAcpProviderDisplayName,
@@ -80,15 +81,18 @@ describe("ACP provider registry", () => {
   });
 });
 
-describe("getAcpProviderSecrets — reserved containerized credentials", () => {
-  // Field name -> what we collect it for. These are the credentials a fresh
-  // container (no host login) needs; they reach the agent-server inline as
-  // StaticSecrets. The set is sourced from the validated container contract
-  // (agent-canvas#1013/#1014) — if a refactor drops one, ACP auth in a
-  // container silently breaks, so assert each provider's exact field set.
-  it("collects the reserved subscription cred, api key, then base URL — in that order — for Codex", () => {
+describe("getAcpProviderSecrets — containerized credentials", () => {
+  // These are the credentials a fresh container (no host login) needs, sourced
+  // from the validated container contract (agent-canvas#1013/#1014) — if a
+  // refactor drops one, ACP auth in a container silently breaks, so assert
+  // each provider's exact field set.
+  it("collects the subscription cred, api key, then base URL — in that order — for Codex", () => {
     const names = getAcpProviderSecrets("codex").map((f) => f.name);
-    expect(names).toEqual(["CODEX_AUTH_JSON", "OPENAI_API_KEY", "OPENAI_BASE_URL"]);
+    expect(names).toEqual([
+      "CODEX_AUTH_JSON",
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+    ]);
   });
 
   it("collects the OAuth token + api key for Claude Code", () => {
@@ -113,25 +117,29 @@ describe("getAcpProviderSecrets — reserved containerized credentials", () => {
   });
 
   it("renders file-content blobs as multiline secret fields", () => {
+    // ``multiline`` also drives the orphaned-credential warning on backends
+    // that can't materialise file secrets (cloud, agent-canvas#1016).
     const codexBlob = getAcpProviderSecrets("codex").find(
       (f) => f.name === "CODEX_AUTH_JSON",
     );
-    expect(codexBlob).toMatchObject({ multiline: true, secret: true, reserved: true });
+    expect(codexBlob).toMatchObject({ multiline: true, secret: true });
 
     const geminiBlob = getAcpProviderSecrets("gemini-cli").find(
       (f) => f.name === "GOOGLE_APPLICATION_CREDENTIALS_JSON",
     );
-    expect(geminiBlob).toMatchObject({ multiline: true, secret: true, reserved: true });
+    expect(geminiBlob).toMatchObject({ multiline: true, secret: true });
   });
 
-  it("never marks the base URL reserved (so it's not auto-sent as an inline secret)", () => {
-    // ANTHROPIC_BASE_URL alongside a Claude OAuth token breaks bearer auth —
-    // canvas must never auto-promote a base URL to a StaticSecret.
+  it("never marks the base URL as a credential (not secret, not multiline)", () => {
+    // ``secret`` is what a required credential step counts as an actual
+    // credential — a base URL alone can't authenticate, and ANTHROPIC_BASE_URL
+    // alongside a Claude OAuth token actively breaks bearer auth.
     for (const key of ["codex", "claude-code", "gemini-cli"]) {
       const baseUrl = getAcpProviderSecrets(key).find((f) =>
         f.name.endsWith("_BASE_URL"),
       );
-      expect(baseUrl?.reserved, key).toBeFalsy();
+      expect(baseUrl?.secret, key).toBeFalsy();
+      expect(baseUrl?.multiline, key).toBeFalsy();
     }
   });
 
@@ -145,12 +153,22 @@ describe("getAcpProviderSecrets — reserved containerized credentials", () => {
 
 describe("getAcpPreferredDefaultModel", () => {
   it("overrides Gemini with the Vertex-safe model rather than the registry default", () => {
-    // gemini-cli's preview default 404s on many Vertex projects; canvas
-    // preselects a broadly-available model instead.
-    expect(getAcpPreferredDefaultModel("gemini-cli")).toBe(ACP_VERTEX_SAFE_MODEL);
+    // gemini-cli's own default 404s on many Vertex projects; canvas preselects
+    // a broadly-available model instead.
+    expect(getAcpPreferredDefaultModel("gemini-cli")).toBe(
+      ACP_VERTEX_SAFE_MODEL,
+    );
     expect(getAcpPreferredDefaultModel("gemini-cli")).not.toBe(
       getAcpProvider("gemini-cli")?.default_model,
     );
+  });
+
+  it("pins a NON-flash Gemini model", () => {
+    // gemini-cli 0.45.x re-resolves any *-flash id at generation time to its
+    // current default flash (software-agent-sdk#3532), so a flash pin is not
+    // honored — only a non-flash id (gemini-2.5-pro) sticks.
+    expect(ACP_VERTEX_SAFE_MODEL).toBe("gemini-2.5-pro");
+    expect(ACP_VERTEX_SAFE_MODEL).not.toMatch(/flash/);
   });
 
   it("keeps the registry default for the other providers", () => {
@@ -166,5 +184,40 @@ describe("getAcpPreferredDefaultModel", () => {
     expect(getAcpPreferredDefaultModel("openhands")).toBeNull();
     expect(getAcpPreferredDefaultModel(ACP_CUSTOM_PRESET_KEY)).toBeNull();
     expect(getAcpPreferredDefaultModel("future-acp-server")).toBeNull();
+  });
+});
+
+describe("getAcpCredentialConflicts", () => {
+  const has =
+    (...names: string[]) =>
+    (name: string) =>
+      names.includes(name);
+
+  it("flags the Claude OAuth token + base URL pair when both are set", () => {
+    expect(
+      getAcpCredentialConflicts(
+        "claude-code",
+        has("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL"),
+      ),
+    ).toEqual([["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL"]]);
+  });
+
+  it("stays quiet when only one side is set", () => {
+    expect(
+      getAcpCredentialConflicts("claude-code", has("CLAUDE_CODE_OAUTH_TOKEN")),
+    ).toEqual([]);
+    expect(
+      getAcpCredentialConflicts("claude-code", has("ANTHROPIC_BASE_URL")),
+    ).toEqual([]);
+  });
+
+  it("has no conflicts for other providers / null", () => {
+    expect(
+      getAcpCredentialConflicts(
+        "codex",
+        has("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL"),
+      ),
+    ).toEqual([]);
+    expect(getAcpCredentialConflicts(null, () => true)).toEqual([]);
   });
 });

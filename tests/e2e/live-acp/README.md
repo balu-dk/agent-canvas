@@ -52,20 +52,18 @@ no "Failed to start ACP server: timed out"**, which is exactly what #3510 fixes.
 | **Claude Code** | ✅ real reply `ACPOK-CLAUDE` | claude-agent-acp 0.30.0; `CLAUDE_CODE_OAUTH_TOKEN` env path (no `ANTHROPIC_BASE_URL`) |
 | **Gemini CLI** | ⚠️ credential path proven; blocked downstream on model selection¹ | `Materialised ACP file-secret 'GOOGLE_APPLICATION_CREDENTIALS_JSON' -> …/acp/gemini-cli/gcloud-credentials.json`; gemini-cli 0.45.1; `Authenticating with ACP method: vertex-ai` ✅ → `Publisher Model …/gemini-3-flash was not found` |
 
-¹ **Gemini caveat (credential path proven; model selection is the blocker).** The
-credential **delivery is fully validated**: the LookupSecret resolves, the ADC
-blob materialises to disk, and gemini-cli authenticates via `vertex-ai`. With a
-**fresh** host ADC (`gcloud auth application-default login`) the earlier
-`invalid_rapt` is gone and the turn reaches real Vertex inference. It then fails
-because gemini-cli 0.45.1 runs **`gemini-3-flash`** — its own built-in default —
-*ignoring* the `acp_model=gemini-2.5-flash` Canvas/the SDK requests
-(`set_session_model` does not stick), and that model isn't served by the test
-Vertex project. This is an **SDK/gemini-cli model-selection** concern, not a
-Canvas credential issue: Canvas correctly sends a Vertex-safe `acp_model`; the
-runtime doesn't honor it. Follow-up belongs in the SDK registry (make
-`set_session_model` apply for gemini-cli 0.45.x, or pin a default the project
-serves). Run with `ACP_E2E_GEMINI_SESSION_MODE=default` to also clear the
-separate gemini-cli ≥0.43 `set_session_mode("yolo")` headless-init blocker.
+¹ **Gemini caveat (credential path proven; model selection was the blocker).**
+The credential **delivery is fully validated**: the LookupSecret resolves, the
+ADC blob materialises to disk, and gemini-cli authenticates via `vertex-ai`.
+With a **fresh** host ADC (`gcloud auth application-default login`) the earlier
+`invalid_rapt` is gone and the turn reaches real Vertex inference. That run then
+failed because it requested `acp_model=gemini-2.5-flash` and gemini-cli 0.45.x
+**re-resolves any `*-flash` id at generation time to its current default flash**
+(`gemini-3-flash`, not served by the test project —
+software-agent-sdk#3532). Only a non-flash id sticks, so the e2e (and Canvas's
+preselected default) now uses **`gemini-2.5-pro`**. Run with
+`ACP_E2E_GEMINI_SESSION_MODE=default` to also clear the separate gemini-cli
+≥0.43 `set_session_mode("yolo")` headless-init blocker.
 
 ## Knobs
 

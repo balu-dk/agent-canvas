@@ -1,29 +1,19 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { AxiosError } from "axios";
 import { Check, Loader2 } from "lucide-react";
 import { BrandButton } from "#/components/features/settings/brand-button";
-import { SettingsInput } from "#/components/features/settings/settings-input";
+import { AcpSecretField } from "#/components/features/settings/acp-secret-field";
 import { I18nKey } from "#/i18n/declaration";
-import { cn } from "#/utils/utils";
-import { formControlMultilineFieldClassName } from "#/utils/form-control-classes";
-import { useCreateSecret } from "#/hooks/mutation/use-create-secret";
 import { useSearchSecrets } from "#/hooks/query/use-get-secrets";
 import { useAcpAuthStatus } from "#/hooks/query/use-acp-auth-status";
+import { useSaveAcpSecrets } from "#/hooks/use-save-acp-secrets";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import {
+  getAcpCredentialConflicts,
   getAcpProviderDisplayName,
   getAcpProviderSecrets,
-  type ACPProviderSecretField,
 } from "#/constants/acp-providers";
 import { type OnboardingAgentId } from "./choose-agent-step";
-import {
-  displayErrorToast,
-  displaySuccessToast,
-  displayWarningToast,
-} from "#/utils/custom-toast-handlers";
-import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
 
 interface SetupAcpSecretsStepProps {
   /** ACP provider whose credentials we're collecting (e.g. ``"claude-code"``).
@@ -46,7 +36,7 @@ interface SetupAcpSecretsStepProps {
 /**
  * Onboarding credentials step for ACP providers (Claude Code, Codex, Gemini
  * CLI). The fields are derived from {@link getAcpProviderSecrets}: the API key
- * + optional base URL (from the SDK registry) plus the per-provider reserved
+ * + optional base URL (from the SDK registry) plus the per-provider
  * credentials a *containerized* agent-server needs (Codex ``auth.json``, the
  * Claude OAuth token, the Gemini Vertex service-account JSON + project/location).
  * Each field maps 1:1 to a **global secret** whose name equals the env var the
@@ -72,8 +62,6 @@ export function SetupAcpSecretsStep({
   onNext,
 }: SetupAcpSecretsStepProps) {
   const { t } = useTranslation("openhands");
-  const queryClient = useQueryClient();
-  const { mutateAsync: createSecret } = useCreateSecret();
   const { data: existingSecrets } = useSearchSecrets();
   const activeBackend = useActiveBackend();
   // Login detection via AcpService (provider status commands run through the
@@ -88,7 +76,7 @@ export function SetupAcpSecretsStep({
     [providerKey],
   );
   const [values, setValues] = React.useState<Record<string, string>>({});
-  const [isSaving, setIsSaving] = React.useState(false);
+  const { saveFilled, isSaving } = useSaveAcpSecrets(fields);
 
   const providerName = getAcpProviderDisplayName(providerKey) ?? providerKey;
 
@@ -99,8 +87,7 @@ export function SetupAcpSecretsStep({
   );
 
   const hasValueFor = React.useCallback(
-    (field: ACPProviderSecretField) =>
-      Boolean(values[field.name]?.trim()) || secretExists(field.name),
+    (name: string) => Boolean(values[name]?.trim()) || secretExists(name),
     [values, secretExists],
   );
 
@@ -113,62 +100,21 @@ export function SetupAcpSecretsStep({
     activeBackend.backend.kind,
     authStatus,
   );
-  // Considered satisfied once the user has any credential for the provider —
-  // typed now or previously saved — since the providers offer alternative auth
-  // paths (API key vs. subscription/Vertex) and we can't know which one the
-  // user intends. An existing login also satisfies it.
-  const satisfied = isAuthenticated || fields.some(hasValueFor);
+  // Satisfied once the user has an actual credential for the provider — a
+  // masked ``secret`` field (blob, OAuth token, or API key), typed now or
+  // previously saved. A base URL or GCP project/location alone can't
+  // authenticate anything, so it doesn't count. An existing login also
+  // satisfies it.
+  const satisfied =
+    isAuthenticated ||
+    fields.some((field) => field.secret && hasValueFor(field.name));
   const blockNext = required && !satisfied;
 
-  // Whether the active backend can actually consume the reserved file-content
-  // credentials we collect. Local agent-servers materialise them to disk via
-  // the SDK's acp_file_secrets defaults; cloud doesn't yet (OpenHands#1016), so
-  // saving one there would orphan it — we warn instead of claiming success.
-  const consumesFileCredentials = activeBackend.backend.kind === "local";
+  const conflicts = getAcpCredentialConflicts(providerKey, hasValueFor);
 
   const handleNext = async () => {
-    // Only persist fields the user actually filled in — empty inputs are a
-    // deliberate skip, not a request to clear an existing secret.
-    const toSave = fields
-      .map((field) => ({ field, value: values[field.name]?.trim() }))
-      .filter(
-        (entry): entry is { field: ACPProviderSecretField; value: string } =>
-          Boolean(entry.value),
-      );
-
-    if (toSave.length === 0) {
+    if (await saveFilled(values)) {
       onNext();
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // Sequential so a mid-list failure leaves the earlier secrets saved and
-      // surfaces a single, specific error rather than a race of toasts.
-      for (const { field, value } of toSave) {
-        await createSecret({ name: field.name, value });
-      }
-      await queryClient.invalidateQueries({ queryKey: ["secrets-search"] });
-      await queryClient.invalidateQueries({ queryKey: ["secrets"] });
-
-      // #1013: don't claim success for a credential the active backend can't
-      // consume. A cloud backend can't yet read the materialised file-content
-      // credentials, so saving one there orphans it — say so rather than
-      // toasting "Saved".
-      const savedOrphanedFileCredential =
-        !consumesFileCredentials &&
-        toSave.some(({ field }) => field.reserved && field.multiline);
-      if (savedOrphanedFileCredential) {
-        displayWarningToast(t(I18nKey.ONBOARDING$ACP_SECRETS_ORPHANED_WARNING));
-      } else {
-        displaySuccessToast(t(I18nKey.SETTINGS$SAVED));
-      }
-      onNext();
-    } catch (error) {
-      const message = retrieveAxiosErrorMessage(error as AxiosError);
-      displayErrorToast(message || t(I18nKey.ERROR$GENERIC));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -238,65 +184,33 @@ export function SetupAcpSecretsStep({
       ) : null}
 
       <div className="flex flex-col gap-5">
-        {fields.map((field) => {
-          const alreadySet = secretExists(field.name);
-          const placeholder = alreadySet
-            ? t(I18nKey.ONBOARDING$ACP_SECRET_ALREADY_SET)
-            : "";
-          return (
-            <div key={field.name} className="flex flex-col gap-1.5">
-              {field.multiline ? (
-                <label className="flex flex-col gap-2.5">
-                  <span className="text-sm font-mono text-white">
-                    {field.name}
-                  </span>
-                  <textarea
-                    data-testid={`onboarding-acp-secret-${field.name}`}
-                    name={field.name}
-                    rows={4}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    value={values[field.name] ?? ""}
-                    placeholder={placeholder}
-                    onChange={(e) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        [field.name]: e.target.value,
-                      }))
-                    }
-                    className={cn(
-                      formControlMultilineFieldClassName,
-                      "font-mono text-xs",
-                    )}
-                  />
-                </label>
-              ) : (
-                <SettingsInput
-                  testId={`onboarding-acp-secret-${field.name}`}
-                  name={field.name}
-                  // The env-var name is the canonical label here; rendering it
-                  // monospace makes clear it's a literal key, not prose.
-                  label={field.name}
-                  labelClassName="font-mono"
-                  type={field.secret ? "password" : "text"}
-                  value={values[field.name] ?? ""}
-                  onChange={(value) =>
-                    setValues((prev) => ({ ...prev, [field.name]: value }))
-                  }
-                  // Every field is optional at the input level — the step's
-                  // required-ness is enforced on "Next", not per field.
-                  showOptionalTag
-                  placeholder={placeholder}
-                />
-              )}
-              <span className="text-xs text-[var(--oh-muted)]">
-                {t(field.hint_key, field.hint_values)}
-              </span>
-            </div>
-          );
-        })}
+        {fields.map((field) => (
+          <AcpSecretField
+            key={field.name}
+            field={field}
+            value={values[field.name] ?? ""}
+            onChange={(value) =>
+              setValues((prev) => ({ ...prev, [field.name]: value }))
+            }
+            alreadySet={secretExists(field.name)}
+            testId={`onboarding-acp-secret-${field.name}`}
+            showOptionalTag
+          />
+        ))}
       </div>
+
+      {conflicts.map(([credential, conflicting]) => (
+        <p
+          key={`${credential}:${conflicting}`}
+          data-testid="acp-credential-conflict-warning"
+          className="text-sm text-amber-300"
+        >
+          {t(I18nKey.SETTINGS$ACP_CREDENTIAL_CONFLICT_WARNING, {
+            credential,
+            conflicting,
+          })}
+        </p>
+      ))}
 
       {blockNext ? (
         <p

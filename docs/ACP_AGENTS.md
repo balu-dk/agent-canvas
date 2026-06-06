@@ -193,13 +193,12 @@ needed.
 > bug.
 
 > [!NOTE]
-> **Gemini model selection is an SDK/gemini-cli concern.** Canvas preselects a
-> Vertex-safe `acp_model` (`gemini-2.5-flash`), but gemini-cli 0.45.x has been
-> observed to run its **own** built-in default (e.g. `gemini-3-flash`) regardless
-> — the SDK's `set_session_model` doesn't stick — and that model 404s on projects
-> that don't serve it. Canvas sends the right model; honoring it is the SDK
-> registry's job. If a Gemini turn fails with `Publisher Model … was not found`,
-> that's this issue, not a credential problem.
+> **Pick a non-flash Gemini model.** gemini-cli 0.45.x re-resolves any `*-flash`
+> model id at generation time to its *current default* flash (e.g.
+> `gemini-2.5-flash` silently ran `gemini-3-flash`, which 404s on projects that
+> don't serve it — software-agent-sdk#3532). Only a non-flash id sticks, so
+> Canvas preselects `gemini-2.5-pro`. If a Gemini turn fails with
+> `Publisher Model … was not found`, check the selected model isn't a flash id.
 
 ### Per-conversation isolation
 
@@ -208,8 +207,8 @@ race on the CLI's auth/config/lock files. The SDK supports opting into a
 per-conversation data dir (`acp_isolate_data_dir`, software-agent-sdk#3492), but
 the released `@openhands/typescript-client` does not yet expose it on
 `ACPAgentSettings`, so Canvas can't send it without risking a validation error on
-older servers. This is tracked as a follow-up (agent-canvas#1014); OpenHands-cloud
-grouping isolation is separate (OpenHands#1016).
+older servers. This is tracked as a follow-up (agent-canvas#1014); cloud
+grouping isolation is separate (agent-canvas#1016).
 
 ## Switching agent or model later
 
