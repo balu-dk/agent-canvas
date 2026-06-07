@@ -76,7 +76,9 @@ function readFileTrimmed(file: string): string | null {
 }
 
 function claudeOAuthToken(): string | null {
-  // macOS keychain entry written by Claude Code on login.
+  // macOS keychain entry written by Claude Code on login. On other platforms
+  // (no `security` binary) this throws into the catch → null → the runner
+  // reports the provider as "SKIP — credentials not present on host".
   try {
     const raw = execFileSync(
       "security",
