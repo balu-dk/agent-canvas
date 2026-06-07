@@ -12,6 +12,7 @@ import {
   removeStoredConversationMetadata,
   setStoredConversationMetadata,
 } from "#/api/conversation-metadata-store";
+import { ACP_VERTEX_SAFE_MODEL } from "#/constants/acp-providers";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 
 const {
@@ -1209,6 +1210,26 @@ describe("buildStartConversationRequest — ACP discriminator", () => {
 
     expect(payload.agent_settings.agent_kind).toBe("acp");
     expect(payload.agent_settings.acp_model).toBeUndefined();
+  });
+
+  it("falls back to the preferred (Vertex-safe) default for a null Gemini acp_model", () => {
+    // The start-request fallback is the third default-model surface (after
+    // onboarding and Settings → Agent) — all three must substitute the same
+    // Vertex-safe model, or a saved ``null`` would silently run gemini-cli's
+    // 404-prone default on Vertex (software-agent-sdk#3532).
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          schema_version: 1,
+          agent_kind: "acp",
+          acp_server: "gemini-cli",
+          acp_model: null,
+        },
+      },
+    }) as { agent_settings: Record<string, unknown> };
+
+    expect(payload.agent_settings.acp_model).toBe(ACP_VERTEX_SAFE_MODEL);
   });
 
   it("resolves an empty acp_command from the registry by acp_server", () => {

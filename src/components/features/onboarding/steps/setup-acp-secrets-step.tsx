@@ -2,17 +2,13 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2 } from "lucide-react";
 import { BrandButton } from "#/components/features/settings/brand-button";
+import { AcpConflictWarnings } from "#/components/features/settings/acp-conflict-warnings";
 import { AcpSecretField } from "#/components/features/settings/acp-secret-field";
 import { I18nKey } from "#/i18n/declaration";
-import { useSearchSecrets } from "#/hooks/query/use-get-secrets";
 import { useAcpAuthStatus } from "#/hooks/query/use-acp-auth-status";
-import { useSaveAcpSecrets } from "#/hooks/use-save-acp-secrets";
+import { useAcpCredentialForm } from "#/hooks/use-acp-credential-form";
 import { useActiveBackend } from "#/contexts/active-backend-context";
-import {
-  getAcpCredentialConflicts,
-  getAcpProviderDisplayName,
-  getAcpProviderSecrets,
-} from "#/constants/acp-providers";
+import { getAcpProviderDisplayName } from "#/constants/acp-providers";
 import { type OnboardingAgentId } from "./choose-agent-step";
 
 interface SetupAcpSecretsStepProps {
@@ -62,7 +58,6 @@ export function SetupAcpSecretsStep({
   onNext,
 }: SetupAcpSecretsStepProps) {
   const { t } = useTranslation("openhands");
-  const { data: existingSecrets } = useSearchSecrets();
   const activeBackend = useActiveBackend();
   // Login detection via AcpService (provider status commands run through the
   // agent-server bash endpoint) — see issue #964.
@@ -71,25 +66,18 @@ export function SetupAcpSecretsStep({
     { enabled: isActive },
   );
 
-  const fields = React.useMemo(
-    () => getAcpProviderSecrets(providerKey),
-    [providerKey],
-  );
-  const [values, setValues] = React.useState<Record<string, string>>({});
-  const { saveFilled, isSaving } = useSaveAcpSecrets(fields);
+  const {
+    fields,
+    values,
+    setValue,
+    secretExists,
+    hasValueFor,
+    conflicts,
+    save,
+    isSaving,
+  } = useAcpCredentialForm(providerKey);
 
   const providerName = getAcpProviderDisplayName(providerKey) ?? providerKey;
-
-  const secretExists = React.useCallback(
-    (name: string) =>
-      (existingSecrets ?? []).some((secret) => secret.name === name),
-    [existingSecrets],
-  );
-
-  const hasValueFor = React.useCallback(
-    (name: string) => Boolean(values[name]?.trim()) || secretExists(name),
-    [values, secretExists],
-  );
 
   const isAuthenticated = authStatus === "authenticated";
   // Required when the backend can't fall back to a host login (see component
@@ -110,10 +98,8 @@ export function SetupAcpSecretsStep({
     fields.some((field) => field.secret && hasValueFor(field.name));
   const blockNext = required && !satisfied;
 
-  const conflicts = getAcpCredentialConflicts(providerKey, hasValueFor);
-
   const handleNext = async () => {
-    if (await saveFilled(values)) {
+    if (await save()) {
       onNext();
     }
   };
@@ -189,9 +175,7 @@ export function SetupAcpSecretsStep({
             key={field.name}
             field={field}
             value={values[field.name] ?? ""}
-            onChange={(value) =>
-              setValues((prev) => ({ ...prev, [field.name]: value }))
-            }
+            onChange={(value) => setValue(field.name, value)}
             alreadySet={secretExists(field.name)}
             testId={`onboarding-acp-secret-${field.name}`}
             showOptionalTag
@@ -199,18 +183,7 @@ export function SetupAcpSecretsStep({
         ))}
       </div>
 
-      {conflicts.map(([credential, conflicting]) => (
-        <p
-          key={`${credential}:${conflicting}`}
-          data-testid="acp-credential-conflict-warning"
-          className="text-sm text-amber-300"
-        >
-          {t(I18nKey.SETTINGS$ACP_CREDENTIAL_CONFLICT_WARNING, {
-            credential,
-            conflicting,
-          })}
-        </p>
-      ))}
+      <AcpConflictWarnings conflicts={conflicts} />
 
       {blockNext ? (
         <p

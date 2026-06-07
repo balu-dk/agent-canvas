@@ -27,6 +27,7 @@ import {
   ACP_PROVIDERS,
   ACP_CUSTOM_PRESET_KEY,
   buildAcpAgentSettingsDiff,
+  getAcpPreferredDefaultModel,
   getAcpProvider,
   type ACPProviderConfig,
 } from "#/constants/acp-providers";
@@ -151,7 +152,9 @@ function AgentSettingsScreen() {
       const savedModel = settings.agent_settings?.acp_model;
       const normalizedSavedModel =
         typeof savedModel === "string" ? savedModel.trim() : "";
-      setAcpModel(normalizedSavedModel || provider?.default_model || "");
+      setAcpModel(
+        normalizedSavedModel || getAcpPreferredDefaultModel(acpServer) || "",
+      );
       setIsCustomAcpModel(
         !!normalizedSavedModel &&
           (!provider || !isKnownAcpModel(provider, normalizedSavedModel)),
@@ -214,9 +217,9 @@ function AgentSettingsScreen() {
         : selectedProvider && isDefaultProviderCommand
           ? selectedProvider.key
           : ACP_CUSTOM_PRESET_KEY;
-      // ``model: undefined`` lets buildAcpAgentSettingsDiff seed the provider's
-      // ``default_model`` for built-in keys; for the custom preset it falls
-      // through to ``null`` since custom has no default.
+      // ``model: undefined`` lets buildAcpAgentSettingsDiff seed the
+      // provider's preferred default for built-in keys; for the custom preset
+      // it falls through to ``null`` since custom has no default.
       const agentSettingsDiff = buildAcpAgentSettingsDiff(providerKey, {
         command: useDefault ? [] : commandTokens,
         model: acpModel.trim() || undefined,
@@ -307,7 +310,7 @@ function AgentSettingsScreen() {
             const preferred = ACP_PROVIDERS[0];
             if (preferred) {
               setCommandText(formatCommand(preferred.default_command));
-              setAcpModel(preferred.default_model ?? "");
+              setAcpModel(getAcpPreferredDefaultModel(preferred.key) ?? "");
               setIsCustomAcpModel(false);
             }
           } else if (newType === "openhands") {
@@ -364,7 +367,7 @@ function AgentSettingsScreen() {
               const provider = getAcpProvider(preset);
               if (provider) {
                 setCommandText(formatCommand(provider.default_command));
-                setAcpModel(provider.default_model ?? "");
+                setAcpModel(getAcpPreferredDefaultModel(preset) ?? "");
                 setIsCustomAcpModel(false);
               } else if (preset === ACP_CUSTOM_PRESET_KEY) {
                 // Clear command + model: the previous provider's default
@@ -405,8 +408,7 @@ function AgentSettingsScreen() {
                 const prevPreset = detectPreset(commandText, ACP_PROVIDERS);
                 const nextPreset = detectPreset(nextCommandText, ACP_PROVIDERS);
                 if (nextPreset !== prevPreset) {
-                  const nextProvider = getAcpProvider(nextPreset);
-                  setAcpModel(nextProvider?.default_model ?? "");
+                  setAcpModel(getAcpPreferredDefaultModel(nextPreset) ?? "");
                   setIsCustomAcpModel(false);
                 }
                 setCommandText(nextCommandText);

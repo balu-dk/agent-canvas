@@ -38,6 +38,10 @@ the Claude Code OAuth token from the macOS keychain, and the gcloud ADC for Gemi
 Vertex (`gcloud auth application-default login` first). A provider whose creds
 aren't present is skipped.
 
+The provider plans (models, credential collectors) and the HTTP/poll helpers are
+shared between both scripts via `harness.mts` — change a model default or
+credential knob there, not per script.
+
 ## Last validated result (agent-server `1.25.0-python`, unified LookupSecret path)
 
 Re-validated 2026-06-05 against `ghcr.io/openhands/agent-server:1.25.0-python`

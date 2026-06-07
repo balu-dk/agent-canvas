@@ -21,157 +21,26 @@
  *
  * One provider per process (settings are global on the backend; a fresh process
  * avoids the SettingsService cache bleeding between providers).
+ *
+ * The provider plans, host credential collectors, and HTTP/poll helpers are
+ * shared with the request-builder script — see ./harness.mts.
  */
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import path from "node:path";
-
-import {
-  setActiveSelection,
-  setRegisteredBackends,
-} from "#/api/backend-registry/active-store";
 import { SecretsService } from "#/api/secrets-service";
 import { buildStartConversationRequestWithEncryptedSettings } from "#/api/agent-server-adapter";
 import { buildAcpAgentSettingsDiff } from "#/constants/acp-providers";
 import { SettingsClient } from "@openhands/typescript-client/clients";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
+import {
+  BASE,
+  fetchFinalReply,
+  getProviderPlan,
+  pollUntilTerminal,
+  postJson,
+  registerDockerBackend,
+  type ProviderPlan,
+} from "./harness.mts";
 
-const BASE = process.env.ACP_E2E_BASE_URL ?? "http://localhost:8010";
-const POLL_TIMEOUT_MS = Number(process.env.ACP_E2E_TIMEOUT_MS ?? 180_000);
-
-// Point the app's backend registry at the container, exactly as if the user had
-// added it in the backend selector. Everything downstream (SecretsService,
-// SettingsService, the orchestrator) resolves the host through this.
-setRegisteredBackends([
-  {
-    id: "acp-docker",
-    name: "ACP Docker",
-    host: BASE,
-    apiKey: "",
-    kind: "local",
-  },
-]);
-setActiveSelection({ backendId: "acp-docker", orgId: null });
-
-interface ProviderPlan {
-  id: string;
-  acpServer: string;
-  model: string;
-  expectedToken: string;
-  sessionMode?: string;
-  collectSecrets: () => Record<string, string> | null;
-}
-
-function readFileTrimmed(file: string): string | null {
-  try {
-    const v = readFileSync(file, "utf-8");
-    return v.trim().length > 0 ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function claudeOAuthToken(): string | null {
-  try {
-    const raw = execFileSync(
-      "security",
-      ["find-generic-password", "-s", "Claude Code-credentials", "-w"],
-      { encoding: "utf-8" },
-    );
-    const t = JSON.parse(raw)?.claudeAiOauth?.accessToken;
-    return typeof t === "string" && t.length > 0 ? t : null;
-  } catch {
-    return null;
-  }
-}
-
-function gcloudProject(): string | null {
-  try {
-    return (
-      execFileSync("gcloud", ["config", "get-value", "project"], {
-        encoding: "utf-8",
-      }).trim() || null
-    );
-  } catch {
-    return null;
-  }
-}
-
-const PLANS: Record<string, ProviderPlan> = {
-  codex: {
-    id: "codex",
-    acpServer: "codex",
-    model: process.env.ACP_E2E_CODEX_MODEL ?? "gpt-5.5/medium",
-    expectedToken: "ACPOK-CODEX",
-    collectSecrets: () => {
-      const auth = readFileTrimmed(path.join(homedir(), ".codex", "auth.json"));
-      return auth ? { CODEX_AUTH_JSON: auth } : null;
-    },
-  },
-  claude: {
-    id: "claude",
-    acpServer: "claude-code",
-    model: process.env.ACP_E2E_CLAUDE_MODEL ?? "claude-opus-4-7",
-    expectedToken: "ACPOK-CLAUDE",
-    collectSecrets: () => {
-      const t = claudeOAuthToken();
-      return t ? { CLAUDE_CODE_OAUTH_TOKEN: t } : null;
-    },
-  },
-  gemini: {
-    id: "gemini",
-    acpServer: "gemini-cli",
-    model: process.env.ACP_E2E_GEMINI_MODEL ?? "gemini-2.5-pro",
-    expectedToken: "ACPOK-GEMINI",
-    sessionMode: process.env.ACP_E2E_GEMINI_SESSION_MODE,
-    collectSecrets: () => {
-      const adc = readFileTrimmed(
-        path.join(
-          homedir(),
-          ".config",
-          "gcloud",
-          "application_default_credentials.json",
-        ),
-      );
-      const project = process.env.GOOGLE_CLOUD_PROJECT ?? gcloudProject();
-      if (!adc || !project) return null;
-      return {
-        GOOGLE_APPLICATION_CREDENTIALS_JSON: adc,
-        GOOGLE_CLOUD_PROJECT: project,
-        GOOGLE_CLOUD_LOCATION:
-          process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1",
-        GOOGLE_GENAI_USE_VERTEXAI: "true",
-      };
-    },
-  },
-};
-
-async function postJson(url: string, body: unknown): Promise<any> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok)
-    throw new Error(`POST ${url} -> ${res.status}: ${text.slice(0, 800)}`);
-  return text ? JSON.parse(text) : null;
-}
-
-async function getJson(url: string): Promise<any> {
-  const res = await fetch(url);
-  const text = await res.text();
-  if (!res.ok)
-    throw new Error(`GET ${url} -> ${res.status}: ${text.slice(0, 400)}`);
-  return text ? JSON.parse(text) : null;
-}
-
-// Terminal states for a single-turn run. NB: "idle" is deliberately NOT here —
-// a freshly-created conversation reports "idle" before the agent starts, so
-// treating it as terminal bails out before the reply exists. Wait for the run
-// to actually finish (or error/stuck).
-const TERMINAL = new Set(["finished", "error", "stuck", "stopped"]);
+registerDockerBackend();
 
 async function run(plan: ProviderPlan): Promise<boolean> {
   const secrets = plan.collectSecrets();
@@ -236,24 +105,11 @@ async function run(plan: ProviderPlan): Promise<boolean> {
   const id = created.id;
   console.log(`   conversation ${id} created; polling…`);
 
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  let status = "";
-  while (Date.now() < deadline) {
-    const info = await getJson(`${BASE}/api/conversations/${id}`);
-    status = String(info.execution_status ?? "").toLowerCase();
-    if (TERMINAL.has(status)) break;
-    await new Promise((r) => setTimeout(r, 2500));
-  }
-  const final = await getJson(
-    `${BASE}/api/conversations/${id}/agent_final_response`,
-  );
-  const reply =
-    typeof final === "string"
-      ? final
-      : (final?.response ?? final?.content ?? JSON.stringify(final));
-  const ok = String(reply).includes(plan.expectedToken);
+  const status = await pollUntilTerminal(id);
+  const reply = await fetchFinalReply(id);
+  const ok = reply.includes(plan.expectedToken);
   console.log(
-    `   status=${status} reply=${JSON.stringify(String(reply).slice(0, 160))}`,
+    `   status=${status} reply=${JSON.stringify(reply.slice(0, 160))}`,
   );
   console.log(`   ${ok ? "✅ PASS" : "❌ FAIL"} (expected "${plan.expectedToken}")`);
   return ok;
@@ -261,8 +117,7 @@ async function run(plan: ProviderPlan): Promise<boolean> {
 
 async function main() {
   const args = process.argv.slice(2).filter((a) => a !== "--");
-  const id = args[0];
-  const plan = id ? PLANS[id] : undefined;
+  const plan = args[0] ? getProviderPlan(args[0]) : undefined;
   if (!plan) {
     console.error(`usage: ... acp-docker-app-e2e.mts -- <codex|claude|gemini>`);
     process.exit(2);

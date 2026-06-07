@@ -10,7 +10,6 @@ import {
   ACP_PROVIDER_FALLBACK_ICON,
   ACP_PROVIDERS,
   buildAcpAgentSettingsDiff,
-  getAcpPreferredDefaultModel,
 } from "#/constants/acp-providers";
 import {
   AgentBrandIcon,
@@ -106,15 +105,9 @@ export function ChooseAgentStep({
   const { mutate: saveSettings, isPending: isSaving } = useSaveSettings();
 
   const handleNext = () => {
-    // Preselect the safe default model per provider (Gemini → a Vertex-safe
-    // model rather than the preview default gemini-cli would otherwise pick).
-    // ``buildAcpAgentSettingsDiff`` falls back to the registry default when the
-    // model is ``undefined`` — which ``getAcpPreferredDefaultModel`` returns as
-    // ``null`` for OpenHands/unknown, so coalesce to ``undefined`` there.
-    const preferredModel = getAcpPreferredDefaultModel(selectedAgentId);
-    const diff = buildAcpAgentSettingsDiff(selectedAgentId, {
-      model: preferredModel ?? undefined,
-    });
+    // The diff builder seeds the preferred default model (Vertex-safe for
+    // Gemini) when none is passed.
+    const diff = buildAcpAgentSettingsDiff(selectedAgentId);
     if (!diff) {
       // Unknown id (shouldn't be reachable through the UI). Advance
       // without writing — better to show the next step than block the

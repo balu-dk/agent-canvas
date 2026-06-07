@@ -220,6 +220,11 @@ export interface ACPProviderSecretField {
  * because they're a deployment concern, not a model registry field. The Gemini
  * project/location/flag are plain config, not secrets — grouped here because
  * they travel with the SA blob.
+ *
+ * The blob *names* (``CODEX_AUTH_JSON`` / ``GOOGLE_APPLICATION_CREDENTIALS_JSON``)
+ * duplicate the SDK registry's ``file_secrets`` specs; derive them from the
+ * client registry once the pinned ``@openhands/typescript-client`` mirrors that
+ * field (same bump that unblocks ``acp_isolate_data_dir``, see #1019).
  */
 const ACP_RESERVED_CREDENTIALS: Record<string, ACPProviderSecretField[]> = {
   codex: [
@@ -304,16 +309,20 @@ export function getAcpCredentialConflicts(
 export const ACP_VERTEX_SAFE_MODEL = "gemini-2.5-pro";
 
 /**
- * The ``acp_model`` canvas preselects for ``providerKey`` when the user picks it.
- * Overrides only Gemini (→ {@link ACP_VERTEX_SAFE_MODEL}, see why above); every
- * other provider keeps its registry {@link ACPProviderConfig.default_model}.
- * Returns ``null`` when there's no override and no registry default, letting the
- * ACP server pick its own.
+ * The default ``acp_model`` canvas substitutes for ``providerKey`` wherever no
+ * concrete model is configured — settings seeding (onboarding, Settings →
+ * Agent), the {@link buildAcpAgentSettingsDiff} fallback, and the start-request
+ * fallback for a saved ``null``. Overrides only Gemini (→
+ * {@link ACP_VERTEX_SAFE_MODEL}, see why above); every other provider keeps its
+ * registry {@link ACPProviderConfig.default_model}. Returns ``null`` when
+ * there's no override and no registry default, letting the ACP server pick its
+ * own.
  *
  * Distinct from {@link ACPProviderConfig.default_model} (which mirrors the SDK
- * registry verbatim, closing agent-canvas#740): this is the *preferred* default
- * to write into settings, deliberately diverging for Gemini where the registry
- * value isn't safe on every backend.
+ * registry verbatim, closing agent-canvas#740): this is the *preferred* default,
+ * deliberately diverging for Gemini where the registry value isn't safe on
+ * every backend — so every default-model surface must route through this, not
+ * read ``default_model`` directly.
  */
 export function getAcpPreferredDefaultModel(
   key: string | null | undefined,
@@ -353,13 +362,15 @@ export function getAcpPreferredDefaultModel(
 export function getAcpProviderSecrets(
   key: string | null | undefined,
 ): ACPProviderSecretField[] {
-  const info = key ? getClientAcpProvider(key) : null;
+  if (!key) return [];
+  const info = getClientAcpProvider(key);
   if (!info) return [];
-  const fields: ACPProviderSecretField[] = [];
   // Subscription / Vertex credentials first — they're the primary auth path for
   // ACP providers (Claude Pro/Max OAuth token, Codex ChatGPT auth.json), with
   // the API key as the fallback below.
-  fields.push(...(key ? (ACP_RESERVED_CREDENTIALS[key] ?? []) : []));
+  const fields: ACPProviderSecretField[] = [
+    ...(ACP_RESERVED_CREDENTIALS[key] ?? []),
+  ];
   if (info.api_key_env_var) {
     fields.push({
       name: info.api_key_env_var,
@@ -495,9 +506,11 @@ export function buildAcpAgentSettingsDiff(
     return null;
   }
 
+  // Undefined model → the *preferred* default (Vertex-safe for Gemini), not
+  // the raw registry default — see getAcpPreferredDefaultModel.
   const model =
     options.model === undefined
-      ? (provider?.default_model ?? null)
+      ? getAcpPreferredDefaultModel(providerKey)
       : options.model;
 
   // ``acp_args: []`` resets any API-set ``acp_args`` that would

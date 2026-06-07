@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from "#/services/settings";
 import { ExecutionStatus } from "#/types/agent-server/core";
 import { Settings, SettingsValue } from "#/types/settings";
 import {
+  getAcpPreferredDefaultModel,
   getAcpProvider,
   resolveEffectiveAcpModel,
 } from "#/constants/acp-providers";
@@ -576,7 +577,7 @@ function buildConfiguredAcpAgentSettings(
     agent_context: buildAgentContext(agentSettings),
   };
 
-  // TODO(#1014): set ``acp_isolate_data_dir: true`` here for a containerized
+  // TODO(#1019): set ``acp_isolate_data_dir: true`` here for a containerized
   // backend so concurrent same-provider conversations don't race on a shared
   // HOME. The SDK supports it (software-agent-sdk#3492), but the released
   // ``@openhands/typescript-client`` (1.24.3) doesn't surface it on
@@ -609,18 +610,17 @@ function buildConfiguredAcpAgentSettings(
 
   // Saved settings may carry ``acp_model: null`` (existing users predating
   // the default-model registry, or saved fields the agent-server stripped).
-  // Fall back to the provider's ``default_model`` so the conversation starts
-  // with whatever the Settings → Agent UI shows — without that, the form's
-  // displayed default would silently not take effect at runtime until the
-  // user re-saved the page.
+  // Fall back to the *preferred* default (Vertex-safe for Gemini) so the
+  // conversation starts with whatever the Settings → Agent UI shows — without
+  // that, the form's displayed default would silently not take effect at
+  // runtime until the user re-saved the page.
   const serverKey =
     typeof agentSettings.acp_server === "string"
       ? agentSettings.acp_server
       : undefined;
-  const provider = getAcpProvider(serverKey);
   const effectiveModel = resolveEffectiveAcpModel({
     configured: agentSettings.acp_model as string | null | undefined,
-    providerDefault: provider?.default_model,
+    providerDefault: getAcpPreferredDefaultModel(serverKey),
   });
   if (effectiveModel) {
     payload.acp_model = effectiveModel;

@@ -207,7 +207,7 @@ race on the CLI's auth/config/lock files. The SDK supports opting into a
 per-conversation data dir (`acp_isolate_data_dir`, software-agent-sdk#3492), but
 the released `@openhands/typescript-client` does not yet expose it on
 `ACPAgentSettings`, so Canvas can't send it without risking a validation error on
-older servers. This is tracked as a follow-up (agent-canvas#1014); cloud
+older servers. This is tracked as a follow-up (agent-canvas#1019); cloud
 grouping isolation is separate (agent-canvas#1016).
 
 ## Switching agent or model later

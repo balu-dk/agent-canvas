@@ -68,6 +68,14 @@ disk, and points the CLI's data-dir env at them automatically.
 > ⚠️ **Gemini Vertex ADC must be freshly logged in.** Run
 > `gcloud auth application-default login` — a stale token returns `invalid_rapt`.
 
+> ℹ️ **Baked creds in `.env` may not satisfy the onboarding gate.** The login
+> probe checks CLI login state (`claude auth status` / `codex login status` /
+> Gemini's OAuth credentials file), not container env vars — a container with
+> only e.g. `GEMINI_API_KEY` baked via `.env` typically still probes as
+> logged-out, and the credentials step then blocks "Next". Enter (or re-enter)
+> a credential in the UI to proceed; the baked env var still works for the
+> agent itself.
+
 ## Tear down
 
 ```bash

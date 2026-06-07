@@ -62,14 +62,21 @@ describe("ACP provider registry", () => {
     }
   });
 
-  it("seeds built-in ACP diffs with the provider default model", () => {
+  it("seeds built-in ACP diffs with the provider's preferred default model", () => {
+    // Preferred default = registry default everywhere except Gemini, where
+    // the Vertex-safe override applies (see getAcpPreferredDefaultModel) —
+    // EVERY default-model surface must agree on this, including this diff
+    // builder's fallback.
     for (const provider of ACP_PROVIDERS) {
       expect(buildAcpAgentSettingsDiff(provider.key)).toMatchObject({
         agent_kind: "acp",
         acp_server: provider.key,
-        acp_model: provider.default_model,
+        acp_model: getAcpPreferredDefaultModel(provider.key),
       });
     }
+    expect(buildAcpAgentSettingsDiff("gemini-cli")).toMatchObject({
+      acp_model: ACP_VERTEX_SAFE_MODEL,
+    });
   });
 
   it("keeps custom ACP diffs model-optional", () => {
@@ -166,8 +173,7 @@ describe("getAcpPreferredDefaultModel", () => {
   it("pins a NON-flash Gemini model", () => {
     // gemini-cli 0.45.x re-resolves any *-flash id at generation time to its
     // current default flash (software-agent-sdk#3532), so a flash pin is not
-    // honored — only a non-flash id (gemini-2.5-pro) sticks.
-    expect(ACP_VERTEX_SAFE_MODEL).toBe("gemini-2.5-pro");
+    // honored — only a non-flash id (e.g. gemini-2.5-pro) sticks.
     expect(ACP_VERTEX_SAFE_MODEL).not.toMatch(/flash/);
   });
 

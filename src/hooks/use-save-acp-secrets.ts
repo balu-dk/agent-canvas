@@ -35,6 +35,8 @@ export function useSaveAcpSecrets(fields: ACPProviderSecretField[]) {
 
   // Local agent-servers materialise file-content credentials via the SDK's
   // acp_file_secrets defaults; cloud doesn't yet (agent-canvas#1016).
+  // TODO(#1016): once cloud materialises file secrets, a kind check can't tell
+  // a new cloud from an old one — replace with a capability/version probe.
   const consumesFileCredentials = activeBackend.backend.kind === "local";
 
   const saveFilled = async (values: Record<string, string>) => {
