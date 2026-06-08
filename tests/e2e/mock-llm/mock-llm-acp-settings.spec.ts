@@ -1,18 +1,4 @@
-/**
- * Mock-LLM E2E tests for ACP Settings → Agent single-save + auth banner.
- *
- * Covers the changes from PR #1251:
- *   1. Only ONE "Save Changes" button on the Settings → Agent page (no
- *      separate credentials-only save).
- *   2. Credential fields render for built-in ACP providers.
- *   3. Saving both agent spec + credential in one click persists both.
- *   4. The credentials section renders only for built-in providers (not
- *      for "Custom" preset).
- *
- * These tests exercise the real agent-server settings API, same as the
- * existing ACP agent spec (mock-llm-acp-agent.spec.ts). They focus on
- * the settings form UX — not a full conversation round-trip.
- */
+/** E2E tests for ACP Settings single-save + credential fields (PR #1251). */
 
 import { test, expect, type Page } from "@playwright/test";
 import {
@@ -137,7 +123,6 @@ test.describe("ACP settings: single save + auth banner", () => {
     await navigateToAgentSettings(page);
     await selectAcpPreset(page, /Codex/);
 
-    // Fill the first credential field (Codex exposes CODEX_AUTH_JSON).
     const fields = credentialFields(page);
     await expect(fields.first()).toBeVisible({ timeout: 5_000 });
     await fields.first().click();
@@ -165,7 +150,8 @@ test.describe("ACP settings: single save + auth banner", () => {
   test("Save button is disabled when no changes have been made", async ({
     page,
   }) => {
-    await ensureMockLLMProfile(page);
+    // No ensureMockLLMProfile needed — this test only checks the initial
+    // disabled state of the save button regardless of agent configuration.
     await navigateToAgentSettings(page);
 
     const saveBtn = page.getByTestId("agent-save-button");

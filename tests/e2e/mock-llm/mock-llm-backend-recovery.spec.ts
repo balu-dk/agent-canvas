@@ -1,17 +1,4 @@
-/**
- * Mock-LLM E2E tests for the Manage Backends recovery flow.
- *
- * Covers the changes from PR #1205: when the active backend is unreachable,
- * the app shows a full-screen recovery modal (ManageBackendsModal with
- * recoveryMode=true). The modal suppresses dismiss controls and the user
- * must add or select a reachable backend to proceed.
- *
- * Scenarios:
- *   1. Recovery modal renders with correct recovery-mode semantics
- *      (no close button, no Done button, no backdrop/escape dismiss).
- *   2. Adding a reachable backend through the recovery modal boots the app.
- *   3. Editing the broken backend to point at the real backend boots the app.
- */
+/** E2E tests for backend recovery flow (PR #1205). */
 
 import { test, expect, type Page } from "@playwright/test";
 import {
@@ -26,13 +13,7 @@ test.describe.configure({ mode: "serial" });
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-/**
- * Seed localStorage with a backend pointing at a non-existent host so the
- * /server_info probe fails and the app enters the recovery gate.
- *
- * Analytics consent is suppressed and onboarding is marked done so the
- * only screen the app can show is the recovery modal.
- */
+/** Seed a broken backend so the app enters the recovery gate without spawning processes. */
 async function seedBrokenBackend(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("analytics-consent", "false");
