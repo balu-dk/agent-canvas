@@ -123,6 +123,9 @@ test.describe("mock-LLM folder browser → workspace → conversation", () => {
 
     // ── Browse to the test directory using the folder browser UI ──
     await test.step("open folder browser and navigate to test directory", async () => {
+      // The "Add Workspaces" button is inside the dropdown's sticky footer,
+      // so we must open the dropdown first.
+      await page.getByTestId("workspace-dropdown").click();
       await page.getByTestId("add-workspaces-button").click();
       await expect(page.getByTestId("folder-browser-modal")).toBeVisible({
         timeout: 10_000,
