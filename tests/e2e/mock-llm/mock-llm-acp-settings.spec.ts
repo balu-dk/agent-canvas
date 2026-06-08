@@ -187,9 +187,11 @@ test.describe("ACP settings: single save + auth banner", () => {
       },
     );
     expect(secretsResp.ok()).toBe(true);
-    const secrets = (await secretsResp.json()) as string[];
+    const body = (await secretsResp.json()) as {
+      secrets: { name: string; description?: string }[];
+    };
     // At least one secret should have been saved by the credential form
-    expect(secrets.length).toBeGreaterThanOrEqual(1);
+    expect(body.secrets.length).toBeGreaterThanOrEqual(1);
   });
 
   // ── 5. Save button disabled when no changes ─────────────────────────
