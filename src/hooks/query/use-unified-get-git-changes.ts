@@ -3,39 +3,47 @@ import { useQuery } from "@tanstack/react-query";
 import AgentServerGitService from "#/api/git-service/agent-server-git-service.api";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import { useConversationId } from "#/hooks/use-conversation-id";
+import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useRuntimeIsReady } from "#/hooks/use-runtime-is-ready";
 import { getGitPath } from "#/utils/get-git-path";
 import type { GitChange } from "#/api/open-hands.types";
 
 export const useUnifiedGetGitChanges = () => {
   const { conversationId } = useConversationId();
+  const { data: conversation } = useActiveConversation();
   const [orderedChanges, setOrderedChanges] = React.useState<GitChange[]>([]);
   const previousDataRef = React.useRef<GitChange[] | null>(null);
   const runtimeIsReady = useRuntimeIsReady();
+
+  // Compute gitPath outside queryFn so it can be used in queryKey
+  const selectedRepository = conversation?.selected_repository;
+  const workingDir = conversation?.workspace?.working_dir?.trim();
+  const gitPath = getGitPath(selectedRepository, workingDir);
 
   const result = useQuery({
     queryKey: [
       "file_changes",
       conversationId,
+      gitPath,
     ],
     queryFn: async () => {
       if (!conversationId) throw new Error("No conversation ID");
 
       // Fetch fresh conversation data directly (like VSCode tab does) to avoid
       // stale cache issues where workspace.working_dir lags behind after repo switch
-      const [conversation] = await AgentServerConversationService.batchGetAppConversations([conversationId]);
+      const [freshConversation] = await AgentServerConversationService.batchGetAppConversations([conversationId]);
 
-      const conversationUrl = conversation?.conversation_url;
-      const sessionApiKey = conversation?.session_api_key;
-      const selectedRepository = conversation?.selected_repository;
-      const workingDir = conversation?.workspace?.working_dir?.trim();
+      const conversationUrl = freshConversation?.conversation_url;
+      const sessionApiKey = freshConversation?.session_api_key;
+      const freshSelectedRepository = freshConversation?.selected_repository;
+      const freshWorkingDir = freshConversation?.workspace?.working_dir?.trim();
 
-      const gitPath = getGitPath(selectedRepository, workingDir);
+      const freshGitPath = getGitPath(freshSelectedRepository, freshWorkingDir);
 
       return AgentServerGitService.getGitChanges(
         conversationUrl,
         sessionApiKey,
-        gitPath,
+        freshGitPath,
       );
     },
     retry: false,
@@ -47,6 +55,12 @@ export const useUnifiedGetGitChanges = () => {
       disableToast: true,
     },
   });
+
+  // Reset orderedChanges when gitPath changes (e.g., repo switch)
+  React.useEffect(() => {
+    setOrderedChanges([]);
+    previousDataRef.current = null;
+  }, [gitPath]);
 
   // Latest changes should be on top
   React.useEffect(() => {
@@ -80,7 +94,7 @@ export const useUnifiedGetGitChanges = () => {
         }
       }
     }
-  }, [result.isFetching, result.isSuccess, result.data]);
+  }, [result.isFetching, result.isSuccess, result.data, gitPath]);
 
   return {
     data: orderedChanges,
