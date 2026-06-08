@@ -127,16 +127,14 @@ class CIVisualizer(ConversationVisualizerBase):
 
 
 # ---------------------------------------------------------------------------
-# Conversation callback — collects agent-source event dumps for parsing
+# Conversation callback — collects all event dumps for parsing
 # ---------------------------------------------------------------------------
-collected_agent_dumps: list[str] = []
+collected_dumps: list[str] = []
 
 
 def capture_event(event: Event) -> None:
-    """Capture only agent-originated events for post-run parsing."""
-    source = getattr(event, "source", None)
-    if source == "agent":
-        collected_agent_dumps.append(event.model_dump_json())
+    """Capture every event for post-run parsing."""
+    collected_dumps.append(event.model_dump_json())
 
 
 # ---------------------------------------------------------------------------
@@ -180,25 +178,30 @@ exactly this block:
 
 
 # ---------------------------------------------------------------------------
-# Extract text from agent-source event dumps
+# Extract text from event dumps
 # ---------------------------------------------------------------------------
-def extract_agent_text(dumps: list[str]) -> str:
-    """Pull text content from agent-originated event JSON dumps."""
+def _collect_text(obj: object, out: list[str]) -> None:
+    """Recursively collect every string value named 'text' or 'message'."""
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            if key in ("text", "message") and isinstance(val, str) and val.strip():
+                out.append(val)
+            else:
+                _collect_text(val, out)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_text(item, out)
+
+
+def extract_all_text(dumps: list[str]) -> str:
+    """Walk every collected event JSON and pull out all text fragments."""
     fragments: list[str] = []
     for raw in dumps:
         try:
             obj = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        # MessageEvent → llm_message.content[].text
-        for block in (obj.get("llm_message") or {}).get("content") or []:
-            if isinstance(block, dict) and block.get("text"):
-                fragments.append(block["text"])
-        # FinishAction, MessageAction, or other events with direct fields
-        for key in ("message", "text", "thought"):
-            val = obj.get(key)
-            if val and isinstance(val, str):
-                fragments.append(val)
+        _collect_text(obj, fragments)
     return "\n".join(fragments)
 
 
@@ -268,9 +271,9 @@ def main() -> None:
     conversation.send_message(prompt)
     conversation.run()
 
-    # Extract text from agent-only events and parse the structured output.
-    agent_text = extract_agent_text(collected_agent_dumps)
-    result = parse_selection(agent_text)
+    # Extract text from all events and parse the structured output.
+    all_text = extract_all_text(collected_dumps)
+    result = parse_selection(all_text)
     result["mode"] = "llm"
 
     print(json.dumps(result, indent=2))
