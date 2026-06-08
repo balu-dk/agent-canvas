@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Select which mock-LLM E2E test specs to run based on changed files.
 
-Uses the OpenHands SDK's LLM class to map PR file changes to the most
-relevant test specs.  Returns the full suite when the LLM decides the
-changes are too broad to narrow.
+Uses an OpenHands SDK Agent + Conversation to reason about which E2E
+test specs are relevant to a set of changed files.  The agent's
+thinking is streamed to stderr so CI logs show the full reasoning;
+the final JSON result is written to stdout.
 
 Usage:
     # Pipe changed files (one per line):
     git diff --name-only origin/main | python scripts/select-e2e-tests.py
 
     # Or pass as arguments:
-    python scripts/select-e2e-tests.py src/routes/automations.tsx src/api/automation-service/...
+    python scripts/select-e2e-tests.py src/routes/automations.tsx ...
 
 Environment variables:
     LLM_API_KEY   – required
@@ -18,23 +19,30 @@ Environment variables:
     LLM_MODEL     – optional, defaults to openhands/gpt-5.1
 
 Output (stdout): JSON object with keys:
-    specs   – list of spec filenames to run (empty ⇒ full suite)
+    specs   – list of spec filenames to run (empty ⇒ no E2E needed)
     reason  – human-readable explanation
-    mode    – "llm" | "full"
+    mode    – "llm"
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
 import sys
+import tempfile
 
-from openhands.sdk import LLM
+from pydantic import SecretStr
+
+from openhands.sdk import LLM, Agent, Conversation, Event
+from openhands.sdk.conversation.visualizer import ConversationVisualizerBase
+
+# Suppress noisy SDK / litellm logs — our visualizer handles output.
+logging.getLogger().setLevel(logging.WARNING)
 
 # ---------------------------------------------------------------------------
-# Spec catalog – each entry maps a spec filename to a brief description
-# of what source areas it exercises.  The LLM receives this catalog so it
-# can reason about coverage.
+# Spec catalog – the agent receives this so it can reason about coverage.
 # ---------------------------------------------------------------------------
 SPEC_CATALOG: dict[str, str] = {
     "mock-llm-acp-agent.spec.ts": (
@@ -97,31 +105,47 @@ SPEC_CATALOG: dict[str, str] = {
     ),
 }
 
+OUTPUT_TAG = "TEST_SELECTION"
 
-def select(changed_files: list[str]) -> tuple[list[str], str]:
-    """Use the OpenHands SDK LLM to pick the relevant specs."""
-    api_key = os.environ.get("LLM_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("LLM_API_KEY is required but not set.")
 
-    base_url = os.environ.get("LLM_BASE_URL", "https://llm-proxy.app.all-hands.dev")
-    model = os.environ.get("LLM_MODEL", "openhands/gpt-5.1")
+# ---------------------------------------------------------------------------
+# Visualizer — streams every agent event to stderr for CI visibility
+# ---------------------------------------------------------------------------
+class CIVisualizer(ConversationVisualizerBase):
+    """Prints agent events to stderr so CI logs show the full reasoning."""
 
+    def on_event(self, event: Event) -> None:
+        name = type(event).__name__
+        dump = event.model_dump_json()[:500]
+        print(f"[agent] {name}: {dump}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Conversation callback — collects the raw content for parsing
+# ---------------------------------------------------------------------------
+collected_messages: list[str] = []
+
+
+def capture_event(event: Event) -> None:
+    """Callback passed to Conversation to capture agent messages."""
+    # MessageAction events have a 'message' field with the agent's text.
+    msg = getattr(event, "message", None) or getattr(event, "text", None)
+    if msg and isinstance(msg, str):
+        collected_messages.append(msg)
+
+
+# ---------------------------------------------------------------------------
+# Build the user prompt
+# ---------------------------------------------------------------------------
+def build_prompt(changed_files: list[str]) -> str:
     catalog_text = "\n".join(
         f"  - {name}: {desc}" for name, desc in sorted(SPEC_CATALOG.items())
     )
     files_text = "\n".join(f"  - {f}" for f in changed_files[:200])
 
-    prompt = f"""\
-You are a CI test-selection assistant for the agent-canvas frontend project.
-
-Given the list of files modified in a pull request, decide which E2E test
-specs are RELEVANT and should be run.  Return ONLY a JSON object with two
-keys: "specs" (list of spec filenames) and "reason" (one-sentence explanation).
-
-If the changes are broad (e.g. package.json, vite.config.ts, tsconfig,
-root layout, core API layer) or you are unsure, return an empty "specs"
-list to trigger the full suite.
+    return f"""\
+Analyze the following list of files modified in a pull request and decide
+which E2E test specs should be run.
 
 Available test specs and what they cover:
 {catalog_text}
@@ -129,37 +153,85 @@ Available test specs and what they cover:
 Changed files in this PR:
 {files_text}
 
-Respond with ONLY the JSON object, no markdown fences."""
+Rules:
+- Pick ONLY the specs whose covered areas are affected by the changed files.
+- If no spec is relevant (e.g. only docs, CI configs, or unit tests changed),
+  return an empty "specs" list — we will skip E2E entirely.
+- If the changes are very broad (package.json, vite.config.ts, tsconfig,
+  root layout, core shared utilities) and could affect anything, return
+  ALL spec filenames.
 
-    llm = LLM(model=model, api_key=api_key, base_url=base_url)
-    response = llm.completion(
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-    )
-    content = response.choices[0].message.content.strip()
-    # Strip markdown fences if the model adds them anyway.
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    result = json.loads(content)
+You MUST end your response with exactly this block (no markdown fences):
+
+<{OUTPUT_TAG}>
+{{"specs": ["spec1.spec.ts", ...], "reason": "one sentence explanation"}}
+</{OUTPUT_TAG}>"""
+
+
+# ---------------------------------------------------------------------------
+# Parse the structured output from the agent's response
+# ---------------------------------------------------------------------------
+def parse_selection(text: str) -> dict:
+    pattern = rf"<{OUTPUT_TAG}>\s*(.*?)\s*</{OUTPUT_TAG}>"
+    match = re.search(pattern, text, re.DOTALL)
+    if not match:
+        raise ValueError(f"Agent response missing <{OUTPUT_TAG}> block")
+    raw = match.group(1).strip()
+    result = json.loads(raw)
     specs = [s for s in result.get("specs", []) if s in SPEC_CATALOG]
     reason = result.get("reason", "LLM selection")
-    return specs, reason
+    return {"specs": specs, "reason": reason}
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 def main() -> None:
-    # Read changed files from args or stdin.
     if len(sys.argv) > 1:
         changed_files = sys.argv[1:]
     else:
         changed_files = [line.strip() for line in sys.stdin if line.strip()]
 
     if not changed_files:
-        print(json.dumps({"specs": [], "reason": "No changed files provided.", "mode": "full"}))
+        print(json.dumps({"specs": [], "reason": "No changed files provided.", "mode": "llm"}))
         return
 
-    specs, reason = select(changed_files)
-    mode = "llm" if specs else "full"
-    print(json.dumps({"specs": specs, "reason": reason, "mode": mode}, indent=2))
+    api_key = os.environ.get("LLM_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("LLM_API_KEY is required but not set.")
+
+    base_url = os.environ.get("LLM_BASE_URL", "https://llm-proxy.app.all-hands.dev")
+    model = os.environ.get("LLM_MODEL", "openhands/gpt-5.1")
+
+    llm = LLM(
+        model=model,
+        api_key=SecretStr(api_key),
+        base_url=base_url,
+        usage_id="e2e-selector",
+    )
+    agent = Agent(llm=llm, tools=[])
+
+    with tempfile.TemporaryDirectory() as workspace:
+        conversation = Conversation(
+            agent=agent,
+            workspace=workspace,
+            visualizer=CIVisualizer(),
+            callbacks=[capture_event],
+        )
+
+        prompt = build_prompt(changed_files)
+        conversation.send_message(prompt)
+        conversation.run()
+
+    # Find the structured output in any captured message.
+    full_text = "\n".join(collected_messages)
+    result = parse_selection(full_text)
+    result["mode"] = "llm"
+
+    print(json.dumps(result, indent=2))
+
+    cost = llm.metrics.accumulated_cost
+    print(f"LLM cost: ${cost:.4f}", file=sys.stderr)
 
 
 if __name__ == "__main__":

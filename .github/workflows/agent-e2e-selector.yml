@@ -145,8 +145,10 @@ jobs:
           echo "$BODY" | gh pr comment "${{ env.EFFECTIVE_PR }}" --body-file -
 
   # ── Phase 2: run the E2E suite via workflow_call ──
+  # Skipped entirely when the agent returns no specs (docs/CI-only changes).
   run-e2e:
     needs: select
+    if: needs.select.outputs.specs != ''
     uses: ./.github/workflows/mock-llm-e2e.yml
     with:
       test_specs: ${{ needs.select.outputs.specs }}
