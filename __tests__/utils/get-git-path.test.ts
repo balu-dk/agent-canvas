@@ -34,18 +34,27 @@ describe("getGitPath", () => {
   });
 
   describe("with a backend-provided workspace path", () => {
-    it("prefers the explicit workspace path over derived git paths", () => {
+    // When a repo is selected, we compute the path from selectedRepository
+    // rather than trusting workingDir. This avoids stale workingDir issues
+    // during repo switches (where workingDir lags behind selectedRepository).
+    it("prefers selectedRepository over workingDir when both are present", () => {
       expect(
         getGitPath(
           "OpenHands/software-agent-sdk",
           "/workspace/project/agent-canvas",
         ),
-      ).toBe("/workspace/project/agent-canvas");
+      ).toBe(`${DEFAULT_WORKING_DIR}/software-agent-sdk`);
     });
 
-    it("ignores blank workspace paths and falls back to heuristics", () => {
+    it("ignores blank workspace paths and falls back to repo-derived path", () => {
       expect(getGitPath("OpenHands/software-agent-sdk", "  ")).toBe(
         `${DEFAULT_WORKING_DIR}/software-agent-sdk`,
+      );
+    });
+
+    it("uses workingDir only when no repository is selected", () => {
+      expect(getGitPath(null, "/workspace/project/agent-canvas")).toBe(
+        "/workspace/project/agent-canvas",
       );
     });
   });
