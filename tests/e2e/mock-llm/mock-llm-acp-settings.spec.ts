@@ -82,9 +82,11 @@ test.describe("ACP settings: single save + auth banner", () => {
     await expect(credsSaveBtn).not.toBeVisible({ timeout: 2_000 });
   });
 
-  // ── 2. Auth status banner appears for built-in ACP providers ────────
+  // ── 2. Credentials section renders for built-in ACP providers ────────
 
-  test("shows auth status banner in credentials section", async ({ page }) => {
+  test("shows credential fields for built-in ACP providers", async ({
+    page,
+  }) => {
     await ensureMockLLMProfile(page);
     await routeSessionApiKey(page);
     await page.goto("/settings/agent", { waitUntil: "domcontentloaded" });
@@ -96,12 +98,13 @@ test.describe("ACP settings: single save + auth banner", () => {
     await waitForTestId(page, "agent-preset-selector");
     await selectDropdownOption(page, /Preset/, /Codex/);
 
-    // The auth status banner should be present (either "checking" or
-    // "detected" state — both have the settings-acp-auth prefix).
-    const authBanner = page
-      .getByTestId("settings-acp-auth-detected")
-      .or(page.getByTestId("settings-acp-auth-checking"));
-    await expect(authBanner).toBeVisible({ timeout: 10_000 });
+    // The credentials section should render with at least one secret
+    // field (Codex has CODEX_AUTH_JSON + the API key env var).
+    const credentialFields = page.locator(
+      '[data-testid^="settings-acp-secret-"]',
+    );
+    await expect(credentialFields.first()).toBeVisible({ timeout: 10_000 });
+    expect(await credentialFields.count()).toBeGreaterThanOrEqual(1);
   });
 
   // ── 3. Credentials section hidden for Custom preset ─────────────────

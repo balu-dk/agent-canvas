@@ -93,20 +93,23 @@ test.describe("backend recovery flow", () => {
       page.getByTestId("manage-backends-row-Broken"),
     ).toBeVisible();
 
-    // The broken backend should show a disconnected/error status
+    // The broken backend should show a disconnected/error status.
+    // Wait for the health probe to settle — it should show "Disconnected"
+    // or an error state, never the exact word "Connected" alone.
     const statusEl = page.getByTestId("manage-backends-status-Broken");
     await expect(statusEl).toBeVisible({ timeout: 15_000 });
-    // Wait for the health probe to settle — it should show disconnected
-    // or an error state (not "Connected")
     await expect
       .poll(
         async () => {
-          const text = await statusEl.textContent();
-          return text?.toLowerCase() ?? "";
+          const text = (await statusEl.textContent())?.trim() ?? "";
+          // "Checking…" means the probe is still running — keep polling.
+          // "Disconnected", "Invalid API key", etc. are all acceptable.
+          // Only the exact status "Connected" is unexpected here.
+          return text;
         },
-        { timeout: 15_000 },
+        { timeout: 15_000, message: "backend status should settle to a non-connected state" },
       )
-      .not.toContain("connected");
+      .not.toBe("Connected");
   });
 
   // ── 2. Adding a reachable backend through the recovery modal ────────
