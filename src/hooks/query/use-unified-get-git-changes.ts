@@ -1,39 +1,36 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import AgentServerGitService from "#/api/git-service/agent-server-git-service.api";
+import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import { useConversationId } from "#/hooks/use-conversation-id";
-import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useRuntimeIsReady } from "#/hooks/use-runtime-is-ready";
 import { getGitPath } from "#/utils/get-git-path";
 import type { GitChange } from "#/api/open-hands.types";
 
 export const useUnifiedGetGitChanges = () => {
   const { conversationId } = useConversationId();
-  const { data: conversation } = useActiveConversation();
   const [orderedChanges, setOrderedChanges] = React.useState<GitChange[]>([]);
   const previousDataRef = React.useRef<GitChange[] | null>(null);
   const runtimeIsReady = useRuntimeIsReady();
-
-  const conversationUrl = conversation?.conversation_url;
-  const sessionApiKey = conversation?.session_api_key;
-  const selectedRepository = conversation?.selected_repository;
-  const workingDir = conversation?.workspace?.working_dir?.trim();
-
-  const gitPath = React.useMemo(
-    () => getGitPath(selectedRepository, workingDir),
-    [selectedRepository, workingDir],
-  );
 
   const result = useQuery({
     queryKey: [
       "file_changes",
       conversationId,
-      conversationUrl,
-      sessionApiKey,
-      gitPath,
     ],
     queryFn: async () => {
       if (!conversationId) throw new Error("No conversation ID");
+
+      // Fetch fresh conversation data directly (like VSCode tab does) to avoid
+      // stale cache issues where workspace.working_dir lags behind after repo switch
+      const [conversation] = await AgentServerConversationService.batchGetAppConversations([conversationId]);
+
+      const conversationUrl = conversation?.conversation_url;
+      const sessionApiKey = conversation?.session_api_key;
+      const selectedRepository = conversation?.selected_repository;
+      const workingDir = conversation?.workspace?.working_dir?.trim();
+
+      const gitPath = getGitPath(selectedRepository, workingDir);
 
       return AgentServerGitService.getGitChanges(
         conversationUrl,

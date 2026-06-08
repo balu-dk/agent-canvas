@@ -34,16 +34,17 @@ describe("getGitPath", () => {
   });
 
   describe("with a backend-provided workspace path", () => {
-    // When a repo is selected, we compute the path from selectedRepository
-    // rather than trusting workingDir. This avoids stale workingDir issues
-    // during repo switches (where workingDir lags behind selectedRepository).
-    it("prefers selectedRepository over workingDir when both are present", () => {
+    it("prefers the explicit workspace path over derived git paths", () => {
+      // When a repo is selected, we still prefer the explicit workingDir
+      // because it comes from the backend and represents the actual runtime state.
+      // The fresh-fetch pattern in useUnifiedGetGitChanges ensures workingDir
+      // is not stale, so we can trust it.
       expect(
         getGitPath(
           "OpenHands/software-agent-sdk",
           "/workspace/project/agent-canvas",
         ),
-      ).toBe(`${DEFAULT_WORKING_DIR}/software-agent-sdk`);
+      ).toBe("/workspace/project/agent-canvas");
     });
 
     it("ignores blank workspace paths and falls back to repo-derived path", () => {
