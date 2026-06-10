@@ -73,6 +73,7 @@ agent-canvas --backend-only   # agent server + automation backend + ingress only
 - A host directory for `PROJECTS_PATH` containing the project folders you want the agent to access. Create it before starting the container.
 
 **macOS / Linux:**
+
 ```sh
 docker pull ghcr.io/openhands/agent-canvas:1.0.0-rc.5
 
