@@ -481,6 +481,7 @@ describe("AgentServerConversationService", () => {
         "@zed-industries/codex-acp",
       ]);
       expect(payload.agent_settings.acp_args).toEqual(["--experimental"]);
+      expect(payload.agent_settings.acp_server).toBe("codex");
       expect(payload.agent_settings.acp_model).toBe("gpt-5.5/high");
       expect(payload.agent_settings.acp_prompt_timeout).toBe(1800);
       expect(payload.agent_settings.llm).toBeUndefined();
@@ -561,6 +562,9 @@ describe("AgentServerConversationService", () => {
         api_key: "encrypted-profile-key",
         base_url: "https://llm-proxy.app.all-hands.dev/",
       });
+      expect(payload.agent_settings.llm.api_key).not.toBe(
+        "encrypted-stale-key",
+      );
     });
   });
 
