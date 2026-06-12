@@ -267,7 +267,6 @@ describe("findCatalogEntryForServer", () => {
     expect(match?.id).toBe("linear");
   });
 });
-});
 
 describe("getMcpMarketplaceCatalog", () => {
   it("includes Linear with its default transport", () => {
@@ -297,7 +296,5 @@ describe("getMcpMarketplaceCatalog", () => {
   it("includes Filesystem (it has MCP connection options)", () => {
     // filesystem has a default MCP connection option and should be included
     expect(mcpMarketplace.find((e) => e.id === "filesystem")).toBeDefined();
-  });
-});
   });
 });
