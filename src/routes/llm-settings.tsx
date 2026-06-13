@@ -1,4 +1,5 @@
 import React from "react";
+import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { ModelSelector } from "#/components/shared/modals/settings/model-selector";
 import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
@@ -32,6 +33,7 @@ import {
   OPENAI_SUBSCRIPTION_VENDOR,
   resolveLlmAuthType,
 } from "#/constants/llm-subscription";
+import { LLM_SETTINGS_EDIT_PROFILE_QUERY_PARAM } from "#/constants/llm-settings";
 import { useOpenAISubscriptionModels } from "#/hooks/query/use-llm-subscription-models";
 import { OPENHANDS_LLM_PROXY_BASE_URL } from "#/utils/openhands-llm";
 
@@ -523,6 +525,7 @@ export function LlmSettingsScreen({
  */
 export default function LlmSettingsRoute() {
   const { backend } = useActiveBackend();
+  const [searchParams] = useSearchParams();
   const isCloud = backend.kind === "cloud";
 
   // Cloud backends use the standard LLM settings form (no profiles support)
@@ -531,5 +534,9 @@ export default function LlmSettingsRoute() {
   }
 
   // Local backends use the profile management view
-  return <LlmSettingsLocalView />;
+  return (
+    <LlmSettingsLocalView
+      editProfileName={searchParams.get(LLM_SETTINGS_EDIT_PROFILE_QUERY_PARAM)}
+    />
+  );
 }
