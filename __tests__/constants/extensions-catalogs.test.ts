@@ -35,8 +35,6 @@ describe("OpenHands extensions catalogs", () => {
   });
 
   it("includes Linear with its upstream transport (no vendor patches in generic layer)", () => {
-    // The generic catalog layer no longer patches vendor-specific transports.
-    // Linear ships with SSE from upstream; the test verifies no patching occurs.
     const catalog = getMcpMarketplaceCatalog(INTEGRATION_CATALOG);
 
     // Act

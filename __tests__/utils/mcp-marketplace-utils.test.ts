@@ -273,8 +273,6 @@ describe("getMcpMarketplaceCatalog", () => {
     const linear = mcpMarketplace.find((e) => e.id === "linear");
     expect(linear).toBeDefined();
     const transport = getDefaultMcpTransport(linear!);
-    // Linear's catalog entry uses sse transport; the shttp rewrite that
-    // previously lived in this file has been removed per issue #1336.
     expect(["sse", "shttp"]).toContain(transport?.kind);
   });
 

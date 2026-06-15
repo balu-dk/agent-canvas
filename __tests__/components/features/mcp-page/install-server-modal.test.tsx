@@ -209,8 +209,6 @@ describe("InstallServerModal", () => {
   });
 
   it("installs Linear with its default transport from the catalog", async () => {
-    // The Linear catalog entry uses sse transport. The runtime patch that
-    // previously rewrote it to shttp has been removed (issue #1336).
     const linear = getMcpMarketplaceCatalog(MCP_MARKETPLACE).find(
       (e) => e.id === "linear",
     )!;
@@ -229,7 +227,7 @@ describe("InstallServerModal", () => {
       expect(SettingsService.getSettings).toHaveBeenCalled(),
     );
 
-    // The Linear entry uses sse transport, not shttp — no api_key field renders.
+    // No api_key field renders for SSE transport.
     expect(screen.queryByTestId("mcp-install-field-api_key")).toBeNull();
 
     // Verify the URL field shows the catalog's sse endpoint.
