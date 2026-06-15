@@ -34,29 +34,24 @@ describe("OpenHands extensions catalogs", () => {
     );
   });
 
-  it("patches Linear to the streamable HTTP /mcp endpoint with bearer auth", () => {
-    // Arrange: upstream still ships the removed /sse SSE transport; the
-    // marketplace catalog must serve the patched entry instead.
+  it("includes Linear with its upstream transport (no vendor patches in generic layer)", () => {
+    // The generic catalog layer no longer patches vendor-specific transports.
+    // Linear ships with SSE from upstream; the test verifies no patching occurs.
     const catalog = getMcpMarketplaceCatalog(INTEGRATION_CATALOG);
 
     // Act
     const linear = catalog.find((entry) => entry.id === "linear")!;
 
-    // Assert
+    // Assert: upstream provides SSE transport
     expect(getDefaultMcpTransport(linear)).toEqual({
-      kind: "shttp",
-      url: "https://mcp.linear.app/mcp",
+      kind: "sse",
+      url: "https://mcp.linear.app/sse",
       apiKeyOptional: true,
     });
-    expect(linear.docsUrl).toBe("https://linear.app/docs/mcp");
-    const mcpOption = linear.connectionOptions.find(
-      (option) => option.transport?.kind === "shttp",
-    );
-    expect(mcpOption?.auth.strategy).toBe("bearer");
   });
 
-  it("does not mutate the imported catalog when patching Linear", () => {
-    // Arrange/Act: run the patch, then inspect the raw imported entry.
+  it("does not mutate the imported catalog (no in-place vendor patches)", () => {
+    // Arrange/Act: run the catalog builder, then inspect the raw imported entry.
     getMcpMarketplaceCatalog(INTEGRATION_CATALOG);
     const raw = INTEGRATION_CATALOG.find((entry) => entry.id === "linear");
 
