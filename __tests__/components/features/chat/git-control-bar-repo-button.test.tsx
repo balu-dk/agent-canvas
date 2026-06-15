@@ -63,6 +63,18 @@ describe("GitControlBarRepoButton", () => {
       expect(screen.getByText("owner/repo")).toBeInTheDocument();
     });
 
+    it("should render with data-testid attribute", () => {
+      render(
+        <GitControlBarRepoButton
+          selectedRepository="owner/repo"
+          gitProvider="github"
+          dataTestId="git-control-bar-repo-button"
+        />,
+      );
+
+      expect(screen.getByTestId("git-control-bar-repo-button")).toBeInTheDocument();
+    });
+
     it("should show git provider icon and external link icon", () => {
       render(
         <GitControlBarRepoButton
