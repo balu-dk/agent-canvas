@@ -19,6 +19,12 @@ interface MetaProfileEditorProps {
   initialConfig?: MetaProfile;
   /** Names of saved LLM profiles, offered as dropdown options. */
   availableProfiles: string[];
+  /**
+   * Names of existing meta-profiles. In create mode a name already present
+   * here is rejected, so "Add" cannot silently overwrite an existing profile
+   * (the backend save contract is create-or-overwrite).
+   */
+  existingNames?: string[];
   isSaving: boolean;
   onSave: (name: string, config: MetaProfile) => void;
   onCancel: () => void;
@@ -35,6 +41,7 @@ export function MetaProfileEditor({
   initialName = "",
   initialConfig,
   availableProfiles,
+  existingNames = [],
   isSaving,
   onSave,
   onCancel,
@@ -52,8 +59,12 @@ export function MetaProfileEditor({
 
   const isEdit = mode === "edit";
   const nameValid = isProfileNameValid(name, { isRequired: true });
+  // In create mode, a name that already exists would overwrite that profile
+  // (the backend save is create-or-overwrite), so reject it here.
+  const isDuplicateName = !isEdit && existingNames.includes(name.trim());
   const canSave =
     nameValid &&
+    !isDuplicateName &&
     config.classifier_model.trim().length > 0 &&
     config.default_model.trim().length > 0 &&
     config.classes.every(
@@ -105,13 +116,23 @@ export function MetaProfileEditor({
         )}
       </Typography.H3>
 
-      <ProfileNameInput
-        testId="meta-profile-name-input"
-        value={name}
-        onChange={setName}
-        isDisabled={isEdit || isSaving}
-        isRequired
-      />
+      <div className="flex flex-col gap-1">
+        <ProfileNameInput
+          testId="meta-profile-name-input"
+          value={name}
+          onChange={setName}
+          isDisabled={isEdit || isSaving}
+          isRequired
+        />
+        {isDuplicateName ? (
+          <p
+            data-testid="meta-profile-name-taken"
+            className="text-xs text-red-400"
+          >
+            {t(I18nKey.SETTINGS$META_PROFILE_NAME_TAKEN)}
+          </p>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-2">
         <SettingsDropdownInput

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, type Mock } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpError } from "@openhands/typescript-client";
 import { renderWithProviders } from "test-utils";
 import { MetaLlmSettingsView } from "#/components/features/settings/meta-llm-profiles";
 import * as useMetaProfilesHook from "#/hooks/query/use-meta-profiles";
@@ -166,6 +167,38 @@ describe("MetaLlmSettingsView", () => {
       expect(screen.getByTestId("meta-profile-editor")).toBeInTheDocument(),
     );
     expect(MetaProfilesService.getMetaProfile).toHaveBeenCalledWith("balanced");
+  });
+
+  it("shows an explicit unsupported-backend message when the API is missing (404)", () => {
+    // Older backends (pre software-agent-sdk #3744) have no /api/meta-profiles
+    // endpoint and return 404; the page must explain that instead of a dead
+    // generic error, and must not offer Add.
+    vi.mocked(useMetaProfilesHook.useMetaProfiles).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new HttpError(404, "Not Found"),
+    } as unknown as ReturnType<typeof useMetaProfilesHook.useMetaProfiles>);
+
+    renderWithProviders(<MetaLlmSettingsView />);
+
+    expect(screen.getByTestId("meta-profile-unsupported")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-meta-profile")).not.toBeInTheDocument();
+  });
+
+  it("shows the generic error for non-404 failures", () => {
+    vi.mocked(useMetaProfilesHook.useMetaProfiles).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new HttpError(500, "Internal Server Error"),
+    } as unknown as ReturnType<typeof useMetaProfilesHook.useMetaProfiles>);
+
+    renderWithProviders(<MetaLlmSettingsView />);
+
+    expect(
+      screen.queryByTestId("meta-profile-unsupported"),
+    ).not.toBeInTheDocument();
+    // The Add affordance remains for transient/server errors.
+    expect(screen.getByTestId("add-meta-profile")).toBeInTheDocument();
   });
 
   it("disables Set active in the menu for the already-active profile", async () => {

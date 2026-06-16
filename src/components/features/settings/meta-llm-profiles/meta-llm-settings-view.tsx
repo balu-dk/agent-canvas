@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { HttpError } from "@openhands/typescript-client";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useMetaProfiles } from "#/hooks/query/use-meta-profiles";
@@ -41,6 +42,12 @@ export function MetaLlmSettingsView() {
   const availableProfiles = (llmProfilesData?.profiles ?? []).map(
     (p) => p.name,
   );
+  const existingNames = metaProfiles.map((p) => p.name);
+  // A 404 means the backend predates the /api/meta-profiles endpoints
+  // (software-agent-sdk #3744). Surface that explicitly instead of a generic
+  // error so the page isn't a dead end on older backends.
+  const isUnsupportedBackend =
+    error instanceof HttpError && error.status === 404;
 
   const handleActivate = async (name: string) => {
     try {
@@ -89,6 +96,17 @@ export function MetaLlmSettingsView() {
     setEditing(null);
   };
 
+  if (isUnsupportedBackend) {
+    return (
+      <p
+        data-testid="meta-profile-unsupported"
+        className="text-sm text-[var(--oh-muted)]"
+      >
+        {t(I18nKey.SETTINGS$META_PROFILE_UNSUPPORTED)}
+      </p>
+    );
+  }
+
   if (view === "create" || view === "edit") {
     return (
       <MetaProfileEditor
@@ -96,6 +114,7 @@ export function MetaLlmSettingsView() {
         initialName={editing?.name}
         initialConfig={editing?.config}
         availableProfiles={availableProfiles}
+        existingNames={existingNames}
         isSaving={saveMetaProfile.isPending}
         onSave={handleSave}
         onCancel={handleCancel}
