@@ -52,27 +52,33 @@ interface HiddenSearchParams {
   limit?: number;
 }
 
+function buildSearchParams(params: HiddenSearchParams): URLSearchParams {
+  const query = new URLSearchParams({
+    path: params.path,
+    include_hidden: "true",
+  });
+  if (params.pageId) query.set("page_id", params.pageId);
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  return query;
+}
+
 async function searchSubdirectoriesWithHidden(
   params: HiddenSearchParams,
 ): Promise<SubdirectoryPage> {
   const active = getActiveBackend();
   if (active.backend.kind === "cloud") {
-    const query = new URLSearchParams({
-      path: params.path,
-      include_hidden: "true",
-    });
-    if (params.pageId) query.set("page_id", params.pageId);
-    if (params.limit !== undefined) query.set("limit", String(params.limit));
     return callCloudProxy<SubdirectoryPage>({
       backend: active.backend,
       method: "GET",
-      path: `${SEARCH_SUBDIRS_PATH}?${query.toString()}`,
+      path: `${SEARCH_SUBDIRS_PATH}?${buildSearchParams(params).toString()}`,
     });
   }
 
+  // Encode params explicitly (path, page_id, limit, include_hidden) rather
+  // than spreading the options object, so callers' camelCase fields do not
+  // leak onto the wire as-is.
   const response = await localFileAxios.get<SubdirectoryPage>(
-    SEARCH_SUBDIRS_PATH,
-    { params: { ...params, include_hidden: true } },
+    `${SEARCH_SUBDIRS_PATH}?${buildSearchParams(params).toString()}`,
   );
   return response.data;
 }
@@ -87,9 +93,9 @@ async function getHomeWithHidden(): Promise<HomeDirectoryResponse> {
     });
   }
 
-  const response = await localFileAxios.get<HomeDirectoryResponse>(HOME_PATH, {
-    params: { include_hidden: true },
-  });
+  const response = await localFileAxios.get<HomeDirectoryResponse>(
+    `${HOME_PATH}?include_hidden=true`,
+  );
   return response.data;
 }
 
