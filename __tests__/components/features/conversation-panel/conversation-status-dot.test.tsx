@@ -51,7 +51,7 @@ describe("ConversationStatusDot", () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId("styled-tooltip")).toHaveAttribute(
       "data-content",
-      "COMMON$STOPPED",
+      "COMMON$UNKNOWN",
     );
   });
 
@@ -64,7 +64,7 @@ describe("ConversationStatusDot", () => {
     );
 
     expect(
-      screen.getByTestId("conversation-status-paused"),
+      screen.getByTestId("conversation-status-stopped"),
     ).toBeInTheDocument();
     expect(screen.getByTestId("styled-tooltip")).toHaveAttribute(
       "data-content",

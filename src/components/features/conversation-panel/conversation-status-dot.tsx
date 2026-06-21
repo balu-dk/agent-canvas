@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FaArchive } from "react-icons/fa";
+import { FaArchive, FaStop } from "react-icons/fa";
 import { ExecutionStatus } from "#/types/agent-server/core/base/common";
 import { SandboxStatus } from "#/api/conversation-service/agent-server-conversation-service.types";
 import { StyledTooltip } from "#/components/shared/buttons/styled-tooltip";
@@ -59,7 +59,7 @@ const labelKeyFor = (
     case "error":
       return "COMMON$ERROR";
     default:
-      return "COMMON$STOPPED";
+      return "COMMON$UNKNOWN";
   }
 };
 
@@ -145,6 +145,13 @@ export function ConversationStatusDot({
       data-testid="conversation-status-archived"
       size={10}
       className="shrink-0 text-[var(--oh-muted)] opacity-60"
+      aria-hidden
+    />
+  ) : isStopped ? (
+    <FaStop
+      data-testid="conversation-status-stopped"
+      size={9}
+      className="shrink-0 text-[var(--oh-muted)] opacity-70"
       aria-hidden
     />
   ) : (
