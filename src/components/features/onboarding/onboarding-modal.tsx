@@ -160,14 +160,34 @@ export function OnboardingModal({
   const [selectedAgentId, setSelectedAgentId] =
     React.useState<OnboardingAgentId>("openhands");
 
+  // Once dismissal is requested (Cloud login in locked-to-Cloud mode, the
+  // skip button, or launching the final step) the modal must disappear
+  // immediately and never render another slide. The root first-run gate
+  // unmounts this modal asynchronously (it flips `showFirstRunOnboarding`
+  // inside a `useEffect`, so the unmount lags by a render). During that
+  // teardown window the freshly-connected Cloud backend can flip
+  // `skipBackendStep` true, which renumbers the slide rail and would
+  // otherwise advance the visible slide to Choose Agent — the "next window
+  // shows up, disappears, then shows up again" flicker reported on PR #1389
+  // (review 4543227064). Rendering nothing while `dismissing` is set guarantees
+  // no slide can flash before the gate tears the modal down.
+  const [dismissing, setDismissing] = React.useState(false);
+  const dismiss = React.useCallback(() => {
+    setDismissing(true);
+    onClose();
+  }, [onClose]);
+
   // When the backend slide drops out of the flow (skipBackendStep flips
   // true), a user still parked on "backend" must be moved forward to the
   // first remaining phase. Doing this with the *phase* rather than a numeric
   // step keeps every other phase pinned to itself, so the user never lands
-  // on the slide that used to live at the next index ("setup").
+  // on the slide that used to live at the next index ("setup"). Skipped
+  // while dismissing so a collapsing backend slide can't advance the phase
+  // (and flash the next slide) after Cloud login.
   React.useEffect(() => {
+    if (dismissing) return;
     if (!slideOrder.includes(phase)) setPhase(slideOrder[0]);
-  }, [phase, slideOrder]);
+  }, [phase, slideOrder, dismissing]);
 
   const totalSteps = slideOrder.length;
   const currentPhase = slideOrder.includes(phase) ? phase : slideOrder[0];
@@ -193,6 +213,11 @@ export function OnboardingModal({
       return order[Math.max(safeIdx - 1, 0)];
     });
   }, [slideOrder]);
+
+  // Dismissal requested: render nothing so no slide (in particular the
+  // Choose Agent step that a freshly-connected Cloud backend would
+  // otherwise advance to) can flash before the root gate unmounts us.
+  if (dismissing) return null;
 
   return (
     // No `onClose`: the flow must only be dismissed via explicit actions
@@ -232,7 +257,7 @@ export function OnboardingModal({
                   index={slideOrder.indexOf("backend")}
                   currentStep={currentStep}
                 >
-                  <CheckBackendStep onNext={goNext} onClose={onClose} />
+                  <CheckBackendStep onNext={goNext} onClose={dismiss} />
                 </Slide>
               )}
               <Slide
@@ -267,8 +292,8 @@ export function OnboardingModal({
               >
                 <SayHelloStep
                   onBack={goBack}
-                  onClose={onClose}
-                  onLaunched={onClose}
+                  onClose={dismiss}
+                  onLaunched={dismiss}
                 />
               </Slide>
             </div>
@@ -279,7 +304,7 @@ export function OnboardingModal({
           <button
             type="button"
             data-testid="onboarding-skip"
-            onClick={onClose}
+            onClick={dismiss}
             className="rounded-md px-3 py-2 text-sm text-[var(--oh-muted)] transition-colors hover:bg-white/5 hover:text-white cursor-pointer"
           >
             {t(I18nKey.ONBOARDING$SKIP)}

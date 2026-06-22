@@ -372,6 +372,45 @@ describe("OnboardingModal", () => {
     // click time, and the modal is now dismissing.
   });
 
+  it("does not flash the Choose Agent step after Cloud login in locked-to-Cloud mode", async () => {
+    // Regression for hieptl's follow-up flicker report on PR #1389
+    // (review 4543227064): even after `onClose` is wired up so the
+    // modal is *dismissed* on Cloud login, the modal stays mounted
+    // for one or more renders until the root first-run gate tears it
+    // down. During that teardown window the freshly-connected Cloud
+    // backend flips `skipBackendStep` true, which renumbers the slide
+    // rail and advances the visible slide from "backend" to "agent"
+    // (Choose Agent) — so the next screen flashes on screen before
+    // the modal finally disappears. Cloud login IS onboarding
+    // completion in locked mode, so the Choose Agent step must NEVER
+    // render after the Cloud login button is clicked.
+    window.localStorage.clear();
+    vi.stubEnv("VITE_BACKEND_BASE_URL", "");
+    vi.stubEnv("VITE_SESSION_API_KEY", "");
+    vi.stubEnv("VITE_LOCK_TO_CLOUD", "https://app.all-hands.dev");
+    delete (window as unknown as Record<string, unknown>)
+      .__AGENT_CANVAS_SESSION_API_KEY__;
+    __resetActiveStoreForTests();
+
+    const onClose = vi.fn();
+    renderModal(onClose);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId("onboarding-backend-login-button"));
+
+    // Cloud login must dismiss the modal.
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // The Choose Agent slide ("the next window") must never appear at
+    // any point after Cloud login — not even briefly while the modal
+    // waits for the root gate to unmount it.
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.queryByTestId("onboarding-step-choose-agent"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the backend step visible for a reachable stale Local backend in locked-to-Cloud mode", async () => {
     // Regression for PR #1389 review: in locked-to-Cloud mode a reachable
     // stale Local backend (one persisted from a previous non-locked
