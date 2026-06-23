@@ -206,7 +206,7 @@ export function SidebarRailBody({
         />
         <SidebarNavLink
           to="/application"
-          label={t(I18nKey.SETTINGS$NAV_APPLICATION)}
+          label={t(I18nKey.SIDEBAR$SETTINGS)}
           testId="sidebar-application-link"
           disabled={linkDisabled}
           collapsed={collapsed}

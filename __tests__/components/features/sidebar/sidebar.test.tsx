@@ -447,10 +447,13 @@ describe("Sidebar", () => {
       "New Chat",
     );
     expect(screen.getByTestId("sidebar-agents-link")).toHaveTextContent(
-      "Agents",
+      "Agent Settings",
     );
     expect(screen.getByTestId("sidebar-automations-link")).toHaveTextContent(
       "Automate",
+    );
+    expect(screen.getByTestId("sidebar-application-link")).toHaveTextContent(
+      "Settings",
     );
   });
 });

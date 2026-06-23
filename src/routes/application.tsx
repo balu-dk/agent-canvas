@@ -19,7 +19,7 @@ export default function ApplicationScreen() {
     >
       <div className="mx-auto flex w-full min-w-0 max-w-[800px] flex-col gap-6">
         <header className="space-y-1">
-          <Typography.H2>{t(I18nKey.SETTINGS$NAV_APPLICATION)}</Typography.H2>
+          <Typography.H2>{t(I18nKey.SIDEBAR$SETTINGS)}</Typography.H2>
           <p className="text-sm leading-5 text-tertiary-light">
             {t(I18nKey.SETTINGS$PAGE_APPLICATION_SUBLINE)}
           </p>
