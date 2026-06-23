@@ -36,6 +36,7 @@ export function VerificationSettingsScreen({
       ]}
       header={renderTopContent ? () => renderTopContent() : undefined}
       testId={testId}
+      hideViewToggle
     />
   );
 }
