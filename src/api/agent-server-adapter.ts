@@ -860,7 +860,10 @@ interface LookupSecret {
 }
 
 type StartConversationPayload = Record<string, unknown> & {
-  agent_settings: AgentSettingsPayload;
+  // Omitted when launching via ``agent_profile_id`` — the two are mutually
+  // exclusive agent sources; the server resolves the profile server-side.
+  agent_settings?: AgentSettingsPayload;
+  agent_profile_id?: string;
   workspace: LocalWorkspacePayload;
   confirmation_policy: SettingsRecord;
   security_analyzer?: SettingsRecord;
@@ -888,6 +891,9 @@ export interface StartConversationOptions {
   encryptedConversationSettings?: Record<string, SettingsValue>;
   secretsEncrypted?: boolean;
   customSecrets?: Array<{ name: string; description?: string }>;
+  // When set, the conversation launches from this AgentProfile (resolved
+  // server-side) instead of an inline ``agent_settings`` dump (#3727).
+  agentProfileId?: string;
 }
 
 export function buildStartConversationRequest(
@@ -918,7 +924,11 @@ export function buildStartConversationRequest(
   );
 
   const payload: StartConversationPayload = {
-    agent_settings: agentSettings,
+    // ``agent_profile_id`` and ``agent_settings`` are mutually exclusive agent
+    // sources; the profile path lets the server resolve the profile (#3727).
+    ...(options.agentProfileId
+      ? { agent_profile_id: options.agentProfileId }
+      : { agent_settings: agentSettings }),
     workspace: conversationSettings.workspace,
     confirmation_policy:
       getConversationConfirmationPolicy(conversationSettings),
@@ -931,7 +941,9 @@ export function buildStartConversationRequest(
     worktree: options.worktree ?? true,
   };
 
-  if (acpServerTag) {
+  // A profile launch resolves the ACP server server-side, so don't stamp the
+  // tag from current settings (it may not match the launched profile).
+  if (!options.agentProfileId && acpServerTag) {
     payload.tags = { [ACP_SERVER_TAG_KEY]: acpServerTag };
   }
 
@@ -942,6 +954,7 @@ export function buildStartConversationRequest(
   // encrypted settings round-trip mcp_config.env/headers as Fernet tokens,
   // and ACP forwards that mcp_config directly to the subprocess.
   if (
+    !options.agentProfileId &&
     options.secretsEncrypted &&
     (!acpMode || hasEncryptedMcpSecrets(agentSettings.mcp_config))
   ) {
@@ -1051,6 +1064,7 @@ export async function buildStartConversationRequestWithEncryptedSettings(options
   conversationId?: string;
   workingDir?: string;
   worktree?: boolean;
+  agentProfileId?: string;
 }): Promise<Record<string, unknown>> {
   const { SecretsService } = await import("./secrets-service");
 
@@ -1062,7 +1076,11 @@ export async function buildStartConversationRequestWithEncryptedSettings(options
   const { agentSettings, conversationSettings, secretsEncrypted } =
     settingsResult;
 
-  await assertSubscriptionAuthReady(agentSettings);
+  // A profile launch resolves the LLM server-side, so the current-settings
+  // subscription check doesn't apply (and can't see the profile's LLM).
+  if (!options.agentProfileId) {
+    await assertSubscriptionAuthReady(agentSettings);
+  }
 
   return buildStartConversationRequest({
     ...options,

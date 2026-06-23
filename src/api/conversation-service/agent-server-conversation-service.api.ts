@@ -370,6 +370,11 @@ class AgentServerConversationService {
     parentConversationId?: string,
     agentType?: "default" | "plan",
     sandboxId?: string,
+    // Local backend only: launch from a saved AgentProfile (resolved
+    // server-side) instead of the current encrypted agent_settings (#3727).
+    // The cloud app-server has no AgentProfile surface yet (#3730), so it's
+    // ignored on the cloud path.
+    agentProfileId?: string,
   ): Promise<AppConversationStartTask> {
     if (getActiveBackend().backend.kind === "cloud") {
       // Cloud path mirrors OpenHands' frontend: build a flat
@@ -419,6 +424,7 @@ class AgentServerConversationService {
       conversationId,
       workingDir,
       worktree: resolvedWorkspaceMode === "new_worktree",
+      agentProfileId,
     });
 
     const data = await new ConversationClient(
