@@ -149,9 +149,11 @@ export function useAgentProfileForm({
   const [toolConcurrency, setToolConcurrency] = useState(
     String(openhands?.tool_concurrency_limit ?? 1),
   );
-  const [verification, setVerification] = useState<ProfileVerificationSettings>(
-    openhands?.verification ?? DEFAULT_VERIFICATION,
-  );
+  // Critic/verification is configured globally (the Critic hub page, #1456), so
+  // the editor no longer edits it per-profile — but we still round-trip the
+  // stored value on save so an edit never resets it.
+  const verification: ProfileVerificationSettings =
+    openhands?.verification ?? DEFAULT_VERIFICATION;
   const openHandsExtrasRef = useRef<OpenHandsExtras>(
     openhands ? { agent: openhands.agent, skills: openhands.skills } : {},
   );
@@ -388,8 +390,6 @@ export function useAgentProfileForm({
     setSystemSuffix,
     toolConcurrency,
     setToolConcurrency,
-    verification,
-    setVerification,
     condenser,
     patchCondenser,
     // ACP

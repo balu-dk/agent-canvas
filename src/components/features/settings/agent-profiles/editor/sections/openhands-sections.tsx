@@ -5,7 +5,6 @@ import { SettingsSwitch } from "#/components/features/settings/settings-switch";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
 import { McpServerRefsSelect } from "../../mcp-server-refs-select";
-import { AgentProfileVerificationFields } from "../../agent-profile-verification-fields";
 import type { AgentProfileForm } from "../use-agent-profile-form";
 import { SectionShell } from "./section-shell";
 
@@ -116,21 +115,6 @@ export function CondenserSection({ form }: SectionProps) {
           />
         </div>
       )}
-    </SectionShell>
-  );
-}
-
-export function VerificationSection({ form }: SectionProps) {
-  const { t } = useTranslation("openhands");
-  return (
-    <SectionShell
-      title={t(I18nKey.SCHEMA$VERIFICATION$SECTION_LABEL)}
-      description={t(I18nKey.SETTINGS$AGENT_SECTION_VERIFICATION_DESC)}
-    >
-      <AgentProfileVerificationFields
-        value={form.verification}
-        onChange={form.setVerification}
-      />
     </SectionShell>
   );
 }

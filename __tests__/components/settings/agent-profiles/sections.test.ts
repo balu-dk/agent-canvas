@@ -10,7 +10,6 @@ describe("getSectionsForKind", () => {
       "model",
       "tools-mcp",
       "condenser",
-      "verification",
       "personality",
     ]);
   });

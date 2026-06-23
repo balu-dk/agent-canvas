@@ -59,6 +59,7 @@ describe("useAgentsHubNavItems", () => {
       "/agents/mcp",
       "/agents/skills",
       "/agents/plugins",
+      "/agents/critic",
       "/agents/secrets",
     ]);
   });

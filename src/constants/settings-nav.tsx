@@ -1,4 +1,4 @@
-import { Boxes, Server } from "lucide-react";
+import { Boxes, Server, Shield } from "lucide-react";
 import KeyIcon from "#/icons/key.svg?react";
 import CircuitIcon from "#/icons/u-circuit.svg?react";
 import RobotIcon from "#/icons/u-robot.svg?react";
@@ -57,6 +57,12 @@ export const AGENTS_HUB_NAV_ITEMS: SettingsNavItem[] = [
     to: "/agents/plugins",
     text: "SETTINGS$PLUGINS_TITLE",
     subtitle: "SETTINGS$PLUGINS_DESCRIPTION",
+  },
+  {
+    icon: <Shield className="size-4" strokeWidth={2} aria-hidden />,
+    to: "/agents/critic",
+    text: "SETTINGS$NAV_CRITIC",
+    subtitle: "SETTINGS$PAGE_CRITIC_SUBLINE",
   },
   {
     icon: <KeyIcon width={16} height={16} />,

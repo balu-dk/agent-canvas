@@ -55,7 +55,7 @@ describe("AgentProfileSectionNav", () => {
         errorSections={new Set()}
       />,
     );
-    await user.click(screen.getByTestId("agent-profile-nav-verification"));
-    expect(onSelect).toHaveBeenCalledWith("verification");
+    await user.click(screen.getByTestId("agent-profile-nav-condenser"));
+    expect(onSelect).toHaveBeenCalledWith("condenser");
   });
 });

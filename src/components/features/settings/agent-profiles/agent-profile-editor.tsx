@@ -22,7 +22,6 @@ import {
   ModelSection,
   ToolsMcpSection,
   CondenserSection,
-  VerificationSection,
   PersonalitySection,
 } from "./editor/sections/openhands-sections";
 import {
@@ -113,8 +112,6 @@ export function AgentProfileEditor({
         return <ToolsMcpSection form={form} />;
       case "condenser":
         return <CondenserSection form={form} />;
-      case "verification":
-        return <VerificationSection form={form} />;
       case "personality":
         return <PersonalitySection form={form} />;
       case "provider-model":

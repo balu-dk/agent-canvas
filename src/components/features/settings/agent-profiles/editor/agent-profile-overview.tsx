@@ -151,11 +151,6 @@ export function AgentProfileOverview({
                 })
               : t(I18nKey.SETTINGS$AGENT_OVERVIEW_DISABLED)}
           </Row>
-          <Row label={t(I18nKey.SCHEMA$VERIFICATION$SECTION_LABEL)}>
-            {form.verification.critic_enabled
-              ? t(I18nKey.SETTINGS$AGENT_OVERVIEW_ENABLED)
-              : t(I18nKey.SETTINGS$AGENT_OVERVIEW_DISABLED)}
-          </Row>
           <Row label={t(I18nKey.SCHEMA$ENABLE_SUB_AGENTS$LABEL)}>
             {form.enableSubAgents
               ? t(I18nKey.SETTINGS$AGENT_OVERVIEW_ENABLED)

@@ -32978,5 +32978,39 @@
     "uk": "Макс. токенів",
     "zh-CN": "最大令牌数",
     "zh-TW": "最大權杖數"
+  },
+  "SETTINGS$NAV_CRITIC": {
+    "en": "Critic",
+    "ar": "الناقد",
+    "ca": "Crític",
+    "de": "Kritiker",
+    "es": "Crítico",
+    "fr": "Critique",
+    "it": "Critico",
+    "ja": "クリティック",
+    "ko-KR": "비평가",
+    "no": "Kritiker",
+    "pt": "Crítico",
+    "tr": "Eleştirmen",
+    "uk": "Критик",
+    "zh-CN": "评审",
+    "zh-TW": "評審"
+  },
+  "SETTINGS$PAGE_CRITIC_SUBLINE": {
+    "en": "Configure the critic that reviews the agent's work.",
+    "ar": "تكوين الناقد الذي يراجع عمل الوكيل.",
+    "ca": "Configureu el crític que revisa la feina de l'agent.",
+    "de": "Konfigurieren Sie den Kritiker, der die Arbeit des Agenten prüft.",
+    "es": "Configura el crítico que revisa el trabajo del agente.",
+    "fr": "Configurez le critique qui examine le travail de l'agent.",
+    "it": "Configura il critico che esamina il lavoro dell'agente.",
+    "ja": "エージェントの作業をレビューするクリティックを設定します。",
+    "ko-KR": "에이전트의 작업을 검토하는 비평가를 구성합니다.",
+    "no": "Konfigurer kritikeren som vurderer agentens arbeid.",
+    "pt": "Configure o crítico que revisa o trabalho do agente.",
+    "tr": "Aracının işini inceleyen eleştirmeni yapılandırın.",
+    "uk": "Налаштуйте критика, який перевіряє роботу агента.",
+    "zh-CN": "配置审查智能体工作的评审。",
+    "zh-TW": "設定審查代理工作的評審。"
   }
 }
