@@ -1,7 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { ConversationClient } from "@openhands/typescript-client/clients";
 import { getActiveBackend } from "#/api/backend-registry/active-store";
-import { interruptCloudConversation } from "#/api/cloud/conversation-service.api";
+import {
+  interruptCloudConversation,
+  pauseCloudSandbox,
+} from "#/api/cloud/conversation-service.api";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import { AppConversation } from "#/api/conversation-service/agent-server-conversation-service.types";
@@ -13,6 +16,7 @@ const fetchConversationData = async (
 ): Promise<{
   conversationUrl: string | null;
   sessionApiKey: string | null;
+  sandboxId: string | null;
 }> => {
   const conversations =
     await AgentServerConversationService.batchGetAppConversations([
@@ -27,13 +31,39 @@ const fetchConversationData = async (
   return {
     conversationUrl: appConversation.conversation_url,
     sessionApiKey: appConversation.session_api_key,
+    sandboxId: appConversation.sandbox_id,
   };
 };
 
 /**
- * Stop a running conversation by interrupting the active agent loop.
+ * Stop the runtime backing a conversation.
+ * - Cloud mode: pause the sandbox.
+ * - Local mode: interrupt the local agent loop because there is no separate sandbox.
  */
 export const pauseConversation = async (conversationId: string) => {
+  const { conversationUrl, sessionApiKey, sandboxId } =
+    await fetchConversationData(conversationId);
+
+  if (getActiveBackend().backend.kind === "cloud") {
+    if (!sandboxId) {
+      throw new Error(
+        `Cannot stop runtime: cloud conversation ${conversationId} has no sandbox_id.`,
+      );
+    }
+
+    await pauseCloudSandbox(sandboxId);
+    return { success: true };
+  }
+
+  return new ConversationClient(
+    getAgentServerClientOptions({ conversationUrl, sessionApiKey }),
+  ).interruptConversation(conversationId);
+};
+
+/**
+ * Interrupt the active agent loop without stopping its backing runtime.
+ */
+export const interruptConversation = async (conversationId: string) => {
   const { conversationUrl, sessionApiKey } =
     await fetchConversationData(conversationId);
 

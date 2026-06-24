@@ -8,7 +8,10 @@ import {
 import type { Backend } from "#/api/backend-registry/types";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import type { AppConversation } from "#/api/conversation-service/agent-server-conversation-service.types";
-import { pauseConversation } from "#/hooks/mutation/conversation-mutation-utils";
+import {
+  interruptConversation,
+  pauseConversation,
+} from "#/hooks/mutation/conversation-mutation-utils";
 import { ExecutionStatus } from "#/types/agent-server/core/base/common";
 
 vi.mock("axios");
@@ -60,6 +63,38 @@ afterEach(() => {
 });
 
 describe("pauseConversation cloud branch", () => {
+  it("POSTs directly to the cloud sandbox pause endpoint", async () => {
+    vi.spyOn(
+      AgentServerConversationService,
+      "batchGetAppConversations",
+    ).mockResolvedValue([buildConversation({ sandbox_id: "sandbox-xyz" })]);
+    vi.mocked(axios.request).mockResolvedValue({ data: { success: true } });
+
+    await pauseConversation("conv-abc");
+
+    expect(axios.request).toHaveBeenCalledOnce();
+    expect(axios.post).not.toHaveBeenCalled();
+    const [config] = vi.mocked(axios.request).mock.calls[0]!;
+    expect(config).toMatchObject({
+      url: `${cloudBackend.host}/api/v1/sandboxes/sandbox-xyz/pause`,
+      method: "POST",
+      headers: { Authorization: "Bearer bearer-token" },
+    });
+  });
+
+  it("throws and does not call the cloud API when the cloud conversation has no sandbox_id", async () => {
+    vi.spyOn(
+      AgentServerConversationService,
+      "batchGetAppConversations",
+    ).mockResolvedValue([buildConversation({ sandbox_id: null })]);
+
+    await expect(pauseConversation("conv-abc")).rejects.toThrow(/sandbox_id/);
+    expect(axios.request).not.toHaveBeenCalled();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
+describe("interruptConversation cloud branch", () => {
   it("POSTs to the cloud runtime conversation interrupt endpoint", async () => {
     vi.spyOn(
       AgentServerConversationService,
@@ -73,7 +108,7 @@ describe("pauseConversation cloud branch", () => {
     ]);
     vi.mocked(axios.post).mockResolvedValue({ data: { success: true } });
 
-    await pauseConversation("conv-abc");
+    await interruptConversation("conv-abc");
 
     expect(axios.request).not.toHaveBeenCalled();
     expect(axios.post).toHaveBeenCalledOnce();
@@ -96,7 +131,7 @@ describe("pauseConversation cloud branch", () => {
       buildConversation({ conversation_url: null, session_api_key: null }),
     ]);
 
-    await expect(pauseConversation("conv-abc")).rejects.toThrow(
+    await expect(interruptConversation("conv-abc")).rejects.toThrow(
       /sandbox is still starting/,
     );
     expect(axios.request).not.toHaveBeenCalled();
