@@ -5,6 +5,11 @@ export const LOCAL_PLANNER_PARENT_TAG_KEY = "plannerparent";
 
 const PLAN_FILENAME_UPPER = "PLAN.MD";
 
+// Mirrors the SDK planning preset's `format_plan_structure()` output
+// (software-agent-sdk openhands-tools/openhands/tools/preset/planning.py,
+// `PLAN_STRUCTURE`). The planning agent loads `system_prompt_planning.j2` with
+// this injected as `{{plan_structure}}`; keep it byte-identical to that SDK
+// output so the local planner matches the canonical planning agent.
 export const PLAN_STRUCTURE_TEXT = [
   "The plan must follow this structure exactly:",
   "",

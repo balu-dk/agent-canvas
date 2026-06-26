@@ -124,6 +124,16 @@ describe("buildStartConversationRequest", () => {
           },
         },
       ],
+      // Matches the SDK planning preset's get_planning_condenser.
+      condenser: {
+        kind: "LLMSummarizingCondenser",
+        max_size: 100,
+        keep_first: 6,
+        llm: {
+          model: "openhands/minimax-m2.7",
+          usage_id: "planning_condenser",
+        },
+      },
     });
     expect(payload.agent_settings).toBeUndefined();
     expect(payload.worktree).toBe(false);

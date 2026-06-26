@@ -1062,7 +1062,25 @@ export function buildStartPlanningConversationRequest(options: {
       ],
       system_prompt_filename: PLANNING_SYSTEM_PROMPT_FILENAME,
       system_prompt_kwargs: { plan_structure: PLAN_STRUCTURE_TEXT },
+      // agent_context (skills + project context) is intentionally included so
+      // the planner shares the code agent's project context. This goes beyond
+      // the bare SDK `get_planning_agent()` preset (which sets no context); it
+      // mirrors how the frontend builds every agent, so the local planner is
+      // not context-starved relative to the code agent.
       agent_context: buildAgentContext(agentSettings),
+      // Mirror the SDK planning preset's condenser (openhands-tools preset
+      // `get_planning_condenser`): a larger rolling window and more pinned
+      // initial context than the default, with its own usage_id so its
+      // summarization LLM calls are attributed separately. The planning
+      // conversation is sent as a raw agent spec (it bypasses the agent-server's
+      // default agent assembly), so without this it would never condense —
+      // diverging from the canonical planning agent on long sessions.
+      condenser: {
+        kind: "LLMSummarizingCondenser",
+        llm: { ...llm, usage_id: "planning_condenser" },
+        max_size: 100,
+        keep_first: 6,
+      },
     },
     workspace: {
       kind: "LocalWorkspace",
