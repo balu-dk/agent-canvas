@@ -18,6 +18,8 @@ import { BackendSelector } from "#/components/features/backends/backend-selector
 import { BackendStatusDot } from "#/components/features/backends/backend-status-dot";
 import { CommandMenuTrigger } from "#/components/features/command-menu/command-menu-trigger";
 import { SidebarConversationList } from "./sidebar-conversation-list";
+import { SidebarContributionButton } from "./sidebar-contribution-button";
+import { useActivityBarItems } from "#/extensions/use-contributions";
 import AutomationsIcon from "#/icons/automations.svg?react";
 import {
   SIDEBAR_COLLAPSE_TOGGLE_OVERLAY_CLASS,
@@ -78,6 +80,7 @@ export function SidebarRailBody({
   onOpenManageBackends,
 }: SidebarRailBodyProps) {
   const { t } = useTranslation("openhands");
+  const activityBarItems = useActivityBarItems();
   const backendCloseTimerRef = collapsedBackendCloseTimer;
 
   return (
@@ -210,6 +213,14 @@ export function SidebarRailBody({
           collapsed={collapsed}
           icon={<AutomationsIcon width={ICON_SIZE} height={ICON_SIZE} />}
         />
+        {activityBarItems.map((item) => (
+          <SidebarContributionButton
+            key={`${item.extensionId}:${item.id}`}
+            item={item}
+            collapsed={collapsed}
+            disabled={linkDisabled}
+          />
+        ))}
       </nav>
 
       <SidebarConversationList collapsed={collapsed} />
