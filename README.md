@@ -141,5 +141,6 @@ The Agent Server is often paired with an [Automation Server](https://github.com/
 
 - [Documentation index](./docs/README.md)
 - [Architecture overview](./docs/architecture.md)
+- [UI extensions guide](./docs/EXTENSIONS.md)
 - [Development guide](./docs/DEVELOPMENT.md)
 - [Self-hosting guide](./docs/SELF_HOSTING.md)
