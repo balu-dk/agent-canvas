@@ -6,20 +6,33 @@ import {
   extensionModuleCardPillClassName,
   extensionModuleCardSurfaceClassName,
 } from "#/utils/extension-module-card-classes";
-import type { InstalledExtension } from "#/extensions/installed-store";
+import type {
+  ExtensionUpdate,
+  InstalledExtension,
+} from "#/extensions/installed-store";
 import { capabilityLabelKey } from "./capability-labels";
 
 interface InstalledExtensionCardProps {
   extension: InstalledExtension;
   onUninstall: () => void;
+  /** A newer version found for this extension, if any. */
+  update?: ExtensionUpdate | null;
+  /** Apply the available update. */
+  onUpdate?: () => void;
+  /** Whether an update is currently being applied. */
+  isUpdating?: boolean;
 }
 
 export function InstalledExtensionCard({
   extension,
   onUninstall,
+  update,
+  onUpdate,
+  isUpdating = false,
 }: InstalledExtensionCardProps) {
   const { t } = useTranslation("openhands");
   const isDev = extension.origin === "dev";
+  const canUpdate = !isDev && update != null && onUpdate != null;
 
   return (
     <div
@@ -44,6 +57,17 @@ export function InstalledExtensionCard({
               })}
             </p>
           ) : null}
+          {!isDev && extension.sourceRef ? (
+            <p
+              data-testid={`installed-extension-source-${extension.id}`}
+              className="mt-0.5 truncate text-xs text-tertiary-alt"
+              title={extension.sourceRef}
+            >
+              {t(I18nKey.EXTENSIONS$INSTALLED_SOURCE, {
+                source: extension.sourceRef,
+              })}
+            </p>
+          ) : null}
         </div>
         {isDev ? (
           <span
@@ -53,24 +77,55 @@ export function InstalledExtensionCard({
             {t(I18nKey.EXTENSIONS$DEV_BADGE)}
           </span>
         ) : (
-          <BrandButton
-            type="button"
-            variant="danger"
-            testId={`uninstall-extension-${extension.id}`}
-            className="flex-shrink-0 whitespace-nowrap"
-            onClick={onUninstall}
-          >
-            {t(I18nKey.EXTENSIONS$UNINSTALL_BUTTON)}
-          </BrandButton>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            {canUpdate ? (
+              <BrandButton
+                type="button"
+                variant="primary"
+                testId={`update-extension-${extension.id}`}
+                className="whitespace-nowrap"
+                isDisabled={isUpdating}
+                aria-busy={isUpdating}
+                onClick={onUpdate}
+              >
+                {isUpdating
+                  ? t(I18nKey.EXTENSIONS$UPDATING)
+                  : t(I18nKey.EXTENSIONS$UPDATE_BUTTON)}
+              </BrandButton>
+            ) : null}
+            <BrandButton
+              type="button"
+              variant="danger"
+              testId={`uninstall-extension-${extension.id}`}
+              className="whitespace-nowrap"
+              onClick={onUninstall}
+            >
+              {t(I18nKey.EXTENSIONS$UNINSTALL_BUTTON)}
+            </BrandButton>
+          </div>
         )}
       </header>
 
-      <span
-        className={cn(extensionModuleCardPillClassName, "self-start")}
-        data-testid={`installed-extension-version-${extension.id}`}
-      >
-        {t(I18nKey.SETTINGS$SKILLS_VERSION, { version: extension.version })}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(extensionModuleCardPillClassName, "self-start")}
+          data-testid={`installed-extension-version-${extension.id}`}
+        >
+          {t(I18nKey.SETTINGS$SKILLS_VERSION, { version: extension.version })}
+        </span>
+        {canUpdate ? (
+          <span
+            data-testid={`installed-extension-update-badge-${extension.id}`}
+            className={cn(
+              extensionModuleCardPillClassName,
+              "self-start border-primary text-primary",
+            )}
+            title={`${update.currentVersion} -> ${update.latestVersion}`}
+          >
+            {t(I18nKey.EXTENSIONS$UPDATE_AVAILABLE)}
+          </span>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-tertiary-light">

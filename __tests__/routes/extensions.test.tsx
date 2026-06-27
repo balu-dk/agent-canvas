@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExtensionsScreen from "#/routes/extensions";
 import { useInstalledExtensionsStore } from "#/extensions/installed-store";
+import { displaySuccessToast } from "#/utils/custom-toast-handlers";
 
 const ctx = vi.hoisted(() => ({
   value: null as null | Record<string, unknown>,
@@ -27,8 +28,22 @@ function makeContext() {
     deps: {},
     previewManifest: vi.fn(),
     installFromUrl: vi.fn(),
+    checkForUpdate: vi.fn().mockResolvedValue(null),
+    updateExtension: vi.fn(),
     uninstall: vi.fn(),
   };
+}
+
+function addHello() {
+  useInstalledExtensionsStore.getState().add({
+    id: "acme.hello",
+    name: "Hello",
+    version: "1.0.0",
+    capabilities: ["conversation:read"],
+    sourceUrl: "https://cdn.jsdelivr.net/npm/acme-hello@1.0.0",
+    sourceRef: "npm:acme-hello@^1",
+    origin: "user",
+  });
 }
 
 describe("ExtensionsScreen", () => {
@@ -76,5 +91,48 @@ describe("ExtensionsScreen", () => {
 
     await user.click(screen.getByTestId("extensions-add-button"));
     expect(screen.getByTestId("add-extension-modal")).toBeInTheDocument();
+  });
+
+  it("surfaces an available update and applies it on click", async () => {
+    const user = userEvent.setup();
+    const context = makeContext();
+    context.checkForUpdate.mockResolvedValue({
+      id: "acme.hello",
+      currentVersion: "1.0.0",
+      latestVersion: "1.5.0",
+      sourceRef: "npm:acme-hello@^1",
+    });
+    context.updateExtension.mockResolvedValue(undefined);
+    ctx.value = context;
+    addHello();
+
+    render(<ExtensionsScreen />);
+
+    const updateButton = await screen.findByTestId(
+      "update-extension-acme.hello",
+    );
+    expect(
+      screen.getByTestId("installed-extension-update-badge-acme.hello"),
+    ).toBeInTheDocument();
+
+    await user.click(updateButton);
+    expect(context.updateExtension).toHaveBeenCalledWith("acme.hello");
+    await waitFor(() => expect(displaySuccessToast).toHaveBeenCalled());
+  });
+
+  it("does not show an update affordance when none is available", async () => {
+    ctx.value = makeContext();
+    addHello();
+
+    render(<ExtensionsScreen />);
+    expect(
+      await screen.findByTestId("installed-extension-card-acme.hello"),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(ctx.value!.checkForUpdate).toHaveBeenCalledWith("acme.hello"),
+    );
+    expect(
+      screen.queryByTestId("update-extension-acme.hello"),
+    ).not.toBeInTheDocument();
   });
 });

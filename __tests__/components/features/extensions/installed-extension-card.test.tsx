@@ -52,4 +52,77 @@ describe("InstalledExtensionCard", () => {
       screen.queryByTestId("uninstall-extension-acme.hello"),
     ).not.toBeInTheDocument();
   });
+
+  it("shows the source ref for user installs", () => {
+    render(
+      <InstalledExtensionCard
+        extension={makeExtension({ sourceRef: "npm:acme-hello@^1" })}
+        onUninstall={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByTestId("installed-extension-source-acme.hello"),
+    ).toHaveAttribute("title", "npm:acme-hello@^1");
+  });
+
+  it("renders an update badge and triggers onUpdate when an update is available", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    render(
+      <InstalledExtensionCard
+        extension={makeExtension({ sourceRef: "npm:acme-hello@^1" })}
+        onUninstall={vi.fn()}
+        update={{
+          id: "acme.hello",
+          currentVersion: "1.2.3",
+          latestVersion: "1.4.0",
+          sourceRef: "npm:acme-hello@^1",
+        }}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("installed-extension-update-badge-acme.hello"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByTestId("update-extension-acme.hello"));
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the update button while updating", () => {
+    render(
+      <InstalledExtensionCard
+        extension={makeExtension({ sourceRef: "npm:acme-hello@^1" })}
+        onUninstall={vi.fn()}
+        update={{
+          id: "acme.hello",
+          currentVersion: "1.2.3",
+          latestVersion: "1.4.0",
+          sourceRef: "npm:acme-hello@^1",
+        }}
+        onUpdate={vi.fn()}
+        isUpdating
+      />,
+    );
+    expect(screen.getByTestId("update-extension-acme.hello")).toBeDisabled();
+  });
+
+  it("does not show update affordances for dev extensions", () => {
+    render(
+      <InstalledExtensionCard
+        extension={makeExtension({ origin: "dev" })}
+        onUninstall={vi.fn()}
+        update={{
+          id: "acme.hello",
+          currentVersion: "1.2.3",
+          latestVersion: "1.4.0",
+          sourceRef: "npm:acme-hello@^1",
+        }}
+        onUpdate={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByTestId("update-extension-acme.hello"),
+    ).not.toBeInTheDocument();
+  });
 });

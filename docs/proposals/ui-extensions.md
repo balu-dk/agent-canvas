@@ -597,8 +597,10 @@ Not yet done (remaining work):
 
 - **Update detection:** _done_ - `checkForUpdate(id)` re-resolves the stored ref within
   its range and reports a newer pinned artifact; `updateExtension(id)` applies it,
-  non-destructively refusing host-incompatible updates or ones requesting new capabilities
-  (the UI affordance for this lands with the management-UI work).
+  non-destructively refusing host-incompatible updates or ones requesting new capabilities.
+  The management UI surfaces each install's source ref, an "Update available" badge, and an
+  Update button; capability-growth refusals are reported so the user can re-run the Add flow
+  to re-consent.
 - **`zip`/tarball -> `blob:` acquirer:** add a single-file artifact format (the enabler for
   single-file registry artifacts; not needed for the `dir`-format npm/gh sources). Tracked
   with the registry below.

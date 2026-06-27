@@ -5,10 +5,16 @@ import { InstalledExtensionCard } from "#/components/features/extensions/install
 import { AddExtensionModal } from "#/components/features/extensions/add-extension-modal";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { useExtensionContext } from "#/components/providers/extension-manager-provider";
-import { useInstalledExtensionsStore } from "#/extensions/installed-store";
+import {
+  useInstalledExtensionsStore,
+  type ExtensionUpdate,
+} from "#/extensions/installed-store";
 import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
-import { displaySuccessToast } from "#/utils/custom-toast-handlers";
+import {
+  displayErrorToast,
+  displaySuccessToast,
+} from "#/utils/custom-toast-handlers";
 import { settingsLikeMainScrollClassName } from "#/utils/settings-like-page-layout-classes";
 import {
   extensionModuleCardGridClassName,
@@ -21,10 +27,56 @@ export default function ExtensionsScreen() {
   const context = useExtensionContext();
   const installed = useInstalledExtensionsStore((state) => state.installed);
   const [showAddModal, setShowAddModal] = React.useState(false);
+  const [updates, setUpdates] = React.useState<Record<string, ExtensionUpdate>>(
+    {},
+  );
+  const [updatingId, setUpdatingId] = React.useState<string | null>(null);
+
+  const checkForUpdate = context?.checkForUpdate;
+  // Poll for available updates whenever the installed set changes.
+  React.useEffect(() => {
+    if (!checkForUpdate) return undefined;
+    let cancelled = false;
+    (async () => {
+      const found: Record<string, ExtensionUpdate> = {};
+      await Promise.all(
+        installed.map(async (extension) => {
+          try {
+            const update = await checkForUpdate(extension.id);
+            if (update) found[extension.id] = update;
+          } catch {
+            // A failed update check is non-fatal; just omit the affordance.
+          }
+        }),
+      );
+      if (!cancelled) setUpdates(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkForUpdate, installed]);
 
   const handleUninstall = (id: string) => {
     context?.uninstall(id);
     displaySuccessToast(t(I18nKey.EXTENSIONS$UNINSTALL_SUCCESS));
+  };
+
+  const handleUpdate = async (id: string) => {
+    if (!context) return;
+    setUpdatingId(id);
+    try {
+      await context.updateExtension(id);
+      setUpdates((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      displaySuccessToast(t(I18nKey.EXTENSIONS$UPDATE_SUCCESS));
+    } catch (error) {
+      displayErrorToast(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
@@ -91,6 +143,9 @@ export default function ExtensionsScreen() {
                     key={extension.id}
                     extension={extension}
                     onUninstall={() => handleUninstall(extension.id)}
+                    update={updates[extension.id]}
+                    onUpdate={() => handleUpdate(extension.id)}
+                    isUpdating={updatingId === extension.id}
                   />
                 ))}
               </div>
