@@ -3,9 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AddExtensionModal } from "#/components/features/extensions/add-extension-modal";
 
-const { previewMock, installMock } = vi.hoisted(() => ({
+const { previewMock, installMock, marketplaceMock } = vi.hoisted(() => ({
   previewMock: vi.fn(),
   installMock: vi.fn(),
+  marketplaceMock: vi.fn(),
 }));
 
 vi.mock("#/components/providers/extension-manager-provider", () => ({
@@ -14,6 +15,7 @@ vi.mock("#/components/providers/extension-manager-provider", () => ({
     deps: {},
     previewManifest: previewMock,
     installFromUrl: installMock,
+    fetchMarketplace: marketplaceMock,
     uninstall: vi.fn(),
   }),
 }));
@@ -54,13 +56,73 @@ describe("AddExtensionModal", () => {
     await waitFor(() =>
       expect(screen.getByTestId("extension-permissions")).toBeInTheDocument(),
     );
-    expect(previewMock).toHaveBeenCalledWith("/__extensions/hello");
+    expect(previewMock).toHaveBeenCalledWith("/__extensions/hello", undefined);
     expect(installMock).not.toHaveBeenCalled();
 
     // Granting installs and closes.
     await user.click(screen.getByTestId("add-extension-install"));
     await waitFor(() =>
-      expect(installMock).toHaveBeenCalledWith("/__extensions/hello"),
+      expect(installMock).toHaveBeenCalledWith(
+        "/__extensions/hello",
+        undefined,
+      ),
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("browses a marketplace and installs a listing with consent", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    marketplaceMock.mockResolvedValue({
+      catalogName: "Examples",
+      listings: [
+        {
+          name: "hello-sidebar",
+          description: "Adds a Hello panel.",
+          bundleUrl: "https://raw.example/hello-sidebar",
+          manifestPath: "extension.json",
+        },
+      ],
+    });
+    previewMock.mockResolvedValue({
+      id: "acme.hello",
+      name: "Hello",
+      version: "1.0.0",
+      capabilities: ["conversation:read"],
+    });
+    installMock.mockResolvedValue({ id: "acme.hello" });
+
+    render(<AddExtensionModal onClose={onClose} />);
+
+    await user.click(screen.getByTestId("add-extension-tab-marketplace"));
+    await user.type(
+      screen.getByTestId("add-extension-marketplace-input"),
+      "github://acme/extensions",
+    );
+    await user.click(screen.getByTestId("add-extension-browse"));
+
+    const listing = await screen.findByTestId(
+      "marketplace-listing-hello-sidebar",
+    );
+    expect(marketplaceMock).toHaveBeenCalledWith("github://acme/extensions");
+
+    // Selecting a listing surfaces its permissions; nothing installed yet.
+    await user.click(listing);
+    await waitFor(() =>
+      expect(screen.getByTestId("extension-permissions")).toBeInTheDocument(),
+    );
+    expect(previewMock).toHaveBeenCalledWith(
+      "https://raw.example/hello-sidebar",
+      "extension.json",
+    );
+    expect(installMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId("add-extension-install"));
+    await waitFor(() =>
+      expect(installMock).toHaveBeenCalledWith(
+        "https://raw.example/hello-sidebar",
+        "extension.json",
+      ),
     );
     expect(onClose).toHaveBeenCalledTimes(1);
   });

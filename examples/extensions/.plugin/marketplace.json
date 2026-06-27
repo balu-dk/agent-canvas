@@ -1,0 +1,20 @@
+{
+  "name": "Agent Canvas example extensions",
+  "owner": { "name": "Acme", "email": "devs@example.com" },
+  "metadata": {
+    "description": "Example UI extensions distributed as OpenHands plugins.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "hello-sidebar",
+      "source": "./hello-sidebar",
+      "description": "Adds a Hello panel to the activity bar.",
+      "version": "1.0.0",
+      "author": { "name": "Acme" },
+      "homepage": "https://example.com/hello-sidebar",
+      "category": "ui-extension",
+      "uiExtension": { "manifest": "extension.json" }
+    }
+  ]
+}

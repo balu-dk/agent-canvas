@@ -14,6 +14,8 @@ export interface InstalledExtension {
   capabilities: Capability[];
   /** Bundle base URL the extension was installed from. */
   sourceUrl: string;
+  /** Manifest filename within the bundle (omitted for the default `extension.json`). */
+  manifestPath?: string;
   /**
    * `dev` entries come from `DEV_EXTENSION_BUNDLE_URLS` (config, not persisted);
    * `user` entries were installed via the UI and persist across reloads.

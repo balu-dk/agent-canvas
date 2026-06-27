@@ -47,6 +47,7 @@ Key properties:
 | Security | `webview-security.ts` (canonical CSP / sandbox / origin) |
 | App mounting | `feature-flag.ts`, `panel-store.ts`, `dev-bundle-source.ts`, `../components/providers/extension-manager-provider.tsx`, `../components/features/extensions/extension-panel.tsx` |
 | Management UI | `installed-store.ts`, `installed-persistence.ts`, `../routes/extensions.tsx`, `../components/features/extensions/{installed-extension-card,add-extension-modal,capability-labels}.tsx` |
+| Distribution | `marketplace/{source,catalog,client}.ts` (git/marketplace loading) |
 | UI | `../components/features/sidebar/sidebar-contribution-button.tsx`, `../components/features/extensions/extension-webview.tsx` |
 
 ## Authoring an extension
@@ -113,21 +114,61 @@ exfiltrate. A future iteration can move to per-load nonces.
 ## Managing extensions
 
 With the feature enabled, the **`/extensions`** route lists installed extensions and
-lets you **install from a URL**. Installing is two-step **capability consent**: the
-manifest is fetched and validated, its requested permissions are shown, and nothing is
-registered until you confirm (all-or-nothing, like VS Code). User installs are persisted
-to `localStorage` (URL + granted capabilities only — never code) and re-installed on
+opens an install modal with two sources:
+
+- **From URL / git** — a bundle base URL (or a `github.com` folder URL, resolved to
+  `raw.githubusercontent.com`).
+- **From marketplace** — a plugin marketplace in a git repo (`github://owner/repo`,
+  `owner/repo`, a `github.com` URL, or a direct catalog URL). The catalog is read from
+  `.plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json`, its UI
+  extensions are listed, and you pick one to install. See `marketplace/` and
+  "Distributing extensions" below.
+
+Installing is two-step **capability consent**: the manifest is fetched and validated,
+its requested permissions are shown, and nothing is registered until you confirm
+(all-or-nothing, like VS Code). User installs are persisted to `localStorage` (bundle
+URL + manifest path + granted capabilities only — never code) and re-installed on
 startup by re-fetching and re-validating; `dev` bundles from `DEV_EXTENSION_BUNDLE_URLS`
-are config-driven and shown with a "Dev" badge. State lives in `installed-store.ts`
-(the reactive inventory the UI renders) rather than a backend, since UI extensions are
+are config-driven and shown with a "Dev" badge. State lives in `installed-store.ts` (the
+reactive inventory the UI renders) rather than a backend, since UI extensions are
 entirely client-side.
+
+## Distributing extensions (plugin marketplace)
+
+UI extensions are distributed as **OpenHands plugins** (which mirror the Claude Code
+plugin spec — see `software-agent-sdk` and `Plugin-Directory`). A UI extension lives
+inside that spec as an ordinary marketplace **plugin entry**, disambiguated from a
+regular agent plugin by:
+
+- `category: "ui-extension"`, and/or
+- a `uiExtension` marker, e.g. `{ "manifest": "extension.json" }`, pointing at the UI
+  manifest within the plugin directory.
+
+Because both Claude Code and the OpenHands SDK allow unknown fields and a UI-extension
+entry contributes **no** `commands`/`agents`/`hooks`/`mcpServers`, it loads safely
+alongside regular plugins without affecting the agent. A marketplace repo therefore
+looks like:
+
+```
+.plugin/marketplace.json          # lists plugins (incl. UI extensions)
+hello-sidebar/
+  .claude-plugin/plugin.json      # optional: marks it a ui-extension plugin
+  extension.json                  # the UI extension manifest
+  main.js, panel.html, icon.svg   # the bundle
+```
+
+See `examples/extensions/.plugin/marketplace.json` for a complete example. Everything is
+fetched over HTTPS from `raw.githubusercontent.com` (CORS-enabled), so public repos need
+no git clone or backend. Private repos are not yet supported from the browser.
 
 ## Status
 
 M1–M4, app mounting (flag-gated via `VITE_ENABLE_EXTENSIONS`), the first round of
-CSP/origin hardening, and the `/extensions` management UI with install-time capability
-consent are implemented and tested (`__tests__/extensions/`,
-`__tests__/components/features/extensions/`, `__tests__/routes/extensions.test.tsx`).
-Remaining work (a marketplace/catalog and cloud-backed distribution, a dedicated
-isolated asset origin, and nonce-based `script-src`) is tracked in the proposal's
-"Implementation status" section.
+CSP/origin hardening, the `/extensions` management UI with install-time capability
+consent, and git/marketplace distribution (loading UI extensions from a plugin
+marketplace in a git repo) are implemented and tested (`__tests__/extensions/`,
+`__tests__/extensions/marketplace/`, `__tests__/components/features/extensions/`,
+`__tests__/routes/extensions.test.tsx`). Remaining work (a hosted marketplace/registry
+service with submission/approval, private-repo auth, a dedicated isolated asset origin,
+and nonce-based `script-src`) is tracked in the proposal's "Implementation status"
+section.

@@ -6,14 +6,18 @@ import type { BundleSource } from "./loader";
  * directory exposing the bundle's `extension.json` and assets, e.g.
  * `"/__extensions/hello-sidebar"`.
  */
-export function createHttpBundleSource(baseUrl: string): BundleSource {
+export function createHttpBundleSource(
+  baseUrl: string,
+  manifestPath = "extension.json",
+): BundleSource {
   const root = baseUrl.replace(/\/$/, "");
+  const manifest = manifestPath.replace(/^\//, "");
   return {
     readManifest: async () => {
-      const response = await fetch(`${root}/extension.json`);
+      const response = await fetch(`${root}/${manifest}`);
       if (!response.ok) {
         throw new Error(
-          `failed to fetch ${root}/extension.json: HTTP ${response.status}`,
+          `failed to fetch ${root}/${manifest}: HTTP ${response.status}`,
         );
       }
       return response.json();

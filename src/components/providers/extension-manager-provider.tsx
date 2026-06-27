@@ -16,6 +16,15 @@ import {
 } from "#/extensions/installed-persistence";
 import { parseManifest, type ExtensionManifest } from "#/extensions/manifest";
 import {
+  githubUrlPath,
+  githubUrlToSource,
+  rawGithubUrl,
+} from "#/extensions/marketplace/source";
+import {
+  fetchMarketplace,
+  type MarketplaceResult,
+} from "#/extensions/marketplace/client";
+import {
   DEV_EXTENSION_BUNDLE_URLS,
   EXTENSIONS_ENABLED,
 } from "#/extensions/feature-flag";
@@ -25,11 +34,27 @@ interface ExtensionContextValue {
   manager: ExtensionManager;
   deps: HostApiDeps;
   /** Fetch + validate a bundle manifest to show its requested permissions (consent). */
-  previewManifest: (url: string) => Promise<ManifestPreview>;
+  previewManifest: (
+    url: string,
+    manifestPath?: string,
+  ) => Promise<ManifestPreview>;
   /** Install a bundle from a URL and record it as a persisted user install. */
-  installFromUrl: (url: string) => Promise<InstalledExtension>;
+  installFromUrl: (
+    url: string,
+    manifestPath?: string,
+  ) => Promise<InstalledExtension>;
+  /** Load a plugin marketplace (git repo or URL) and list its UI extensions. */
+  fetchMarketplace: (source: string) => Promise<MarketplaceResult>;
   /** Remove an extension and forget any persisted user install. */
   uninstall: (id: string) => void;
+}
+
+/** Convert a github.com folder/tree URL to a raw bundle base; pass other inputs through. */
+function resolveBundleUrl(input: string): string {
+  const trimmed = input.trim();
+  const github = githubUrlToSource(trimmed);
+  if (github) return rawGithubUrl(github, githubUrlPath(trimmed) ?? "");
+  return trimmed;
 }
 
 const ExtensionContext = React.createContext<ExtensionContextValue | null>(
@@ -45,6 +70,7 @@ function toInstalledExtension(
   manifest: ExtensionManifest,
   sourceUrl: string,
   origin: InstalledExtensionOrigin,
+  manifestPath?: string,
 ): InstalledExtension {
   return {
     id: manifest.id,
@@ -53,6 +79,7 @@ function toInstalledExtension(
     publisher: manifest.publisher,
     capabilities: manifest.capabilities ?? [],
     sourceUrl,
+    manifestPath,
     origin,
   };
 }
@@ -74,8 +101,11 @@ function ExtensionManagerProviderInner({
   const manager = managerRef.current;
 
   const previewManifest = React.useCallback(
-    async (url: string): Promise<ManifestPreview> => {
-      const raw = await createHttpBundleSource(url).readManifest();
+    async (url: string, manifestPath?: string): Promise<ManifestPreview> => {
+      const raw = await createHttpBundleSource(
+        resolveBundleUrl(url),
+        manifestPath,
+      ).readManifest();
       const parsed = parseManifest(raw);
       if (!parsed.ok) {
         throw new Error(parsed.errors.join("; "));
@@ -93,17 +123,26 @@ function ExtensionManagerProviderInner({
   );
 
   const installFromUrl = React.useCallback(
-    async (url: string): Promise<InstalledExtension> => {
-      const result = await manager.install(createHttpBundleSource(url));
+    async (url: string, manifestPath?: string): Promise<InstalledExtension> => {
+      const baseUrl = resolveBundleUrl(url);
+      const result = await manager.install(
+        createHttpBundleSource(baseUrl, manifestPath),
+      );
       if (!result.ok) {
         throw new Error(result.errors.join("; "));
       }
-      const extension = toInstalledExtension(result.manifest, url, "user");
+      const extension = toInstalledExtension(
+        result.manifest,
+        baseUrl,
+        "user",
+        manifestPath,
+      );
       useInstalledExtensionsStore.getState().add(extension);
       addPersistedInstall({
         id: extension.id,
         sourceUrl: extension.sourceUrl,
         capabilities: extension.capabilities,
+        manifestPath,
       });
       return extension;
     },
@@ -128,11 +167,16 @@ function ExtensionManagerProviderInner({
     const installFrom = async (
       url: string,
       origin: InstalledExtensionOrigin,
+      manifestPath?: string,
     ) => {
-      const result = await manager.install(createHttpBundleSource(url));
+      const result = await manager.install(
+        createHttpBundleSource(url, manifestPath),
+      );
       if (cancelled) return;
       if (result.ok) {
-        store.add(toInstalledExtension(result.manifest, url, origin));
+        store.add(
+          toInstalledExtension(result.manifest, url, origin, manifestPath),
+        );
       } else {
         console.warn(`[extensions] failed to install ${url}:`, result.errors);
       }
@@ -143,7 +187,7 @@ function ExtensionManagerProviderInner({
         await installFrom(url, "dev");
       }
       for (const persisted of loadPersistedInstalls()) {
-        await installFrom(persisted.sourceUrl, "user");
+        await installFrom(persisted.sourceUrl, "user", persisted.manifestPath);
       }
     })();
 
@@ -158,9 +202,28 @@ function ExtensionManagerProviderInner({
     };
   }, [manager]);
 
+  const loadMarketplace = React.useCallback(
+    (source: string) => fetchMarketplace(source),
+    [],
+  );
+
   const value = React.useMemo(
-    () => ({ manager, deps, previewManifest, installFromUrl, uninstall }),
-    [manager, deps, previewManifest, installFromUrl, uninstall],
+    () => ({
+      manager,
+      deps,
+      previewManifest,
+      installFromUrl,
+      fetchMarketplace: loadMarketplace,
+      uninstall,
+    }),
+    [
+      manager,
+      deps,
+      previewManifest,
+      installFromUrl,
+      loadMarketplace,
+      uninstall,
+    ],
   );
 
   return (

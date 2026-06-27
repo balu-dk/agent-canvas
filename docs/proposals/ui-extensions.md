@@ -531,11 +531,30 @@ Also built and tested since (this branch):
   only, never code — `installed-persistence.ts`) and are re-installed on startup by
   re-fetching/re-validating; `dev` bundles stay config-driven. Nav entry is flag-gated.
 
+- **M5 (part 2) – Git / marketplace distribution:** UI extensions can now be installed
+  from a **plugin marketplace hosted in a git repo**, reusing the OpenHands plugin
+  marketplace format (`software-agent-sdk` + `Plugin-Directory`), which mirrors the
+  Claude Code marketplace spec. `marketplace/source.ts` parses sources
+  (`github://owner/repo[@ref]`, `owner/repo`, `github.com` URLs, direct catalog URLs)
+  and builds `raw.githubusercontent.com` URLs; `marketplace/catalog.ts` validates the
+  catalog (`.plugin/marketplace.json` preferred, `.claude-plugin/marketplace.json`
+  fallback) and resolves each entry to a bundle URL; `marketplace/client.ts` returns the
+  installable UI extensions. The `AddExtensionModal` gains a "From marketplace" mode that
+  lists extensions and installs them through the same capability-consent flow.
+
+  **Living within the plugin spec (disambiguated):** a UI extension is an ordinary
+  marketplace plugin entry marked with `category: "ui-extension"` and/or a `uiExtension`
+  marker (`{ "manifest": "extension.json" }`). Both Claude Code and the SDK allow unknown
+  fields (`extra=allow`), and the entry contributes no `commands`/`agents`/`hooks`/
+  `mcpServers`, so it loads safely alongside regular plugins without affecting the agent.
+  No git clone or backend is required — public repos are fetched directly over CORS-
+  enabled raw HTTPS. Example: `examples/extensions/.plugin/marketplace.json`.
+
 Not yet done (remaining work):
 
-- **M5 (part 2) – Distribution / marketplace:** a catalog/marketplace of discoverable
-  extensions and cloud-backed distribution + storage (the same gap plugins fill via
-  their backend), so installs aren't limited to URLs the user already knows. Partial
+- **Hosted marketplace / registry service:** a discoverable catalog with submission and
+  approval, ratings/reviews, and cloud-backed storage (the role `Plugin-Directory`
+  plays for agent plugins), plus **private-repo auth** for browser installs. Partial
   capability grants (subset consent) and an enable/disable toggle are natural follow-ons.
 - **CSP/origin hardening (round 2):** serve webview assets from a *dedicated isolated
   origin/subdomain* (defence in depth beyond the sandbox), move `script-src` to per-load

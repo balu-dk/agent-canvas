@@ -12,6 +12,7 @@ import {
   displaySuccessToast,
 } from "#/utils/custom-toast-handlers";
 import type { ManifestPreview } from "#/extensions/installed-store";
+import type { UiExtensionListing } from "#/extensions/marketplace/client";
 import { useExtensionContext } from "#/components/providers/extension-manager-provider";
 import { capabilityLabelKey } from "./capability-labels";
 
@@ -19,32 +20,56 @@ interface AddExtensionModalProps {
   onClose: () => void;
 }
 
+type Mode = "url" | "marketplace";
+
+interface InstallTarget {
+  bundleUrl: string;
+  manifestPath?: string;
+}
+
 /**
- * Two-step install: enter a bundle URL, then review the permissions the manifest
+ * Two-step install with capability consent: pick a source (a bundle URL / git repo, or
+ * a UI extension from a plugin marketplace), then review the permissions the manifest
  * requests before granting them. Nothing is installed until the user confirms in the
- * review step, matching VS Code's all-or-nothing capability consent.
+ * review step, matching VS Code's all-or-nothing consent.
  */
 export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
   const { t } = useTranslation("openhands");
   const context = useExtensionContext();
 
+  const [mode, setMode] = React.useState<Mode>("url");
   const [source, setSource] = React.useState("");
+  const [marketplaceSource, setMarketplaceSource] = React.useState("");
+  const [listings, setListings] = React.useState<UiExtensionListing[] | null>(
+    null,
+  );
+  const [target, setTarget] = React.useState<InstallTarget | null>(null);
   const [preview, setPreview] = React.useState<ManifestPreview | null>(null);
   const [isPending, setIsPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const trimmedSource = source.trim();
+  const trimmedMarketplace = marketplaceSource.trim();
 
   if (!context) return null;
-  const { previewManifest, installFromUrl } = context;
+  const { previewManifest, installFromUrl, fetchMarketplace } = context;
 
-  const handleReview = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (trimmedSource.length === 0 || isPending) return;
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setPreview(null);
+    setTarget(null);
+    setListings(null);
+    setError(null);
+  };
+
+  const reviewTarget = async (next: InstallTarget) => {
+    if (isPending) return;
     setIsPending(true);
     setError(null);
     try {
-      setPreview(await previewManifest(trimmedSource));
+      const result = await previewManifest(next.bundleUrl, next.manifestPath);
+      setTarget(next);
+      setPreview(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -52,12 +77,35 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
     }
   };
 
-  const handleInstall = async () => {
-    if (isPending) return;
+  const handleBrowse = async () => {
+    if (trimmedMarketplace.length === 0 || isPending) return;
     setIsPending(true);
     setError(null);
     try {
-      await installFromUrl(trimmedSource);
+      const result = await fetchMarketplace(trimmedMarketplace);
+      setListings(result.listings);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (mode === "url") {
+      if (trimmedSource.length > 0) reviewTarget({ bundleUrl: trimmedSource });
+    } else {
+      handleBrowse();
+    }
+  };
+
+  const handleInstall = async () => {
+    if (isPending || !target) return;
+    setIsPending(true);
+    setError(null);
+    try {
+      await installFromUrl(target.bundleUrl, target.manifestPath);
       displaySuccessToast(t(I18nKey.EXTENSIONS$INSTALL_SUCCESS));
       onClose();
     } catch (e) {
@@ -69,13 +117,21 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
     }
   };
 
+  const tabButtonClass = (active: boolean) =>
+    cn(
+      "rounded-md px-3 py-1.5 text-xs font-medium",
+      active
+        ? "bg-base-tertiary text-white"
+        : "text-tertiary-light hover:text-white",
+    );
+
   return (
     <ModalBackdrop
       onClose={onClose}
       aria-label={t(I18nKey.EXTENSIONS$ADD_MODAL_TITLE)}
     >
       <form
-        onSubmit={handleReview}
+        onSubmit={handleSubmit}
         data-testid="add-extension-modal"
         className="relative flex w-[520px] max-w-[90vw] max-h-[85vh] flex-col rounded-xl border border-[var(--oh-border)] bg-base-secondary"
       >
@@ -91,22 +147,103 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
           <p className="mt-4 text-sm text-tertiary-light">
             {t(I18nKey.EXTENSIONS$ADD_MODAL_INTRO)}
           </p>
+          {!preview ? (
+            <div className="mt-4 flex gap-1" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                data-testid="add-extension-tab-url"
+                aria-selected={mode === "url"}
+                className={tabButtonClass(mode === "url")}
+                onClick={() => switchMode("url")}
+              >
+                {t(I18nKey.EXTENSIONS$TAB_URL)}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-testid="add-extension-tab-marketplace"
+                aria-selected={mode === "marketplace"}
+                className={tabButtonClass(mode === "marketplace")}
+                onClick={() => switchMode("marketplace")}
+              >
+                {t(I18nKey.EXTENSIONS$TAB_MARKETPLACE)}
+              </button>
+            </div>
+          ) : null}
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 custom-scrollbar">
-          <SettingsInput
-            testId="add-extension-source-input"
-            label={t(I18nKey.EXTENSIONS$SOURCE_LABEL)}
-            type="text"
-            value={source}
-            onChange={(value) => {
-              setSource(value);
-              setPreview(null);
-              setError(null);
-            }}
-            placeholder={t(I18nKey.EXTENSIONS$SOURCE_PLACEHOLDER)}
-            showRequiredTag
-          />
+          {!preview && mode === "url" ? (
+            <SettingsInput
+              testId="add-extension-source-input"
+              label={t(I18nKey.EXTENSIONS$SOURCE_LABEL)}
+              type="text"
+              value={source}
+              onChange={(value) => {
+                setSource(value);
+                setError(null);
+              }}
+              placeholder={t(I18nKey.EXTENSIONS$SOURCE_PLACEHOLDER)}
+              showRequiredTag
+            />
+          ) : null}
+
+          {!preview && mode === "marketplace" ? (
+            <>
+              <SettingsInput
+                testId="add-extension-marketplace-input"
+                label={t(I18nKey.EXTENSIONS$MARKETPLACE_LABEL)}
+                type="text"
+                value={marketplaceSource}
+                onChange={(value) => {
+                  setMarketplaceSource(value);
+                  setListings(null);
+                  setError(null);
+                }}
+                placeholder={t(I18nKey.EXTENSIONS$MARKETPLACE_PLACEHOLDER)}
+                showRequiredTag
+              />
+              {listings !== null ? (
+                <ul
+                  data-testid="marketplace-listings"
+                  className="flex flex-col gap-2"
+                >
+                  {listings.length === 0 ? (
+                    <li className="text-xs text-tertiary-alt">
+                      {t(I18nKey.EXTENSIONS$MARKETPLACE_EMPTY)}
+                    </li>
+                  ) : (
+                    listings.map((listing) => (
+                      <li key={listing.bundleUrl}>
+                        <button
+                          type="button"
+                          data-testid={`marketplace-listing-${listing.name}`}
+                          disabled={isPending}
+                          onClick={() =>
+                            reviewTarget({
+                              bundleUrl: listing.bundleUrl,
+                              manifestPath: listing.manifestPath,
+                            })
+                          }
+                          className="w-full rounded-lg border border-[var(--oh-border)] p-3 text-left hover:border-primary disabled:opacity-50"
+                        >
+                          <span className="block truncate text-sm font-medium text-white">
+                            {listing.name}
+                          </span>
+                          {listing.description ? (
+                            <span className="block truncate text-xs text-tertiary-alt">
+                              {listing.description}
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
 
           {preview ? (
             <section
@@ -164,7 +301,10 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
                 variant="secondary"
                 testId="add-extension-back"
                 isDisabled={isPending}
-                onClick={() => setPreview(null)}
+                onClick={() => {
+                  setPreview(null);
+                  setTarget(null);
+                }}
               >
                 {t(I18nKey.EXTENSIONS$BACK_BUTTON)}
               </BrandButton>
@@ -192,18 +332,33 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
               >
                 {t(I18nKey.BUTTON$CLOSE)}
               </BrandButton>
-              <BrandButton
-                type="submit"
-                variant="primary"
-                testId="add-extension-review"
-                isDisabled={trimmedSource.length === 0 || isPending}
-              >
-                {t(
-                  isPending
-                    ? I18nKey.EXTENSIONS$REVIEWING
-                    : I18nKey.EXTENSIONS$REVIEW_BUTTON,
-                )}
-              </BrandButton>
+              {mode === "url" ? (
+                <BrandButton
+                  type="submit"
+                  variant="primary"
+                  testId="add-extension-review"
+                  isDisabled={trimmedSource.length === 0 || isPending}
+                >
+                  {t(
+                    isPending
+                      ? I18nKey.EXTENSIONS$REVIEWING
+                      : I18nKey.EXTENSIONS$REVIEW_BUTTON,
+                  )}
+                </BrandButton>
+              ) : (
+                <BrandButton
+                  type="submit"
+                  variant="primary"
+                  testId="add-extension-browse"
+                  isDisabled={trimmedMarketplace.length === 0 || isPending}
+                >
+                  {t(
+                    isPending
+                      ? I18nKey.EXTENSIONS$MARKETPLACE_LOADING
+                      : I18nKey.EXTENSIONS$MARKETPLACE_LOAD,
+                  )}
+                </BrandButton>
+              )}
             </>
           )}
         </footer>

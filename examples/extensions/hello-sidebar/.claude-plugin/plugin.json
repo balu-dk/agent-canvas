@@ -1,0 +1,8 @@
+{
+  "name": "hello-sidebar",
+  "version": "1.0.0",
+  "description": "Adds a Hello panel to the activity bar.",
+  "author": { "name": "Acme" },
+  "category": "ui-extension",
+  "uiExtension": { "manifest": "extension.json" }
+}
