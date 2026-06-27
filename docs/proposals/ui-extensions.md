@@ -519,6 +519,15 @@ Also built and tested since (this branch):
   in addition to `event.source`, so loosening the sandbox fails loudly. Verified via a
   running dev server (CSP present on webview HTML, absent on JSON; path-traversal guard
   returns 403 on encoded escapes).
+- **CSP/origin hardening (round 2):** `webview-security.ts` moved from constants to
+  builders — `buildWebviewCsp({ nonce, frameAncestors })`, `generateCspNonce()`, and
+  `stampCspNonce(html, nonce)`. The dev asset server mints a fresh nonce per `.html`
+  response, stamps it onto the document's `<script>` tags, and sets
+  `script-src 'nonce-…'` (dropping `'unsafe-inline'` so an injected inline script is
+  blocked). The CSP also adds `frame-ancestors` (default `'self'`; set to the host
+  origin when assets move to an isolated origin) and a document-level
+  `sandbox allow-scripts`. Still pending (infra/process): a dedicated isolated asset
+  origin and a formal security review.
 
 - **M5 (part 1) – Management UI + install-time consent:** a `/extensions` route
   (`routes/extensions.tsx`) lists installed extensions and installs new ones from a URL.
@@ -561,10 +570,13 @@ Not yet done (remaining work):
   approval, ratings/reviews, and cloud-backed storage (the role `Plugin-Directory`
   plays for agent plugins), plus **private-repo auth** for browser installs. Partial
   capability grants (subset consent) and an enable/disable toggle are natural follow-ons.
-- **CSP/origin hardening (round 2):** serve webview assets from a *dedicated isolated
-  origin/subdomain* (defence in depth beyond the sandbox), move `script-src` to per-load
-  nonces, restrict `frame-ancestors` to the host origin, and complete a formal security
-  review.
+- **CSP/origin hardening (round 2):** _partly done_ — `script-src` now uses a per-load
+  nonce (the asset server stamps the matching nonce onto the bundle's `<script>` tags;
+  see `buildWebviewCsp`/`generateCspNonce`/`stampCspNonce` in `webview-security.ts`),
+  `frame-ancestors` is enforced (defaults to `'self'`, overridable to the host origin),
+  and a document-level `sandbox allow-scripts` mirrors the iframe sandbox. _Still
+  remaining:_ serve webview assets from a *dedicated isolated origin/subdomain* (an infra
+  change — the in-code hook is `frameAncestors`), and a formal security review.
 - **Command palette:** surface contributed commands in the Command-K menu (needs the
   palette item model widened beyond `I18nKey` to accept plain-string extension titles).
 - **Real `BundleSource` implementations:** installed-folder source (agent-server) and a

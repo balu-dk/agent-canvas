@@ -97,19 +97,27 @@ so the runtime and the asset server can never drift apart.
    `Content-Security-Policy` header (authoritative over any `<meta>` a bundle ships).
    The load-bearing directive is **`connect-src 'none'`**: the webview has *no network
    channel* (no fetch/XHR/WebSocket/EventSource/beacon), so it **cannot exfiltrate
-   data**. `default-src 'none'` denies everything not explicitly re-allowed.
+   data**. `default-src 'none'` denies everything not explicitly re-allowed. Additional
+   directives: a per-load **`script-src 'nonce-…'`** (the server stamps the matching
+   nonce onto the bundle's `<script>` tags, so an injected inline script without the
+   nonce is blocked), **`frame-ancestors`** (who may embed the webview), and a
+   document-level **`sandbox allow-scripts`** mirroring the iframe sandbox.
 3. **Capability-gated RPC** — the webview's only outbound path is `postMessage` to the
    host. The host accepts a message only when both `event.source` is the frame **and**
    `event.origin` is the opaque origin, then gates every privileged call by the
    extension's granted `capabilities`.
 
-`script-src 'unsafe-inline'` is currently required to run unbundled webview code with
-no build step; it is acceptable only because the frame is sandboxed and cannot
-exfiltrate. A future iteration can move to per-load nonces.
+`webview-security.ts` exposes `buildWebviewCsp({ nonce, frameAncestors })`,
+`generateCspNonce()`, and `stampCspNonce(html, nonce)` so the runtime and the asset
+server share one implementation. Where an asset server cannot rewrite HTML to stamp a
+nonce, omitting it falls back to `script-src 'unsafe-inline'` — still acceptable because
+the frame is sandboxed and `connect-src 'none'` blocks exfiltration.
 
-**Production requirement:** the dev server applies these headers via middleware
+**Production requirements:** the dev server applies these headers via middleware
 (`vite.config.ts`); a real deployment **must** serve webview assets with the same
-`Content-Security-Policy` (ideally from a dedicated isolated origin/subdomain).
+`Content-Security-Policy` (stamping a fresh nonce per response). Serve assets from a
+**dedicated isolated origin/subdomain** and set `frameAncestors` to the host app's
+origin so only the host can frame the webview.
 
 ## Managing extensions
 
@@ -173,12 +181,13 @@ no git clone or backend. Private repos are not yet supported from the browser.
 
 ## Status
 
-M1–M4, app mounting (flag-gated via `VITE_ENABLE_EXTENSIONS`), the first round of
-CSP/origin hardening, the `/extensions` management UI with install-time capability
-consent, and git/marketplace distribution (loading UI extensions from a plugin
-marketplace in a git repo) are implemented and tested (`__tests__/extensions/`,
-`__tests__/extensions/marketplace/`, `__tests__/components/features/extensions/`,
-`__tests__/routes/extensions.test.tsx`). Remaining work (a hosted marketplace/registry
-service with submission/approval, private-repo auth, a dedicated isolated asset origin,
-and nonce-based `script-src`) is tracked in the proposal's "Implementation status"
-section.
+M1–M4, app mounting (flag-gated via `VITE_ENABLE_EXTENSIONS`), CSP/origin hardening
+(sandbox + opaque origin, `connect-src 'none'`, per-load nonce `script-src`,
+`frame-ancestors`, document-level `sandbox`), the `/extensions` management UI with
+install-time capability consent, and git/marketplace distribution (loading UI
+extensions from a plugin marketplace in a git repo) are implemented and tested
+(`__tests__/extensions/`, `__tests__/extensions/marketplace/`,
+`__tests__/components/features/extensions/`, `__tests__/routes/extensions.test.tsx`).
+Remaining work (a hosted marketplace/registry service with submission/approval,
+private-repo auth, deploying a dedicated isolated asset origin, and a formal security
+review) is tracked in the proposal's "Implementation status" section.

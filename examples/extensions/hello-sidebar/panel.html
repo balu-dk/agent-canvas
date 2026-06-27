@@ -4,9 +4,11 @@
     <meta charset="utf-8" />
     <!--
       Defence-in-depth only: the host serves this document with an authoritative
-      Content-Security-Policy header (see src/extensions/webview-security.ts). The
-      key restriction is `connect-src 'none'` — the webview has no network channel and
-      can only reach the host via the capability-gated postMessage RPC.
+      Content-Security-Policy header (see src/extensions/webview-security.ts) that also
+      adds a per-load script nonce, `frame-ancestors`, and a CSP `sandbox`. The key
+      restriction is `connect-src 'none'` — the webview has no network channel and can
+      only reach the host via the capability-gated postMessage RPC. This static `<meta>`
+      keeps the sample runnable as a bare file when no header is present.
     -->
     <meta
       http-equiv="Content-Security-Policy"
