@@ -297,7 +297,10 @@ install-time capability consent, git/marketplace distribution (loading UI extens
 from a plugin marketplace in a git repo), **versioned `npm:`/`gh:` source refs
 resolved via jsDelivr with `engines.agentCanvas` host-compatibility enforcement**, and
 **in-place update detection/application** (`checkForUpdate`/`updateExtension`, surfaced in
-the management UI alongside each install's source ref) are implemented and tested
+the management UI alongside each install's source ref), and the **`contributes.menus`
+declarative contribution point** (menu items bound to a contributed command, placed into
+named menu slots via `menu-slots.ts` and rendered by `extension-menu-items.tsx` — the
+first host slot is the conversation-tabs context menu) are implemented and tested
 (`__tests__/extensions/`, `__tests__/extensions/sources/`,
 `__tests__/extensions/marketplace/`, `__tests__/components/features/extensions/`,
 `__tests__/routes/extensions.test.tsx`). Remaining work (a `zip`

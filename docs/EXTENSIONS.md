@@ -126,8 +126,9 @@ examples/extensions/hello-sidebar/
   package.json       # makes the folder npm-publish-ready
 ```
 
-It contributes a **Hello** sidebar button, a webview panel, and a **Hello: Say hi** command,
-and requests only `conversation:read`. See
+It contributes a **Hello** sidebar button, a webview panel, a **Hello: Say hi** command,
+and a context-menu item (in the conversation-tabs menu) that runs that command, and
+requests only `conversation:read`. See
 [`examples/extensions/hello-sidebar/README.md`](../examples/extensions/hello-sidebar/README.md).
 
 ### The manifest (`extension.json`)
@@ -149,10 +150,18 @@ and requests only `conversation:read`. See
     "views": {
       "hello.container": [{ "id": "hello.panel", "name": "Hello", "type": "webview", "page": "panel.html" }]
     },
-    "commands": [{ "command": "hello.say", "title": "Hello: Say hi" }]
+    "commands": [{ "command": "hello.say", "title": "Hello: Say hi" }],
+    "menus": {                                  // place items into named menu slots
+      "conversationTabs/context": [{ "command": "hello.say" }]
+    }
   }
 }
 ```
+
+A **menu item** is declarative: it binds to one of your contributed `commands` (its label
+comes from that command's `title`) and is placed into a named menu slot — selecting it runs
+the command, so it needs no extra permission. The available slots are listed in
+`src/extensions/menu-slots.ts` (today: `conversationTabs/context`).
 
 ### Your logic (`main.js`, runs in a Web Worker)
 

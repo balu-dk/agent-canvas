@@ -80,7 +80,7 @@ management page) for *distribution*, while adding the genuinely new piece: a
 | View / View Container | A **panel** rendered in the main area or a side panel | `contributes.views`. |
 | Webview (`vscode.window.createWebviewPanel`) | Sandboxed `<iframe>` panel + `postMessage` bridge | For arbitrary customer UI. |
 | Command (`contributes.commands`) | Entry in the existing **Command-K menu** | We already ship a command menu (`CommandMenuTrigger`). |
-| Menus (`contributes.menus`) | Contributed items in context/overflow menus | Phase 2. |
+| Menus (`contributes.menus`) | Contributed items in context/overflow menus | **Implemented** (declarative; items bind to a contributed command, placed into named menu slots — see § 5b). |
 | Activation events | Lazy activation (`onView:*`, `onCommand:*`, `onStartup`) | Worker spins up only when needed. |
 | Extension Host process | **Web Worker** per extension (or shared pool) | Isolation boundary for extension logic. |
 | `vscode` module / API | `agentCanvas` API object injected into the worker | Versioned, capability-gated. |
@@ -592,6 +592,21 @@ Also built and tested since (this branch):
   needs is a zip→`blob:` acquirer in `toBundleSource`; the loader and persistence are
   unchanged, and installs are keyed on `manifest.id` so distribution can migrate to the
   registry without breaking existing installs.
+
+- **Menus (`contributes.menus`) — first declarative point on the documented recipe:**
+  extensions contribute items into **named menu slots** via a `contributes.menus` map of
+  *slot id → items*, each item `{ command, group? }` bound to one of the extension's own
+  contributed `commands`. The slice spans the standard seam — schema + validator
+  (`manifest.ts`), resolved `MenuItem` type (`types.ts`), a `MENU_SLOTS` slot registry
+  (`menu-slots.ts`), derived `menuItems`/`menuItemsBySlot` in `contribution-registry.ts`
+  with a `useMenuItems(slot)` hook, loader wiring (`buildMenuItems` resolves the label
+  from the bound command's title and runs `activate(onCommand:<id>) + runCommand`), and a
+  declarative host renderer `ExtensionMenuItems` mounted in the conversation-tabs context
+  menu. **Declarative and capability-free:** showing an item runs no extension code; the
+  action is just an existing contributed command. Tested across schema/registry/loader/host
+  and the example bundle. _Not yet:_ `when`-clause visibility (no host `when` evaluator) and
+  an `onMenu:<slot>` activation event (command activation already covers it). See
+  `docs/EXTENSION_POINTS.md` § 1.
 
 Not yet done (remaining work):
 

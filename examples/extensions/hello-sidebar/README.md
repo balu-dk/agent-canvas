@@ -8,7 +8,9 @@ It contributes:
 - an Activity Bar (sidebar) button **Hello** with an icon,
 - a webview panel (`panel.html`) shown when the button is selected,
 - a command **Hello: Say hi** that reads the active conversation and shows a host
-  message.
+  message,
+- a menu item (`contributes.menus`) in the conversation-tabs context menu
+  (`conversationTabs/context`) bound to that same command.
 
 Files:
 
