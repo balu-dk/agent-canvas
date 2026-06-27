@@ -17,7 +17,6 @@ const CATALOG = {
       description: "Hello panel",
       version: "1.0.0",
       author: { name: "Acme" },
-      uiExtension: { manifest: "extension.json" },
     },
   ],
 };
@@ -45,7 +44,6 @@ describe("fetchMarketplace", () => {
         homepage: undefined,
         bundleUrl:
           "https://raw.githubusercontent.com/acme/repo/main/hello-sidebar",
-        manifestPath: "extension.json",
       },
     ]);
   });

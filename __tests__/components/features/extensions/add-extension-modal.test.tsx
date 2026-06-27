@@ -56,16 +56,13 @@ describe("AddExtensionModal", () => {
     await waitFor(() =>
       expect(screen.getByTestId("extension-permissions")).toBeInTheDocument(),
     );
-    expect(previewMock).toHaveBeenCalledWith("/__extensions/hello", undefined);
+    expect(previewMock).toHaveBeenCalledWith("/__extensions/hello");
     expect(installMock).not.toHaveBeenCalled();
 
     // Granting installs and closes.
     await user.click(screen.getByTestId("add-extension-install"));
     await waitFor(() =>
-      expect(installMock).toHaveBeenCalledWith(
-        "/__extensions/hello",
-        undefined,
-      ),
+      expect(installMock).toHaveBeenCalledWith("/__extensions/hello"),
     );
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -80,7 +77,6 @@ describe("AddExtensionModal", () => {
           name: "hello-sidebar",
           description: "Adds a Hello panel.",
           bundleUrl: "https://raw.example/hello-sidebar",
-          manifestPath: "extension.json",
         },
       ],
     });
@@ -113,7 +109,6 @@ describe("AddExtensionModal", () => {
     );
     expect(previewMock).toHaveBeenCalledWith(
       "https://raw.example/hello-sidebar",
-      "extension.json",
     );
     expect(installMock).not.toHaveBeenCalled();
 
@@ -121,7 +116,6 @@ describe("AddExtensionModal", () => {
     await waitFor(() =>
       expect(installMock).toHaveBeenCalledWith(
         "https://raw.example/hello-sidebar",
-        "extension.json",
       ),
     );
     expect(onClose).toHaveBeenCalledTimes(1);

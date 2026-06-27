@@ -18,9 +18,6 @@ import {
   type MarketplaceSource,
 } from "./source";
 
-/** Default UI manifest filename within a bundle directory. */
-export const DEFAULT_UI_EXTENSION_MANIFEST = "extension.json";
-
 export interface CatalogOwner {
   name: string;
   email?: string;
@@ -50,11 +47,6 @@ export interface UrlEntrySource {
 /** A plugin entry's source: a string path (relative to the catalog repo) or an object. */
 export type EntrySource = string | GithubEntrySource | UrlEntrySource;
 
-/** OpenHands-specific marker pointing at the UI bundle's manifest within the plugin dir. */
-export interface UiExtensionMarker {
-  manifest?: string;
-}
-
 export interface MarketplaceEntry {
   name: string;
   source: EntrySource;
@@ -63,7 +55,6 @@ export interface MarketplaceEntry {
   author?: CatalogAuthor;
   category?: string;
   homepage?: string;
-  uiExtension?: UiExtensionMarker;
 }
 
 export interface MarketplaceCatalog {
@@ -150,10 +141,6 @@ export function parseCatalog(input: unknown): CatalogParseResult {
 
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, catalog: input as unknown as MarketplaceCatalog };
-}
-
-export function uiExtensionManifestPath(entry: MarketplaceEntry): string {
-  return entry.uiExtension?.manifest ?? DEFAULT_UI_EXTENSION_MANIFEST;
 }
 
 function parentUrl(url: string): string {

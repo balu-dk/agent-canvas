@@ -13,8 +13,7 @@
       "description": "Adds a Hello panel to the activity bar.",
       "version": "1.0.0",
       "author": { "name": "Acme" },
-      "homepage": "https://example.com/hello-sidebar",
-      "uiExtension": { "manifest": "extension.json" }
+      "homepage": "https://example.com/hello-sidebar"
     }
   ]
 }

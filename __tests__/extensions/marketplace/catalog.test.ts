@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   parseCatalog,
   resolveEntryBundleUrl,
-  uiExtensionManifestPath,
   type MarketplaceEntry,
 } from "#/extensions/marketplace/catalog";
 import type { MarketplaceSource } from "#/extensions/marketplace/source";
@@ -46,21 +45,6 @@ describe("parseCatalog", () => {
       uiExtensions: [{ name: "bad", source: { source: "svn" } }],
     });
     expect(result.ok).toBe(false);
-  });
-});
-
-describe("manifest path", () => {
-  it("defaults the manifest filename and honours overrides", () => {
-    expect(uiExtensionManifestPath({ name: "a", source: "./a" })).toBe(
-      "extension.json",
-    );
-    expect(
-      uiExtensionManifestPath({
-        name: "a",
-        source: "./a",
-        uiExtension: { manifest: "ui/manifest.json" },
-      }),
-    ).toBe("ui/manifest.json");
   });
 });
 

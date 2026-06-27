@@ -145,18 +145,16 @@ they are listed under a **dedicated `uiExtensions` array — never in `plugins`*
   "owner": { "name": "Acme" },
   "plugins": [],            // agent plugins (Claude Code / OpenHands plugin loader)
   "uiExtensions": [         // read ONLY by Agent Canvas
-    {
-      "name": "hello-sidebar",
-      "source": "./hello-sidebar",
-      "uiExtension": { "manifest": "extension.json" }
-    }
+    { "name": "hello-sidebar", "source": "./hello-sidebar" }
   ]
 }
 ```
 
-This is deliberate: Claude Code and the OpenHands plugin loader only enumerate `plugins`,
-so a UI extension **never appears as an installable plugin in a context that can't render
-it**. Both parsers ignore unknown top-level keys, so the file stays a valid marketplace
+Each entry's `source` points at a bundle directory containing an `extension.json`
+manifest (resolved relative to the catalog repo for string sources). This separation is
+deliberate: Claude Code and the OpenHands plugin loader only enumerate `plugins`, so a UI
+extension **never appears as an installable plugin in a context that can't render it**.
+Both parsers ignore unknown top-level keys, so the file stays a valid marketplace
 manifest. (A per-entry `category`/flag would not work — those tools list every `plugins`
 entry regardless.) As a second layer, putting the file at `.plugin/marketplace.json` (the
 OpenHands-native location) keeps it invisible to Claude Code, which only discovers

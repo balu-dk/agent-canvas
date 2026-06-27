@@ -9,7 +9,6 @@ export interface PersistedInstall {
   id: string;
   sourceUrl: string;
   capabilities: Capability[];
-  manifestPath?: string;
 }
 
 const STORAGE_KEY = "agent-canvas:extensions:user-installs";

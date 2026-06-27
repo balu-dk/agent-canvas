@@ -22,11 +22,6 @@ interface AddExtensionModalProps {
 
 type Mode = "url" | "marketplace";
 
-interface InstallTarget {
-  bundleUrl: string;
-  manifestPath?: string;
-}
-
 /**
  * Two-step install with capability consent: pick a source (a bundle URL / git repo, or
  * a UI extension from a plugin marketplace), then review the permissions the manifest
@@ -43,7 +38,7 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
   const [listings, setListings] = React.useState<UiExtensionListing[] | null>(
     null,
   );
-  const [target, setTarget] = React.useState<InstallTarget | null>(null);
+  const [target, setTarget] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<ManifestPreview | null>(null);
   const [isPending, setIsPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -62,13 +57,13 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
     setError(null);
   };
 
-  const reviewTarget = async (next: InstallTarget) => {
+  const reviewTarget = async (bundleUrl: string) => {
     if (isPending) return;
     setIsPending(true);
     setError(null);
     try {
-      const result = await previewManifest(next.bundleUrl, next.manifestPath);
-      setTarget(next);
+      const result = await previewManifest(bundleUrl);
+      setTarget(bundleUrl);
       setPreview(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -94,7 +89,7 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (mode === "url") {
-      if (trimmedSource.length > 0) reviewTarget({ bundleUrl: trimmedSource });
+      if (trimmedSource.length > 0) reviewTarget(trimmedSource);
     } else {
       handleBrowse();
     }
@@ -105,7 +100,7 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
     setIsPending(true);
     setError(null);
     try {
-      await installFromUrl(target.bundleUrl, target.manifestPath);
+      await installFromUrl(target);
       displaySuccessToast(t(I18nKey.EXTENSIONS$INSTALL_SUCCESS));
       onClose();
     } catch (e) {
@@ -220,12 +215,7 @@ export function AddExtensionModal({ onClose }: AddExtensionModalProps) {
                           type="button"
                           data-testid={`marketplace-listing-${listing.name}`}
                           disabled={isPending}
-                          onClick={() =>
-                            reviewTarget({
-                              bundleUrl: listing.bundleUrl,
-                              manifestPath: listing.manifestPath,
-                            })
-                          }
+                          onClick={() => reviewTarget(listing.bundleUrl)}
                           className="w-full rounded-lg border border-[var(--oh-border)] p-3 text-left hover:border-primary disabled:opacity-50"
                         >
                           <span className="block truncate text-sm font-medium text-white">

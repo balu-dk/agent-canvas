@@ -3,11 +3,7 @@
  * UI-extension entries, resolved to bundle URLs ready for the install/consent flow.
  */
 
-import {
-  parseCatalog,
-  resolveEntryBundleUrl,
-  uiExtensionManifestPath,
-} from "./catalog";
+import { parseCatalog, resolveEntryBundleUrl } from "./catalog";
 import { marketplaceCatalogCandidates, parseMarketplaceSource } from "./source";
 
 export interface UiExtensionListing {
@@ -18,8 +14,6 @@ export interface UiExtensionListing {
   homepage?: string;
   /** Raw base URL of the bundle directory. */
   bundleUrl: string;
-  /** Manifest filename within the bundle (defaults to `extension.json`). */
-  manifestPath: string;
 }
 
 export interface MarketplaceResult {
@@ -83,7 +77,6 @@ export async function fetchMarketplace(
       author: entry.author?.name,
       homepage: entry.homepage,
       bundleUrl,
-      manifestPath: uiExtensionManifestPath(entry),
     });
   }
 
