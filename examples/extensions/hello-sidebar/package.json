@@ -3,5 +3,11 @@
   "version": "1.0.0",
   "description": "Sample Agent Canvas UI extension (hello-sidebar).",
   "license": "MIT",
-  "files": ["extension.json", "main.js", "panel.html", "icon.svg"]
+  "files": [
+    "extension.json",
+    "main.js",
+    "panel.html",
+    "settings.html",
+    "icon.svg"
+  ]
 }

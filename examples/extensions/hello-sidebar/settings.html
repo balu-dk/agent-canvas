@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Defence-in-depth only: the host serves this document with an authoritative
+      Content-Security-Policy header (see src/extensions/webview-security.ts) that also
+      adds a per-load script nonce, `frame-ancestors`, and a CSP `sandbox`. The key
+      restriction is `connect-src 'none'` — the webview has no network channel and can
+      only reach the host via the capability-gated postMessage RPC. This static `<meta>`
+      keeps the sample runnable as a bare file when no header is present.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none';"
+    />
+    <title>Hello settings</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        color: #e5e7eb;
+        background: #0b0f17;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        color: #9ca3af;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #374151;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 14px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        align-items: center;
+      }
+      button {
+        cursor: pointer;
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: 0;
+        background: #2563eb;
+        color: white;
+        font-size: 14px;
+      }
+      #status {
+        font-size: 13px;
+        color: #9ca3af;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Hello settings</h1>
+    <p>
+      This page is a contributed <strong>settings page</strong>
+      (<code>contributes.settingsPages</code>), rendered as a sandboxed webview at
+      <code>/settings/x/acme.hello</code>. It persists through the extension's own
+      <code>storage</code> capability — no host settings are touched.
+    </p>
+
+    <label for="greeting">Greeting</label>
+    <input id="greeting" type="text" placeholder="e.g. Hi there" />
+
+    <div class="row">
+      <button id="save" type="button">Save</button>
+      <span id="status">Loading saved value…</span>
+    </div>
+
+    <script>
+      // Self-contained webview client. A real bundle would instead `import` the
+      // published SDK:
+      //   import { acquireAgentCanvasApi } from "@agent-canvas/extension-api/webview";
+      // which speaks this exact postMessage RPC protocol to the host. It is inlined
+      // here so the sample runs as a static file with no build step.
+      (function () {
+        var parentWindow = window.parent;
+        var nextId = 1;
+        var pending = {};
+
+        window.addEventListener("message", function (event) {
+          if (event.source !== parentWindow) return;
+          var msg = event.data;
+          if (!msg || msg.kind !== "response") return;
+          var entry = pending[msg.id];
+          if (!entry) return;
+          delete pending[msg.id];
+          if (msg.error !== undefined) entry.reject(new Error(msg.error));
+          else entry.resolve(msg.result);
+        });
+
+        function request(method, params) {
+          var id = nextId++;
+          return new Promise(function (resolve, reject) {
+            pending[id] = { resolve: resolve, reject: reject };
+            parentWindow.postMessage(
+              { kind: "request", id: id, method: method, params: params },
+              "*",
+            );
+          });
+        }
+
+        var api = {
+          storage: {
+            // Gated by the `storage` capability the user approved at install time.
+            get: function (key) {
+              return request("storage.get", { key: key });
+            },
+            set: function (key, value) {
+              return request("storage.set", { key: key, value: value });
+            },
+          },
+        };
+
+        var STORAGE_KEY = "greeting";
+        var input = document.getElementById("greeting");
+        var status = document.getElementById("status");
+
+        api.storage
+          .get(STORAGE_KEY)
+          .then(function (saved) {
+            if (typeof saved === "string") input.value = saved;
+            status.textContent = saved
+              ? "Loaded saved greeting."
+              : "No greeting saved yet.";
+          })
+          .catch(function (e) {
+            status.textContent = "Error loading: " + e.message;
+          });
+
+        document.getElementById("save").addEventListener("click", function () {
+          status.textContent = "Saving…";
+          api.storage
+            .set(STORAGE_KEY, input.value)
+            .then(function () {
+              status.textContent = "Saved. Reopen this page to confirm it persisted.";
+            })
+            .catch(function (e) {
+              status.textContent = "Error saving: " + e.message;
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

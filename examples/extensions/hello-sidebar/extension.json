@@ -6,7 +6,7 @@
   "engines": { "agentCanvas": "^1.0.0" },
   "main": "main.js",
   "activationEvents": ["onView:hello.panel", "onCommand:hello.say"],
-  "capabilities": ["conversation:read"],
+  "capabilities": ["conversation:read", "storage"],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -25,7 +25,11 @@
     },
     "commands": [{ "command": "hello.say", "title": "Hello: Say hi" }],
     "menus": {
-      "conversationTabs/context": [{ "command": "hello.say" }]
-    }
+      "conversationTabs/context": [{ "command": "hello.say" }],
+      "chatInput/actions": [{ "command": "hello.say", "when": "emailVerified" }]
+    },
+    "settingsPages": [
+      { "id": "general", "title": "Hello", "page": "settings.html" }
+    ]
   }
 }

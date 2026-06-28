@@ -49,7 +49,7 @@ describe("examples/extensions/hello-sidebar", () => {
     expect(views.map((v) => v.id)).toEqual(["hello.panel"]);
     // The view's `page` is resolved to an asset URL for the webview panel.
     expect(views[0].pageUrl).toBe("blob:panel.html");
-    expect(views[0].capabilities).toEqual(["conversation:read"]);
+    expect(views[0].capabilities).toEqual(["conversation:read", "storage"]);
 
     // The menu item binds to the contributed command and inherits its title.
     const menuItems = contributionRegistry.getMenuItemsForSlot(
@@ -57,5 +57,22 @@ describe("examples/extensions/hello-sidebar", () => {
     );
     expect(menuItems.map((m) => m.command)).toEqual(["hello.say"]);
     expect(menuItems[0].title).toBe("Hello: Say hi");
+
+    // The second menu item targets the chat-input actions slot and carries a `when`
+    // clause (host-fact gated; carried through the loader untouched).
+    const chatItems =
+      contributionRegistry.getMenuItemsForSlot("chatInput/actions");
+    expect(chatItems.map((m) => m.command)).toEqual(["hello.say"]);
+    expect(chatItems[0].when).toBe("emailVerified");
+
+    // The settings page is resolved with its webview URL and inherits the
+    // extension's capabilities (so its webview can persist via `storage`).
+    const settingsPages = contributionRegistry.getSettingsPages();
+    expect(settingsPages.map((p) => p.id)).toEqual(["general"]);
+    expect(settingsPages[0].pageUrl).toBe("blob:settings.html");
+    expect(settingsPages[0].capabilities).toEqual([
+      "conversation:read",
+      "storage",
+    ]);
   });
 });

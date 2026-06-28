@@ -122,13 +122,17 @@ examples/extensions/hello-sidebar/
   extension.json     # the manifest
   main.js            # worker entry (registers a command, reads the conversation)
   panel.html         # a sandboxed webview panel
+  settings.html      # a sandboxed settings-page webview (persists via storage)
   icon.svg           # the sidebar rail icon
   package.json       # makes the folder npm-publish-ready
 ```
 
-It contributes a **Hello** sidebar button, a webview panel, a **Hello: Say hi** command,
-and a context-menu item (in the conversation-tabs menu) that runs that command, and
-requests only `conversation:read`. See
+It deliberately exercises **one of every declarative contribution point available today**,
+so it doubles as an end-to-end test bundle: a **Hello** sidebar button, a webview panel, a
+**Hello: Say hi** command, two menu items running that command (one in the conversation-tabs
+menu and one in the chat input "add"/overflow menu, the latter gated by a `when` clause), and
+a **settings page** that persists a value through the `storage` capability. It requests
+`conversation:read` and `storage`. See
 [`examples/extensions/hello-sidebar/README.md`](../examples/extensions/hello-sidebar/README.md).
 
 ### The manifest (`extension.json`)
@@ -142,7 +146,7 @@ requests only `conversation:read`. See
   "engines": { "agentCanvas": "^1.0.0" },    // host versions you support (semver range)
   "main": "main.js",                          // optional worker entry
   "activationEvents": ["onCommand:hello.say"],
-  "capabilities": ["conversation:read"],      // permissions; surfaced for consent
+  "capabilities": ["conversation:read", "storage"], // permissions; surfaced for consent
   "contributes": {
     "viewsContainers": {
       "activitybar": [{ "id": "hello.container", "title": "Hello", "icon": "icon.svg" }]
@@ -152,8 +156,12 @@ requests only `conversation:read`. See
     },
     "commands": [{ "command": "hello.say", "title": "Hello: Say hi" }],
     "menus": {                                  // place items into named menu slots
-      "conversationTabs/context": [{ "command": "hello.say" }]
-    }
+      "conversationTabs/context": [{ "command": "hello.say" }],
+      "chatInput/actions": [{ "command": "hello.say", "when": "emailVerified" }]
+    },
+    "settingsPages": [                          // merged into the Settings sidebar
+      { "id": "general", "title": "Hello", "page": "settings.html" }
+    ]
   }
 }
 ```
@@ -161,7 +169,47 @@ requests only `conversation:read`. See
 A **menu item** is declarative: it binds to one of your contributed `commands` (its label
 comes from that command's `title`) and is placed into a named menu slot — selecting it runs
 the command, so it needs no extra permission. The available slots are listed in
-`src/extensions/menu-slots.ts` (today: `conversationTabs/context`).
+`src/extensions/menu-slots.ts` (today: **`conversationTabs/context`** — the conversation-tabs
+context menu — and **`chatInput/actions`** — the chat input "add"/overflow actions menu).
+Targeting a slot a given host build doesn't render simply shows nothing.
+
+### Conditional visibility (`when`)
+
+Any **menu item** or **settings page** may carry an optional **`when`** clause that gates its
+visibility against a small, **whitelisted, read-only UI-context** of facts the host already
+derives for its own built-ins. The grammar is intentionally tiny — a `&&`-conjunction of
+`key`, `!key`, `key == value`, and `key != value` terms (no full expression language):
+
+```jsonc
+"menus": {
+  "chatInput/actions": [
+    { "command": "hello.say", "when": "backend == cloud && emailVerified" }
+  ]
+}
+```
+
+Available keys:
+
+| Key | Values | Meaning |
+|---|---|---|
+| `backend` | `cloud` \| `local` | the active backend kind |
+| `agentState` | e.g. `running`, `awaiting_user_input` | the active conversation's agent state |
+| `emailVerified` | boolean | `false` only when the host explicitly says so |
+| `repoConnected` | boolean | a repository is attached to the conversation |
+| `flag.hide_llm_settings`, `flag.hide_users_page` | boolean | host feature flags |
+
+Filtering reads **host facts only** — showing or hiding a contributed item runs **no**
+extension code, so `when` needs **no** capability.
+
+### Settings pages (`contributes.settingsPages`)
+
+A `settingsPages` entry (`{ id, title, page, when? }`) adds a nav item to the **Settings**
+sidebar and renders your page (`page`) as a **sandboxed webview** at the catch-all route
+`/settings/x/<your-extension-id>`. One nav item is shown per extension. The body is the same
+isolated iframe as a `views` webview and reaches the host through the same capability-gated
+API — so a page that saves its own data needs only the **`storage`** capability (no new
+permission). See the sample's `settings.html`, which persists a value with `storage.get` /
+`storage.set`.
 
 ### Your logic (`main.js`, runs in a Web Worker)
 
