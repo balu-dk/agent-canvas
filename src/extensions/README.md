@@ -43,6 +43,7 @@ Key properties:
 | Types | `types.ts`, `sdk/types.ts` |
 | Manifest | `manifest.ts` |
 | Registry | `contribution-registry.ts`, `use-contributions.ts`, `menu-slots.ts` |
+| Visibility (`when`) | `when.ts` (tiny evaluator), `ui-context.tsx` (whitelisted host UI-context) |
 | Loader / manager | `loader.ts`, `extension-manager.ts` |
 | Host runtime | `host/rpc.ts`, `host/host-api.ts`, `host/extension-host.ts`, `host/webview-transport.ts`, `host/create-app-host-deps.ts` |
 | Worker/webview SDK | `sdk/runtime.ts`, `sdk/worker-bootstrap.ts`, `sdk/api-proxy.ts`, `sdk/webview-client.ts` |
@@ -72,10 +73,22 @@ webview assets. See `examples/extensions/hello-sidebar/` for a minimal working s
     "viewsContainers": { "activitybar": [{ "id": "hello.container", "title": "Hello", "icon": "icon.svg" }] },
     "views": { "hello.container": [{ "id": "hello.panel", "name": "Hello", "type": "webview" }] },
     "commands": [{ "command": "hello.say", "title": "Hello: Say hi" }],
-    "menus": { "conversationTabs/context": [{ "command": "hello.say" }] }
+    "menus": {
+      "conversationTabs/context": [
+        { "command": "hello.say", "when": "backend == cloud" }
+      ]
+    }
   }
 }
 ```
+
+A menu item's optional **`when`** clause gates its visibility against a small,
+whitelisted, read-only **UI-context** of host facts (`when.ts` + `ui-context.tsx`).
+The grammar is intentionally tiny — a `&&`-conjunction of `key`, `!key`, `key == value`
+and `key != value` terms (no expression language). Available keys: `backend`
+(`cloud`/`local`), `agentState`, `emailVerified`, `repoConnected`, and the
+`flag.hide_llm_settings` / `flag.hide_users_page` feature flags. Hiding an item reads
+host facts only — it runs **no** extension code, so `when` needs no capability.
 
 ```js
 // main.js (runs in a Web Worker)
@@ -300,7 +313,10 @@ resolved via jsDelivr with `engines.agentCanvas` host-compatibility enforcement*
 the management UI alongside each install's source ref), and the **`contributes.menus`
 declarative contribution point** (menu items bound to a contributed command, placed into
 named menu slots via `menu-slots.ts` and rendered by `extension-menu-items.tsx` — the
-first host slot is the conversation-tabs context menu) are implemented and tested
+first host slot is the conversation-tabs context menu), and the **`when` / UI-context
+visibility primitive** (a tiny `&&`-conjunction evaluator in `when.ts` over a
+whitelisted, read-only host UI-context in `ui-context.tsx`, applied by `useMenuItems`
+so hidden items render no extension code and need no capability) are implemented and tested
 (`__tests__/extensions/`, `__tests__/extensions/sources/`,
 `__tests__/extensions/marketplace/`, `__tests__/components/features/extensions/`,
 `__tests__/routes/extensions.test.tsx`). Remaining work (a `zip`

@@ -125,6 +125,7 @@ function buildMenuItems(
       command: item.command,
       title: titleByCommand.get(item.command) ?? item.command,
       group: item.group,
+      when: item.when,
       run: () => {
         Promise.resolve(
           host.activate(manifest, `onCommand:${item.command}`),

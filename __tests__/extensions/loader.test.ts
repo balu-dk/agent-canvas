@@ -138,6 +138,38 @@ describe("loadExtension", () => {
     );
   });
 
+  it("carries an item's when clause through to the resolved menu item", async () => {
+    await loadExtension(
+      makeSource({
+        readManifest: async () => ({
+          ...manifest,
+          contributes: {
+            ...manifest.contributes,
+            menus: {
+              "conversationTabs/context": [
+                { command: "compliance.scan", when: "backend == cloud" },
+              ],
+            },
+          },
+        }),
+      }),
+      makeHost(),
+    );
+
+    const items = contributionRegistry.getMenuItemsForSlot(
+      "conversationTabs/context",
+    );
+    expect(items[0].when).toBe("backend == cloud");
+  });
+
+  it("leaves when undefined when the item declares none", async () => {
+    await loadExtension(makeSource(), makeHost());
+    const items = contributionRegistry.getMenuItemsForSlot(
+      "conversationTabs/context",
+    );
+    expect(items[0].when).toBeUndefined();
+  });
+
   it("falls back to the command id as the label when it isn't declared", async () => {
     const host = makeHost();
     await loadExtension(

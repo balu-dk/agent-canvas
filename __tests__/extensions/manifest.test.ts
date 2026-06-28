@@ -141,6 +141,42 @@ describe("parseManifest", () => {
     }
   });
 
+  it("accepts an optional when clause on a menu item", () => {
+    const result = parseManifest({
+      ...validManifest,
+      contributes: {
+        ...validManifest.contributes,
+        menus: {
+          "conversationTabs/context": [
+            { command: "compliance.scan", when: "backend == cloud" },
+          ],
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const slot =
+        result.manifest.contributes?.menus?.["conversationTabs/context"];
+      expect(slot?.[0].when).toBe("backend == cloud");
+    }
+  });
+
+  it("rejects a non-string when clause with a precise path", () => {
+    const result = parseManifest({
+      ...validManifest,
+      contributes: {
+        menus: {
+          "conversationTabs/context": [{ command: "compliance.scan", when: 3 }],
+        },
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.join()).toMatch(
+        /contributes\.menus\.conversationTabs\/context\[0\]\.when/,
+      );
+  });
+
   it("rejects a non-object contributes.menus", () => {
     const result = parseManifest({
       ...validManifest,

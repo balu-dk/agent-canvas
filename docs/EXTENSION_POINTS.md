@@ -148,7 +148,9 @@ Grounded surface map:
 | Right-panel tab/panel | `conversation-tabs/` | webview panel | new tab-slot (reuses `views`) |
 
 **Revised order (grounded):**
-1. **`when` / whitelisted UI-context primitive** — shared dependency of everything below; no capability.
+1. **`when` / whitelisted UI-context primitive** — ✅ implemented (shared dependency of
+   everything below; no capability). See § "3. Command metadata + the `when` / UI-context
+   primitive".
 2. **Chat "add" menu slot** — XS; pure reuse of the menus mechanism.
 3. **Settings page contribution** — webview body + merge into `use-settings-nav-items` + one
    catch-all `/settings/x/:extensionId` route; **no new capability** if the page persists via
@@ -179,8 +181,10 @@ Shipped as the first declarative point built on this recipe (see the "today" tab
 - **Trust:** declarative; the action is just an existing contributed command, so **no new
   capability**. The "menu contribution location" registry is `menu-slots.ts` (the `MENU_SLOTS`
   ids) plus the registry's derived `menuItemsBySlot`, queried via `useMenuItems(slot)`.
-- **Not yet:** `when`-clause visibility (there is no host `when` evaluator) and an
-  `onMenu:<slot>` activation event (unnecessary — command activation already covers it).
+- **`when` visibility:** ✅ a menu item may now carry an optional `when` clause (see § 3);
+  `useMenuItems` filters by it against the host UI-context before rendering.
+- **Not yet:** an `onMenu:<slot>` activation event (unnecessary — command activation already
+  covers it).
 
 ### 2. Chat "add" menu (and why *not* slash commands)
 - **Surface:** the chat "add" menu in the submission area (next to the code/plan selector),
@@ -198,18 +202,33 @@ Shipped as the first declarative point built on this recipe (see the "today" tab
   conversation is a separate, higher-value step needing the `conversation:write` capability
   (see #8) — keep it out of the cheap declarative slice.
 
-### 3. Command metadata + the `when` / UI-context primitive
+### 3. Command metadata + the `when` / UI-context primitive — `when` ✅ implemented
 - **Surface:** `src/components/features/command-menu/`, and — more importantly — every gated
   menu/nav surface above.
 - **Analog:** VS Code command `category`, `enablement`, `icon`, plus `when`-clause context keys.
-- **Shape:** enrich the `commands`/`menus` points with grouping, icons, and **`when`-style
-  visibility** evaluated against a small, whitelisted, read-only **UI-context** (backend kind,
-  agent state, email-verified, repo-connected, feature flags). The host already derives all of
-  these for built-ins (see finding #2), so this exposes existing facts, not new data.
-- **Trust:** declarative; **no new capability**.
-- **Promoted:** this is now a **prerequisite**, not optional polish — contributed menu/nav
-  items look broken without it, and it is the shared dependency of #2, #5, and future rail
-  items. Build the evaluator + UI-context once.
+- **Shape (the `when` half — shipped):** menu items take an optional **`when`** clause
+  evaluated against a small, whitelisted, read-only **UI-context** the host already derives for
+  built-ins (see finding #2), so it exposes existing facts, not new data:
+  - **Evaluator:** `src/extensions/when.ts` — a deliberately tiny grammar (a `&&`-conjunction
+    of `key`, `!key`, `key == value`, `key != value` terms; `true`/`false` literals coerce to
+    booleans; unknown keys are falsy). **Not** an expression language.
+  - **UI-context:** `src/extensions/ui-context.tsx` — `ExtensionUiContextProvider` derives the
+    whitelisted facts (`backend` cloud/local, `agentState`, `emailVerified`, `repoConnected`,
+    `flag.hide_llm_settings`, `flag.hide_users_page`) and provides them; `useUiContext()` reads
+    them (shared-empty default when no provider).
+  - **Filtering:** `useMenuItems(slot)` filters items by `evaluateWhen(item.when, context)`, so
+    a hidden item is simply never rendered — **no extension code runs** to hide it.
+  ```jsonc
+  "menus": {
+    "conversationTabs/context": [
+      { "command": "hello.say", "when": "backend == cloud && emailVerified" }
+    ]
+  }
+  ```
+- **Trust:** declarative; host-owned facts only, so **no new capability**.
+- **Still future (command metadata):** grouping/icons/`category` on `commands` and a `when`
+  on the Command-K menu itself. The shared `when` evaluator + UI-context are now built once and
+  reused by the menu/nav points (#2, #5) and future rail items.
 
 ### 4. Status-bar items
 - **Surface:** *none yet* - there is no status bar component today.

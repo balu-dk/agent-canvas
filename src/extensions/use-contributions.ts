@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   selectActivityBarItems,
   selectCommands,
@@ -6,6 +7,8 @@ import {
   useContributionRegistry,
 } from "./contribution-registry";
 import type { ActivityBarItem, CommandItem, MenuItem, ViewItem } from "./types";
+import { useUiContext } from "./ui-context";
+import { evaluateWhen } from "./when";
 
 /**
  * React hooks exposing the contribution registry to host UI. Each selects a single
@@ -25,10 +28,20 @@ export function useExtensionViews(): ViewItem[] {
 }
 
 /**
- * Menu items contributed into a single named menu slot (see `menu-slots.ts`). Returns
- * a stable reference between mutations so a host menu can render it without re-render
- * loops; an empty slot yields a shared empty array.
+ * Menu items contributed into a single named menu slot (see `menu-slots.ts`),
+ * filtered by each item's optional `when` clause against the host UI-context (see
+ * `ui-context.tsx`). Filtering reads host facts only — it runs no extension code, so
+ * a hidden item is simply never rendered.
+ *
+ * The result is memoised on the (stable) slot items and the UI-context, so a host
+ * menu renders it without re-render loops; an empty/unfiltered slot still resolves to
+ * a stable reference between renders.
  */
 export function useMenuItems(slot: string): MenuItem[] {
-  return useContributionRegistry(selectMenuItemsForSlot(slot));
+  const items = useContributionRegistry(selectMenuItemsForSlot(slot));
+  const context = useUiContext();
+  return useMemo(
+    () => items.filter((item) => evaluateWhen(item.when, context)),
+    [items, context],
+  );
 }

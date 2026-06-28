@@ -90,6 +90,12 @@ export interface MenuItem {
   title: string;
   /** Optional ordering group within the slot (lower groups sort first). */
   group?: string;
+  /**
+   * Optional visibility clause evaluated against the host UI-context (see `when.ts`).
+   * The host filters items by this before rendering; hiding one runs no extension
+   * code. Absent means always visible.
+   */
+  when?: string;
   /** Invoked when the item is selected. Wired by the loader/host. */
   run: () => void | Promise<void>;
 }

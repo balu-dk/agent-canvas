@@ -41,6 +41,12 @@ export interface MenuItemManifest {
   command: string;
   /** Optional ordering group within the slot (lower groups sort first). */
   group?: string;
+  /**
+   * Optional visibility clause evaluated against the host UI-context (see
+   * `when.ts`), e.g. `"backend == cloud"` or `"emailVerified && repoConnected"`.
+   * Hiding an item runs no extension code — it reads host facts only.
+   */
+  when?: string;
 }
 
 export interface ContributesManifest {
@@ -203,6 +209,10 @@ function validateContributes(
               obj.group === undefined
                 ? undefined
                 : v.requireString(obj.group, `${itemPath}.group`),
+            when:
+              obj.when === undefined
+                ? undefined
+                : v.requireString(obj.when, `${itemPath}.when`),
           };
         });
       }

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtensionMenuItems } from "#/components/features/extensions/extension-menu-items";
 import { contributionRegistry } from "#/extensions/contribution-registry";
 import { MENU_SLOTS } from "#/extensions/menu-slots";
+import { UiContextProvider } from "#/extensions/ui-context";
+import type { WhenContext } from "#/extensions/when";
 import type { MenuItem } from "#/extensions/types";
 
 const SLOT = MENU_SLOTS.conversationTabsContext;
@@ -57,6 +59,47 @@ describe("ExtensionMenuItems", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     expect(onAfterSelect).toHaveBeenCalledTimes(1);
+  });
+
+  const renderWithContext = (context: WhenContext) =>
+    render(
+      <UiContextProvider value={context}>
+        <ExtensionMenuItems slot={SLOT} />
+      </UiContextProvider>,
+    );
+
+  it("hides an item whose when clause fails against the UI-context", () => {
+    const run = vi.fn();
+    registerMenuItem({ when: "backend == cloud", run });
+    renderWithContext({ backend: "local" });
+
+    // Hidden: not in the DOM, no separator, and crucially the bound command
+    // (the only path into extension code) was never invoked by rendering.
+    expect(
+      screen.queryByTestId("extension-menu-item-acme.hello-hello.say"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("extension-menu-separator"),
+    ).not.toBeInTheDocument();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("shows an item whose when clause holds against the UI-context", () => {
+    registerMenuItem({ when: "backend == cloud" });
+    renderWithContext({ backend: "cloud" });
+
+    expect(
+      screen.getByTestId("extension-menu-item-acme.hello-hello.say"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an item with no when clause regardless of context", () => {
+    registerMenuItem();
+    renderWithContext({ backend: "local" });
+
+    expect(
+      screen.getByTestId("extension-menu-item-acme.hello-hello.say"),
+    ).toBeInTheDocument();
   });
 
   it("only renders items targeting the requested slot", () => {
