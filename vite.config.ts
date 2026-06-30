@@ -83,6 +83,18 @@ export default defineConfig(({ mode }) => {
     }
   })();
 
+  // Override for the CSP `frame-ancestors` directive and the matching
+  // X-Frame-Options header. Defaults to `'none'` (refuse all embedding).
+  // Hosted deployments that legitimately embed the dev server inside their
+  // own portal can set `VITE_FRAME_ANCESTORS="self"` or a specific origin.
+  const frameAncestors = process.env.VITE_FRAME_ANCESTORS?.trim() || "'none'";
+  const xFrameOptions =
+    frameAncestors === "'none'"
+      ? "DENY"
+      : frameAncestors === "'self'"
+        ? "SAMEORIGIN"
+        : null; // omitting the header is the most permissive option
+
   return {
     define: {
       // Empty string for library builds so consumers aren't bound to this
@@ -364,7 +376,10 @@ export default defineConfig(({ mode }) => {
       // when the meta tag is stripped (e.g. by a misbehaving proxy) and
       // lets us add `frame-ancestors`, which is ignored in meta tags.
       headers: {
-        "X-Frame-Options": "DENY",
+        // X-Frame-Options mirrors the CSP `frame-ancestors` value
+        // (see `frameAncestors` above). Default `DENY`; relax to
+        // `SAMEORIGIN` for hosted-in-iframe dev workflows.
+        ...(xFrameOptions ? { "X-Frame-Options": xFrameOptions } : {}),
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
@@ -388,9 +403,14 @@ export default defineConfig(({ mode }) => {
           backendOrigin
             ? `frame-src 'self' ${backendOrigin}`
             : "frame-src 'self'",
-          "frame-ancestors 'none'",
+          `frame-ancestors ${frameAncestors}`,
           "base-uri 'self'",
-          "form-action 'self'",
+          // form-action covers backend origins so legitimate cross-origin
+          // form posts (file uploads, OAuth returns) succeed even when the
+          // dev server and the agent-server are on different origins.
+          backendOrigin
+            ? `form-action 'self' ${backendOrigin}`
+            : "form-action 'self'",
           "object-src 'none'",
           "upgrade-insecure-requests",
         ].join("; "),

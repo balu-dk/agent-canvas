@@ -87,6 +87,11 @@ export function parseArgs(argv = process.argv.slice(2)) {
     authRequired: false,
     runtimeServicesInfo: null,
     lockToCloud: null,
+    // Override for the CSP `frame-ancestors` directive (and the matching
+    // X-Frame-Options header). Defaults to `'none'` (refuse all embedding).
+    // Hosted deployments that legitimately embed the canvas inside their
+    // own portal can set this to `'self'` or a specific origin.
+    frameAncestors: "'none'",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -128,6 +133,17 @@ export function parseArgs(argv = process.argv.slice(2)) {
       case "--lock-to-cloud":
         config.lockToCloud = argv[++i] || null;
         break;
+      case "--frame-ancestors": {
+        // CSP source-list value: `'none'` (default), `'self'`, or a
+        // specific origin like `https://portal.example.com`. Used to
+        // let hosted deployments embed the canvas inside their own UI.
+        const value = (argv[++i] ?? "").trim();
+        if (!value) {
+          throw new Error("--frame-ancestors requires a value");
+        }
+        config.frameAncestors = value;
+        break;
+      }
 
       case "--auth-required":
         config.authRequired = true;
@@ -435,7 +451,15 @@ function applySecurityHeaders(res, pathname, securityHeaders) {
     "Strict-Transport-Security",
     "max-age=31536000; includeSubDomains",
   );
-  res.setHeader("X-Frame-Options", "DENY");
+  // X-Frame-Options mirrors `frame-ancestors` from the CSP so the legacy
+  // header and the modern directive stay in sync. The set may contain
+  // `X-Frame-Options` (when the override resolves to DENY or SAMEORIGIN)
+  // or omit it entirely (when whitelisting a specific origin that has
+  // no clean legacy mapping). See `buildSecurityHeaders` in
+  // scripts/security-headers.mjs.
+  if (securityHeaders["X-Frame-Options"]) {
+    res.setHeader("X-Frame-Options", securityHeaders["X-Frame-Options"]);
+  }
 
   // Document-only headers: CSP / Permissions-Policy only fire on HTML
   // because they govern how the browser renders the document. Emitting
@@ -520,8 +544,13 @@ export function startStaticServer(config) {
   const staticMiddleware = createStaticMiddleware(dirAbs);
   // Compute CSP / Permissions-Policy once at startup. connect-src and
   // frame-src reflect every configured proxy target's origin so the
-  // browser can talk to each agent-server the launcher wired up.
-  const securityHeaders = buildSecurityHeaders(config.routes ?? []);
+  // browser can talk to each agent-server the launcher wired up. The
+  // `frameAncestors` override lets hosted deployments relax the strict
+  // default-deny stance when they need to embed the canvas inside their
+  // own portal.
+  const securityHeaders = buildSecurityHeaders(config.routes ?? [], {
+    frameAncestors: config.frameAncestors ?? "'none'",
+  });
 
   const uninstallDiagnostics = proxy.installDiagnostics();
 

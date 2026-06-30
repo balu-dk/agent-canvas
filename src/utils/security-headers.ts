@@ -83,6 +83,30 @@ export function buildConnectSrc(backends: ReadonlyArray<Backend>): string {
 }
 
 /**
+ * Build the `form-action` source list. Includes `'self'` and every registered
+ * backend origin so that legitimate form submissions (e.g. file uploads,
+ * password-manager relaunches, OAuth-style redirects that re-enter the app
+ * via `<form>`) are not blocked by the default-deny stance.
+ *
+ * For local-only deployments this is `'self'` only by default; for hosted
+ * deployments the backend typically lives on a different origin (a remote
+ * agent-server, the OpenHands cloud app, or a runtime sandbox under
+ * `*.prod-runtime.all-hands.dev`), and a hosted canvas must be able to
+ * POST back to those origins to drive the agent. CSP `form-action` does
+ * not affect `<a>` navigation, only HTML form submissions and the rare
+ * `window.location` trick — so widening it does not enable exfiltration
+ * via simple link clicks.
+ */
+export function buildFormActionSrc(backends: ReadonlyArray<Backend>): string {
+  const sources = new Set<string>(["'self'"]);
+  for (const backend of backends) {
+    const origin = backendHostToCspSource(backend.host);
+    if (origin) sources.add(origin);
+  }
+  return Array.from(sources).join(" ");
+}
+
+/**
  * Build the `frame-src` source list. Workspace artifacts are embedded as
  * `<iframe src>` against the conversation's static fileserver, which is the
  * active backend's origin. Restrict to backend origins only — we never
@@ -122,6 +146,34 @@ export interface BuildContentSecurityPolicyOptions {
    * Defaults to `false` for HTTP-header use.
    */
   forMetaTag?: boolean;
+  /**
+   * Override the `frame-ancestors` directive value. Defaults to `'none'`
+   * (refuse to be embedded by anyone). Set to `'self'` for hosted
+   * deployments that genuinely need to be embedded inside their own
+   * portal, or to a specific origin for third-party embedding.
+   *
+   * Has no effect when `forMetaTag` is `true` (the directive is ignored
+   * inside `<meta>` tags anyway).
+   */
+  frameAncestors?: string;
+}
+
+/**
+ * Compute the source-list expressions shared between
+ * `buildContentSecurityPolicy` and `buildSecurityHeaders`.
+ */
+function computeSourceLists(backends: ReadonlyArray<Backend>): {
+  connectSrc: string;
+  frameSrc: string;
+  formActionSrc: string;
+  imgSrc: string;
+} {
+  return {
+    connectSrc: buildConnectSrc(backends),
+    frameSrc: buildFrameSrc(backends),
+    formActionSrc: buildFormActionSrc(backends),
+    imgSrc: buildImgSrc(backends),
+  };
 }
 
 /**
@@ -137,21 +189,22 @@ export interface BuildContentSecurityPolicyOptions {
  * - `connect-src` covers all known backend origins plus telemetry + ws
  * - `frame-src` restricted to backend origins (workspace iframes)
  * - `frame-ancestors 'none'` so the UI cannot be embedded by other sites
- *   (the workspace artifacts can be embedded — that's the iframe *src*
- *   side; this is about who can embed *us*)
+ *   (overridable via `options.frameAncestors` — see SECURITY.md for why
+ *   some hosted deployments legitimately need to relax this)
  * - `base-uri 'self'` blocks `<base>` tag injection that would redirect
  *   relative URLs to an attacker-controlled origin
- * - `form-action 'self'` blocks exfiltration via injected forms
+ * - `form-action` covers self + every backend origin so legitimate
+ *   cross-origin form submissions (file uploads, OAuth returns, the
+ *   workspace password-manager relaunch flow) are not blocked
  * - `object-src 'none'` blocks `<object>` / `<embed>` plugins (Flash, Java)
  * - `upgrade-insecure-requests` upgrades any stray http: requests to https:
  */
 export function buildContentSecurityPolicy(
   options: BuildContentSecurityPolicyOptions,
 ): string {
-  const { backends, forMetaTag = false } = options;
-  const connectSrc = buildConnectSrc(backends);
-  const frameSrc = buildFrameSrc(backends);
-  const imgSrc = buildImgSrc(backends);
+  const { backends, forMetaTag = false, frameAncestors = "'none'" } = options;
+  const { connectSrc, frameSrc, formActionSrc, imgSrc } =
+    computeSourceLists(backends);
 
   const directives: string[] = [
     "default-src 'self'",
@@ -167,10 +220,12 @@ export function buildContentSecurityPolicy(
     `frame-src ${frameSrc}`,
     // Only emit frame-ancestors when this is going out as an HTTP header;
     // the directive is ignored inside <meta> tags, but emitting it costs
-    // nothing and keeps the two delivery paths in sync.
-    ...(forMetaTag ? [] : ["frame-ancestors 'none'"]),
+    // nothing and keeps the two delivery paths in sync. The value is
+    // configurable because some hosted deployments embed the canvas
+    // inside their own portal.
+    ...(forMetaTag ? [] : [`frame-ancestors ${frameAncestors}`]),
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action ${formActionSrc}`,
     "object-src 'none'",
     "upgrade-insecure-requests",
   ];
@@ -211,13 +266,31 @@ export function buildPermissionsPolicy(): string {
  */
 export function buildSecurityHeaders(
   backends: ReadonlyArray<Backend>,
+  options: Pick<BuildContentSecurityPolicyOptions, "frameAncestors"> = {},
 ): Record<string, string> {
+  const { frameAncestors = "'none'" } = options;
+  // `X-Frame-Options: DENY` matches `frame-ancestors 'none'` (the strict
+  // default). When the CSP is relaxed to allow some embeds (e.g.
+  // `frameAncestors = "'self'"` for same-origin hosting), we relax the
+  // legacy header to the same value to keep them in sync.
+  const xFrameOptions =
+    frameAncestors === "'none'"
+      ? "DENY"
+      : frameAncestors === "'self'"
+        ? "SAMEORIGIN"
+        : ""; // empty string tells the static-server to omit the header entirely
+
   return {
-    "Content-Security-Policy": buildContentSecurityPolicy({ backends }),
+    "Content-Security-Policy": buildContentSecurityPolicy({
+      backends,
+      frameAncestors,
+    }),
     "Permissions-Policy": buildPermissionsPolicy(),
-    // Defence-in-depth: refuse to be embedded by any site. The workspace
-    // artifacts embed *us* via <iframe src>; this is the opposite direction.
-    "X-Frame-Options": "DENY",
+    // Defence-in-depth: refuse to be embedded by any site by default. The
+    // workspace artifacts embed *us* via <iframe src>; this header governs
+    // who can embed *us*. Relaxed in lock-step with `frame-ancestors`
+    // above for hosted-deployments that need it.
+    ...(xFrameOptions ? { "X-Frame-Options": xFrameOptions } : {}),
     // Tell browsers the body of this page should not be sniffed for content;
     // we always emit proper Content-Type.
     "X-Content-Type-Options": "nosniff",

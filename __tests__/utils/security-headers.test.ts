@@ -4,6 +4,7 @@ import {
   backendHostToCspSource,
   buildConnectSrc,
   buildContentSecurityPolicy,
+  buildFormActionSrc,
   buildFrameSrc,
   buildImgSrc,
   buildPermissionsPolicy,
@@ -234,5 +235,78 @@ describe("buildSecurityHeaders", () => {
     expect(csp).toContain("http://localhost:18000");
     expect(csp).toContain("https://app.all-hands.dev");
     expect(csp).toContain("https://127.0.0.1:18100");
+  });
+});
+
+describe("form-action (hosted deployment support)", () => {
+  it("includes 'self' plus every registered backend", () => {
+    const sources = buildFormActionSrc([localBackend, cloudBackend]);
+    expect(sources).toContain("'self'");
+    expect(sources).toContain("http://localhost:18000");
+    expect(sources).toContain("https://app.all-hands.dev");
+    expect(sources).not.toContain("https://us.i.posthog.com");
+  });
+
+  it("falls back to 'self' when no backends are registered", () => {
+    expect(buildFormActionSrc([])).toBe("'self'");
+  });
+
+  it("drops malformed backend hosts", () => {
+    const malformed: Backend = {
+      id: "bad",
+      name: "Bad",
+      host: "not-a-url",
+      apiKey: "x",
+      kind: "local",
+    };
+    const sources = buildFormActionSrc([malformed]);
+    expect(sources).toBe("'self'");
+  });
+});
+
+describe("frame-ancestors (hosted embedding support)", () => {
+  it("defaults to 'frame-ancestors 'none'' for tight default-deny", () => {
+    const csp = buildContentSecurityPolicy({
+      backends: [localBackend],
+    });
+    expect(csp).toContain("frame-ancestors 'none'");
+  });
+
+  it("relaxes to 'frame-ancestors 'self'' when frameAncestors is set", () => {
+    const csp = buildContentSecurityPolicy({
+      backends: [localBackend],
+      frameAncestors: "'self'",
+    });
+    expect(csp).toContain("frame-ancestors 'self'");
+    expect(csp).not.toContain("frame-ancestors 'none'");
+  });
+
+  it("accepts a specific origin (hosted-deployment portal)", () => {
+    const csp = buildContentSecurityPolicy({
+      backends: [localBackend],
+      frameAncestors: "https://portal.example.com",
+    });
+    expect(csp).toContain("frame-ancestors https://portal.example.com");
+  });
+
+  it("synchronizes X-Frame-Options with the CSP frame-ancestors value", () => {
+    expect(
+      buildSecurityHeaders([localBackend])["X-Frame-Options"],
+    ).toBe("DENY");
+
+    expect(
+      buildSecurityHeaders([localBackend], {
+        frameAncestors: "'self'",
+      })["X-Frame-Options"],
+    ).toBe("SAMEORIGIN");
+
+    // For an arbitrary origin whitelist there is no clean legacy header
+    // mapping; the static-server / Vite dev path should omit it entirely
+    // so we don't undermine the CSP with a stricter legacy directive.
+    expect(
+      buildSecurityHeaders([localBackend], {
+        frameAncestors: "https://portal.example.com",
+      })["X-Frame-Options"],
+    ).toBeUndefined();
   });
 });

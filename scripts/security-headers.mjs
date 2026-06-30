@@ -43,9 +43,15 @@ export function targetToCspSource(target) {
  * `ws:` / `wss:` for WebSockets.
  *
  * @param {Record<string, string>} routesMap
+ * @param {object} [options]
+ * @param {string} [options.frameAncestors="'none'"] value for the
+ *   `frame-ancestors` directive. Use `"'self'"` for hosted deployments
+ *   that legitimately embed the canvas inside their own portal, or a
+ *   specific origin to whitelist.
  * @returns {string}
  */
-export function buildContentSecurityPolicy(routesMap) {
+export function buildContentSecurityPolicy(routesMap, options = {}) {
+  const { frameAncestors = "'none'" } = options;
   const backendOrigins = new Set(["'self'"]);
   for (const target of Object.values(routesMap ?? {})) {
     const origin = targetToCspSource(target);
@@ -70,6 +76,12 @@ export function buildContentSecurityPolicy(routesMap) {
   // avatars. Note `'self'` is already in `backendSources`.
   const imgSources = ["data:", "blob:", "https:", backendSources].join(" ");
 
+  // form-action also covers backend origins so legitimate cross-origin
+  // form submissions (file uploads, OAuth returns) are not blocked by
+  // the default-deny stance on hosted deployments where the canvas and
+  // the agent-server live on different origins.
+  const formActionSources = backendSources;
+
   return [
     "default-src 'self'",
     // 'unsafe-inline' is required: React Router emits inline replay scripts
@@ -82,9 +94,9 @@ export function buildContentSecurityPolicy(routesMap) {
     `img-src ${imgSources}`,
     `connect-src ${connectSources}`,
     `frame-src ${frameSources}`,
-    "frame-ancestors 'none'",
+    `frame-ancestors ${frameAncestors}`,
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action ${formActionSources}`,
     "object-src 'none'",
     "upgrade-insecure-requests",
   ].join("; ");
@@ -113,15 +125,30 @@ const PERMISSIONS_POLICY = [
  * Build the full set of security response headers for the static-server.
  *
  * @param {Record<string, string>} routesMap
+ * @param {object} [options] forwarded to {@link buildContentSecurityPolicy}
  * @returns {Record<string, string>}
  */
-export function buildSecurityHeaders(routesMap) {
-  return {
-    "Content-Security-Policy": buildContentSecurityPolicy(routesMap),
+export function buildSecurityHeaders(routesMap, options = {}) {
+  const { frameAncestors = "'none'" } = options;
+  // Keep X-Frame-Options in lock-step with frame-ancestors. The legacy
+  // header is not needed when neither directive forbids the embed, but
+  // we still want a tight default and an opt-out for hosted use cases.
+  const xFrameOptions =
+    frameAncestors === "'none'"
+      ? "DENY"
+      : frameAncestors === "'self'"
+        ? "SAMEORIGIN"
+        : "";
+
+  const headers = {
+    "Content-Security-Policy": buildContentSecurityPolicy(routesMap, options),
     "Permissions-Policy": PERMISSIONS_POLICY,
-    "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   };
+  if (xFrameOptions) {
+    headers["X-Frame-Options"] = xFrameOptions;
+  }
+  return headers;
 }

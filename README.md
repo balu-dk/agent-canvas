@@ -147,16 +147,21 @@ The Agent Server is often paired with an [Automation Server](https://github.com/
 
 ## Security
 
-agent-canvas is a **local-machine tool** that runs an agent-server (often
-`localhost:18000`) and a static frontend (often `localhost:3001`) on the
-same machine. The default deployment generates a random session API key
-that lives in the browser JS heap and is never persisted to disk; only
-public-mode deployments and user-added custom backends persist keys to
-`localStorage`.
+A full threat model — including the three deployment modes
+(local / private-network / public URL), the trust boundary for each,
+what we do about XSS, the shipped Content-Security-Policy, CSP overrides
+for self-hosters that embed the canvas in their own portal, and a
+hardening checklist — lives in **[docs/SECURITY.md](./docs/SECURITY.md)**.
 
-The full threat model — including what the keys can do, where they live,
-what we do about XSS, the shipped Content-Security-Policy, and a hardening
-checklist for self-hosters — lives in **[docs/SECURITY.md](./docs/SECURITY.md)**.
+The short version: agent-canvas is **local-first** but supports
+self-hosting behind nginx on a public URL (`npx @openhands/agent-canvas
+--public`). The default mode puts the session API key in the JS heap and
+never persists it to disk; only `--public` and user-added custom
+backends persist keys to `localStorage`. The shipped CSP, HSTS,
+Referrer-Policy, and X-Content-Type-Options are designed so the canvas
+is safe to expose at a public URL out of the box, with explicit
+escape hatches documented in SECURITY.md for self-hosters that need to
+embed the canvas inside their own portal.
 
 If you find a vulnerability, please follow our
 [security policy][security-md] rather than filing a public issue.

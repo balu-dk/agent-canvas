@@ -13,26 +13,40 @@ on GitHub rather than filing a public issue.
 
 ## Trust boundary
 
-agent-canvas is a **local-machine tool**. The default deployment runs:
+agent-canvas supports **three distinct deployment modes**, each with a
+different trust boundary and a different threat model. Read the row that
+matches how you deploy it before deciding what to harden.
 
-- the agent-server (`openhands-agent-server`) on `localhost:18000`
-- the static frontend on `localhost:3001` (Vite dev) or `localhost:8000`
-  (Docker all-in-one / published binary)
-- an automation backend on `localhost:18001`
+| Mode | Browser reaches canvas via | Browser reaches agent-server via | Trust boundary | What the API keys can reach |
+| --- | --- | --- | --- | --- |
+| **A. Local single-user** (default `npm run dev`, `npx @openhands/agent-canvas`) | `http://localhost:3001` (Vite) or `http://localhost:8000` (Docker all-in-one) | Loopback to `127.0.0.1:18000` | Physical access to the box **and** the user account running the browser | One agent-server on your machine, with your local privileges |
+| **B. Self-hosted on a private network** (LAN / VPN only — `npx @openhands/agent-canvas --public` behind a firewall) | `https://canvas.lan.example.com` | Same host through nginx → ingress (`127.0.0.1:8000`) | Same as A, plus your LAN / VPN ACL | Same as A |
+| **C. Self-hosted on a public URL** (`--public` reachable from the internet) | `https://canvas.example.com` | Through nginx → ingress (`127.0.0.1:8000`), optionally through TLS to a remote agent-server | **Anyone on the internet** can hit the canvas URL | Whatever your agent-server can reach on your behalf — still your host, but reachable from a much larger attacker pool |
 
-The browser is assumed to be running on the same machine as the agent-server,
-operated by the same human. There is no multi-tenant SaaS layer between
-them. The API keys the frontend stores grant access to **one** agent-server
-on **your** machine, with the **same privileges you have locally**.
+The default options for `localStorage` API keys, the CSP shipped in this
+repo, and the recommended `--public` setup are all designed around
+**mode A**. Modes B and C inherit the same defaults but add three new
+concerns:
 
-This is the same trust model as the AWS CLI, kubectl, Docker, or any SSH
-client: the credentials are machine-local, not user-account-bound. Treat
-them accordingly.
+1. **Anyone on the network can be a passive observer.** TLS termination
+   is no longer optional — without it, the session API key sits in the
+   JS heap in cleartext on a network segment you don't control.
+2. **Anyone with the URL can attempt XSS.** The canvas is reachable
+   from attack surfaces (browser extensions, npm transitive deps, hostile
+   iframes in ads) the local-only deployment cannot be reached from.
+   CSP / Trusted Types become load-bearing rather than defense-in-depth.
+3. **`localStorage` becomes a cross-session problem** if the box is shared
+   (a kiosk, a CI runner). The host's user accounts are still the trust
+   root — no `localStorage` hardening changes that.
+
+The CSP shipped in this repo is safe by default for all three modes.
+For mode C deployments that genuinely need to embed the canvas inside
+their own portal, see [Hosted-deployment CSP overrides](#hosted-deployment-csp-overrides).
 
 ## What the keys can do
 
-A valid session API key against the local agent-server grants the holder
-the ability to:
+A valid session API key against an agent-server grants the holder the
+ability to:
 
 - start / pause / resume conversations
 - run shell commands inside the agent-server sandbox
@@ -41,10 +55,15 @@ the ability to:
 - upload / download workspace files
 - read conversation history and any data the agent has touched
 
-It does **not** grant any access beyond the agent-server itself (no other
-user's data, no other host's resources). Compromised keys are bounded by
-"someone can drive this agent-server on your behalf until you revoke
-the key."
+In **modes A and B** the keys are bounded by "someone can drive this
+agent-server on your behalf until you revoke the key."
+
+In **mode C** (public-facing canvas), the keys also grant the holder
+the ability to drive any *other* agent-server the canvas is configured
+to talk to. If the user has registered the OpenHands Cloud
+(`https://app.all-hands.dev`) as a backend, a leaked session key is a
+leaked Cloud session. Audit `ManageBackendsModal` for whichever backends
+the canvas exposes before exposing mode C to the internet.
 
 ## How keys reach the browser
 
@@ -82,16 +101,21 @@ to `localStorage["openhands-backends"]`.
 **`localStorage` is the same threat class as `~/.aws/credentials`,
 `~/.kube/config`, or `~/.ssh/id_rsa`.** On the practical threat-axis:
 
-| Attacker | Can read `localStorage`? | Practical impact |
-| --- | --- | --- |
-| Compromise of the user account on the machine (file read) | Yes | Same as reading any other config file |
-| Malicious browser extension | Yes | Same — extensions have full DOM access anyway |
-| XSS in the page | Reads `localStorage` *and* can use the key in-flight | In-flight abuse does not need `localStorage`; `localStorage` only matters for off-machine reuse |
-| Disk forensics | Yes | Same as any plaintext credential on disk |
-| Network observer | No | Key is never sent in cleartext on the wire |
+| Attacker | Mode | Can read `localStorage`? | Practical impact |
+| --- | --- | --- | --- |
+| Compromise of the user account on the machine (file read) | A, B, C | Yes | Same as reading any other config file |
+| Local LAN neighbour (sniffing) | A: doesn't apply; B: behind TLS, otherwise yes; C: same | Behind TLS: no | Key is never sent in cleartext on the wire when TLS is enforced |
+| Malicious browser extension | A, B, C | Yes | Same — extensions have full DOM access anyway |
+| XSS in the page | A: requires the user loads a malicious npm dep locally; B: requires the same plus a way in; C: **anyone on the internet** | Reads `localStorage` *and* can use the key in-flight | In-flight abuse does not need `localStorage`; `localStorage` only matters for off-machine reuse |
+| Disk forensics | A, B, C | Yes | Same as any plaintext credential on disk |
+| Passive network observer on the same LAN | A: doesn't apply; B and C behind TLS | No (with TLS), yes (without) | The HSTS + Strict-Transport-Security headers we ship (modes B, C) are the mitigation |
 
-For a thorough answer to "how bad is `localStorage`?", see the
-[Security FAQ](#faq) below.
+The honest summary: **`localStorage` is safe to the same degree as the
+other credential files on your machine**. None of the alternatives
+(`sessionStorage`, IndexedDB, cookies, server-side session binding)
+meaningfully narrow the threat model; the FAQ below details why.
+For mode C deployments the *real* mitigations are TLS termination +
+CSP + Trusted Types + supply-chain hygiene, not key-storage plumbing.
 
 ## XSS is the real attack surface
 
@@ -165,9 +189,9 @@ tracked below.
 | `img-src` | `'self' data: blob: https:` + every backend origin | Inline previews, avatar URLs, workspace `<img>` embeds |
 | `connect-src` | `'self'` + every backend origin + PostHog + `z.openhands.dev` + `ws:` / `wss:` | Backend WebSocket / REST calls, telemetry |
 | `frame-src` | `'self'` + every backend origin | Workspace artifacts embedded as `<iframe>` |
-| `frame-ancestors` | `'none'` | Don't let other sites embed us |
+| `frame-ancestors` | `'none'` (configurable — see [Hosted-deployment overrides](#hosted-deployment-csp-overrides)) | Don't let other sites embed us by default |
 | `base-uri` | `'self'` | Prevent `<base>` tag injection |
-| `form-action` | `'self'` | Prevent exfiltration via injected forms |
+| `form-action` | `'self'` + every backend origin | Allow legitimate cross-origin form posts (file uploads, OAuth returns) on hosted deployments |
 | `object-src` | `'none'` | No Flash / Java / `<embed>` |
 | `upgrade-insecure-requests` | (no value) | Upgrade any stray `http:` to `https:` |
 
@@ -188,20 +212,108 @@ hostile iframe embeds. WebAuthn (`publickey-credentials-get=(self)`) is
 explicitly allowed for the same origin so a future passkey login flow
 would not need a policy change.
 
+## Hosted-deployment CSP overrides
+
+Two directives have configurable values for self-hosted (mode B / C)
+deployments that legitimately want to relax the strict default-deny
+stance. Everything else stays the same.
+
+### `frame-ancestors` and `X-Frame-Options`
+
+Default: `frame-ancestors 'none'` + `X-Frame-Options: DENY` — refuse all
+embedding by third parties. This is the right choice for the standalone
+canvas at `canvas.example.com/` because the workspace artifacts embed
+*us* via `<iframe src>` and there is no legitimate reason for the canvas
+itself to be embedded.
+
+Hosted deployments where the canvas is genuinely rendered as a child
+`<iframe>` of a separate portal (e.g. a SaaS dashboard or a corporate
+launcher) can opt in to one of:
+
+| Value | CSP `frame-ancestors` | `X-Frame-Options` |
+| --- | --- | --- |
+| `'self'` | `'self'` | `SAMEORIGIN` |
+| `https://portal.example.com` | `https://portal.example.com` | _omitted_ (no clean legacy mapping) |
+
+Static server:
+
+```bash
+# Same-origin embedding (canvas hosted as a child of portal.example.com):
+npx @openhands/agent-canvas --public --frame-ancestors "'self'"
+
+# Embedding inside a specific portal at a different origin:
+npx @openhands/agent-canvas --public \
+  --frame-ancestors "https://portal.example.com"
+```
+
+Vite dev server:
+
+```bash
+VITE_FRAME_ANCESTORS="'self'" npm run dev
+```
+
+These are *opt-in* and off by default. The standalone canvas at the
+default `npx @openhands/agent-canvas --public` URL stays un-embeddable,
+which is the conservative choice for users who haven't thought about
+it.
+
+### `form-action` (no override needed)
+
+Unlike `frame-ancestors`, `form-action` already includes every registered
+backend's origin. A hosted canvas pointing at `https://app.all-hands.dev`
+or a remote agent-server will allow cross-origin `<form>` submissions to
+that backend without configuration — including file uploads, password-
+manager relaunches, and OAuth-style return flows. CSP `form-action` does
+not affect `<a>` navigation, so this widening does not enable exfiltration
+via simple link clicks.
+
 ## Sharing agent-canvas across users
 
-The default deployment is single-user. If you must share the host with
-other users (a lab machine, a shared dev VM, a CI runner):
+The default deployment (mode A) is single-user. If you must share the
+host with other users, or expose the canvas to a network, the failure
+modes multiply fast and the recommendations split by mode:
 
-- **Use `--public` and per-user API keys.** The local agent-server
-  already supports multiple `OH_SESSION_API_KEYS_*` env vars. Configure
-  one key per user and rotate on offboarding.
-- **Never run on a multi-user machine without TLS termination in front.**
-  Without HTTPS the session key is observable to anyone on the same
-  network segment during the brief window it lives in the browser.
+### Mode B — private network (LAN / VPN)
+
+- **Use `--public` and per-user API keys.** The agent-server supports
+  multiple `OH_SESSION_API_KEYS_*` env vars. Configure one key per user
+  and rotate on offboarding.
+- **TLS termination in front is mandatory.** Without HTTPS the session
+  key sits in the JS heap in cleartext on a network segment others can
+  sniff.
 - **Run agent-server in a container per user** if you need filesystem
   isolation. The Docker all-in-one image makes this easy:
   `docker run --user <uid>:<gid> ...`.
+- **CSP / Trusted Types become a deliberate hardening goal**, not just
+  defense-in-depth — see [Planned hardening](#planned-hardening).
+
+### Mode C — public URL
+
+Everything in mode B applies, plus:
+
+- **Audit which backends the canvas exposes.** A leaked session key
+  against an OpenHands Cloud backend is a leaked Cloud session. If the
+  hosted canvas is provisioned with default backends (Local + Bundled),
+  be aware that new browser sessions get prompted to add a custom
+  backend if a user logs in with `--auth-required`. Consider stripping
+  the "Add backend" CTA when shipping the canvas publicly with a fixed
+  set of trusted backends.
+- **Set Trusted Types enforcement** before going public. The current
+  `'unsafe-inline'` requirement on `script-src` is acceptable for
+  internal use; public exposure should tighten it. Tracked under
+  [Planned hardening](#planned-hardening).
+- **Set up CSP report-uri** so you can see real XSS attempts against
+  the live deployment. Otherwise they fail silently in the browser
+  console.
+- **Rotate the `OH_SECRET_KEY` and any per-user session keys on a
+  cadence.** Even with TLS + CSP, the threat model includes
+  long-tail exposure via stale browser caches. Re-issue credentials
+  quarterly at minimum.
+- **Consider `Referrer-Policy: no-referrer`** instead of the default
+  `strict-origin-when-cross-origin` if you don't want search engines
+  to pick up the canvas URL from outbound links to docs / GitHub.
+  This is a tradeoff against SEO of outbound links; the default
+  `strict-origin-when-cross-origin` is safe for almost everyone.
 
 ## Hardening checklist for self-hosters
 
@@ -280,11 +392,16 @@ and tied to a single conversation. See
 
 ## Planned hardening
 
-Tracked for future PRs:
+Tracked for future PRs, roughly in priority order for mode-C
+deployments:
 
 - [ ] **Nonce-based `script-src`.** Requires React Router to support
       nonce replay AND the static-server to generate a per-request nonce.
       Would let us drop `'unsafe-inline'` and add `'strict-dynamic'`.
+      **Required before going public**: the current policy relies on
+      inline `<script>` for React Router's replay and for the
+      static-server's `__AGENT_CANVAS_*` runtime injection, which is
+      acceptable for internal use but not for hostile traffic.
 - [ ] **Trusted Types enforcement.**
       `require-trusted-types-for 'script'` + a tiny policy that wraps
       every existing `dangerouslySetInnerHTML` / `new Function` call site.
@@ -293,13 +410,26 @@ Tracked for future PRs:
       react-syntax-highlighter will need to be audited.
 - [ ] **CSP report-uri / report-to.** Stand up an endpoint (or a public
       report-only service) that aggregates CSP violation reports so we
-      can detect XSS attempts in the wild.
+      can detect XSS attempts in the wild. **Required before going
+      public**: without it, mode-C XSS attempts fail silently in the
+      browser console and we never see them.
 - [ ] **Subresource Integrity for vendor chunks.** Currently we trust
       the npm supply chain end-to-end. SRI on the hashed chunk filenames
       Vite emits would catch a CDN compromise.
 - [ ] **`Vary: Cookie` on the agent-server.** If the deployment ever
       serves through a CDN, the backend responses need to vary by
       session-cookie so users don't see each other's cached responses.
+- [ ] **Cookie-rotation flow for `OPENHANDS_AGENT_SERVER_API_KEY`.**
+      A self-hosted-public canvas would benefit from being able to
+      rotate the session key without forcing every browser to re-enter
+      it. Not currently scoped — `localStorage` rotation today is
+      manual.
+- [ ] **Per-backend CSP scoping.** Right now the `connect-src` /
+      `frame-src` / `form-action` allowlists include *every* registered
+      backend's origin. For mode-C deployments with a fixed set of
+      trusted backends it would be tighter to ship a build-time
+      `VITE_ALLOWED_BACKEND_HOSTS` allowlist and reject the rest.
+      Tracked as a follow-up if/when the demand materializes.
 
 ## Reporting vulnerabilities
 
