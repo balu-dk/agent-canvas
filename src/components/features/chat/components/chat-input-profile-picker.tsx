@@ -36,7 +36,7 @@ export function ChatInputProfileMenuContent({
   settingsIconClassName,
 }: ChatInputProfileMenuContentProps) {
   const { t } = useTranslation("openhands");
-  const { profiles, currentProfileId, isInConversation, selectProfile } =
+  const { profiles, currentProfileId, selectProfile } =
     useChatInputProfileState();
 
   const handleSelect = (profile: (typeof profiles)[number]) => {
@@ -93,13 +93,6 @@ export function ChatInputProfileMenuContent({
               </ContextMenuListItem>
             );
           })}
-          {isInConversation && (
-            <li role="presentation" className="px-2 pt-0.5 pb-1">
-              <Typography.Text className="text-[11px] text-[var(--oh-text-dim)] leading-4">
-                {t(I18nKey.CHAT$START_NEW_WITH_PROFILE_HINT)}
-              </Typography.Text>
-            </li>
-          )}
         </>
       )}
       {profiles.length > 0 && <Divider inset={dividerInset} />}

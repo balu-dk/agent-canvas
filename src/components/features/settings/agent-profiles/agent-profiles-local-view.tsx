@@ -13,6 +13,7 @@ import AgentProfilesService, {
   type AgentProfileSaveInput,
 } from "#/api/agent-profiles-service/agent-profiles-service.api";
 import { useSaveAgentProfile } from "#/hooks/mutation/use-save-agent-profile";
+import { useRenameAgentProfile } from "#/hooks/mutation/use-rename-agent-profile";
 import { useAgentProfiles } from "#/hooks/query/use-agent-profiles";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
 import {
@@ -64,6 +65,7 @@ export function AgentProfilesLocalView() {
   const { t } = useTranslation("openhands");
   const { setHideSectionHeader } = useSettingsSectionHeader();
   const saveProfile = useSaveAgentProfile();
+  const renameProfile = useRenameAgentProfile();
   const { data: profilesData } = useAgentProfiles();
   const { data: llmProfilesData } = useLlmProfiles();
 
@@ -188,7 +190,10 @@ export function AgentProfilesLocalView() {
       // Rename first (preserves the profile's stable id / active pointer);
       // saving to a new name would otherwise mint a fresh profile.
       if (isRename) {
-        await AgentProfilesService.renameProfile(originalName, trimmedName);
+        await renameProfile.mutateAsync({
+          name: originalName,
+          newName: trimmedName,
+        });
       }
 
       await saveProfile.mutateAsync({ name: trimmedName, profile: input });
@@ -213,6 +218,7 @@ export function AgentProfilesLocalView() {
     viewMode,
     editingProfile,
     saveProfile,
+    renameProfile,
     t,
     handleBackToList,
   ]);

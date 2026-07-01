@@ -41,6 +41,11 @@ vi.mock("#/hooks/mutation/use-save-agent-profile", () => ({
   useSaveAgentProfile: () => ({ mutateAsync: saveMutate }),
 }));
 
+const renameMutate = vi.fn().mockResolvedValue({ name: "x", message: "ok" });
+vi.mock("#/hooks/mutation/use-rename-agent-profile", () => ({
+  useRenameAgentProfile: () => ({ mutateAsync: renameMutate }),
+}));
+
 const agentProfilesData = { profiles: [], active_agent_profile_id: null };
 vi.mock("#/hooks/query/use-agent-profiles", () => ({
   useAgentProfiles: () => ({ data: agentProfilesData }),

@@ -3,28 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderWithProviders } from "test-utils";
 
 const useAgentProfilesMock = vi.fn();
-const useActiveConversationMock = vi.fn();
-const useOptionalConversationIdMock = vi.fn();
-const createConversationMutate = vi.fn();
 const activateProfileMutate = vi.fn();
 
 vi.mock("#/hooks/query/use-agent-profiles", () => ({
   useAgentProfiles: () => useAgentProfilesMock(),
-}));
-
-vi.mock("#/hooks/query/use-active-conversation", () => ({
-  useActiveConversation: () => useActiveConversationMock(),
-}));
-
-vi.mock("#/hooks/use-conversation-id", () => ({
-  useOptionalConversationId: () => useOptionalConversationIdMock(),
-}));
-
-vi.mock("#/hooks/mutation/use-create-conversation", () => ({
-  useCreateConversation: () => ({
-    mutate: createConversationMutate,
-    isPending: false,
-  }),
 }));
 
 vi.mock("#/hooks/mutation/use-activate-agent-profile", () => ({
@@ -34,7 +16,6 @@ vi.mock("#/hooks/mutation/use-activate-agent-profile", () => ({
   }),
 }));
 
-// eslint-disable-next-line import/first
 import { ChatInputProfilePicker } from "#/components/features/chat/components/chat-input-profile-picker";
 
 const PROFILES = [
@@ -42,21 +23,16 @@ const PROFILES = [
   { id: "id-codex", name: "Codex", agent_kind: "acp" },
 ];
 
+// The picker is home-only (a running conversation shows the LLM-profile / model
+// picker instead), so selecting a profile activates it as the launch default.
 describe("ChatInputProfilePicker", () => {
   beforeEach(() => {
     useAgentProfilesMock.mockReset();
-    useActiveConversationMock.mockReset();
-    useOptionalConversationIdMock.mockReset();
-    createConversationMutate.mockReset();
     activateProfileMutate.mockReset();
 
     useAgentProfilesMock.mockReturnValue({
       data: { profiles: PROFILES, active_agent_profile_id: "id-default" },
       isLoading: false,
-    });
-    useActiveConversationMock.mockReturnValue({ data: undefined });
-    useOptionalConversationIdMock.mockReturnValue({
-      conversationId: undefined,
     });
   });
 
@@ -70,43 +46,14 @@ describe("ChatInputProfilePicker", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("labels the button with the launched profile inside a conversation", () => {
-    useOptionalConversationIdMock.mockReturnValue({ conversationId: "c1" });
-    useActiveConversationMock.mockReturnValue({
-      data: { launched_profile: { profile_id: "id-codex", revision: 1 } },
-    });
-
+  it("labels the button with the active profile", () => {
     renderWithProviders(<ChatInputProfilePicker />);
-
     expect(screen.getByTestId("chat-input-agent-profile")).toHaveTextContent(
-      "Codex",
+      "Default",
     );
   });
 
-  it("starts a new conversation with the picked profile inside a conversation", () => {
-    useOptionalConversationIdMock.mockReturnValue({ conversationId: "c1" });
-    useActiveConversationMock.mockReturnValue({
-      data: { launched_profile: { profile_id: "id-default", revision: 1 } },
-    });
-
-    renderWithProviders(<ChatInputProfilePicker />);
-    fireEvent.click(screen.getByTestId("chat-input-agent-profile"));
-    fireEvent.click(
-      screen.getByTestId("chat-input-agent-profile-option-Codex"),
-    );
-
-    expect(createConversationMutate).toHaveBeenCalledTimes(1);
-    expect(createConversationMutate.mock.calls[0][0]).toEqual({
-      agentProfileId: "id-codex",
-    });
-    expect(activateProfileMutate).not.toHaveBeenCalled();
-  });
-
-  it("activates the picked profile on the home page (no conversation)", () => {
-    useOptionalConversationIdMock.mockReturnValue({
-      conversationId: undefined,
-    });
-
+  it("activates the picked profile", () => {
     renderWithProviders(<ChatInputProfilePicker />);
     fireEvent.click(screen.getByTestId("chat-input-agent-profile"));
     fireEvent.click(
@@ -114,22 +61,15 @@ describe("ChatInputProfilePicker", () => {
     );
 
     expect(activateProfileMutate).toHaveBeenCalledWith("id-codex");
-    expect(createConversationMutate).not.toHaveBeenCalled();
   });
 
-  it("does not switch when the current profile is re-selected", () => {
-    useOptionalConversationIdMock.mockReturnValue({ conversationId: "c1" });
-    useActiveConversationMock.mockReturnValue({
-      data: { launched_profile: { profile_id: "id-default", revision: 1 } },
-    });
-
+  it("does not activate when the active profile is re-selected", () => {
     renderWithProviders(<ChatInputProfilePicker />);
     fireEvent.click(screen.getByTestId("chat-input-agent-profile"));
     fireEvent.click(
       screen.getByTestId("chat-input-agent-profile-option-Default"),
     );
 
-    expect(createConversationMutate).not.toHaveBeenCalled();
     expect(activateProfileMutate).not.toHaveBeenCalled();
   });
 
