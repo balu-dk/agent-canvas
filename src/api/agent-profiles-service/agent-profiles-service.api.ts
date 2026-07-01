@@ -4,8 +4,10 @@
  * as ProfilesService / SettingsService).
  *
  * Backs the Settings → Agent profiles library + reused agent editor. The
- * `/api/agent-profiles` endpoints shipped in agent-server v1.29.0 and exist
- * only on local backends (cloud has no such surface yet, epic #3730).
+ * `AgentProfilesClient` ships in ts-client (pinned 1.28.0 here); the
+ * `/api/agent-profiles` server endpoints it targets shipped in agent-server
+ * v1.29.0 and exist only on local backends (cloud has no such surface yet,
+ * epic #3730).
  */
 import { AgentProfilesClient } from "@openhands/typescript-client/clients";
 import type {

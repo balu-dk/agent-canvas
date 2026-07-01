@@ -108,6 +108,71 @@ export type AgentProfileFieldsDraft =
       acp_args: string[] | null;
     };
 
+/** Live form state the pure {@link buildAgentProfileFields} builder reads. */
+export interface AgentProfileFieldsInput {
+  isAcp: boolean;
+  /** Detected ACP preset: a provider key or the ``custom`` sentinel. */
+  selectedPreset: string;
+  /** True when the command exactly matches the selected provider's default. */
+  isDefaultProviderCommand: boolean;
+  commandTokens: string[];
+  acpModel: string;
+  subAgentsEnabled: boolean;
+  toolConcurrencyField?: SettingsFieldSchema;
+  toolConcurrency: string | boolean;
+}
+
+/**
+ * Translate the live Agent-settings form state into the variant-specific
+ * AgentProfile fields. Pure (no React), so it can be unit-tested directly.
+ *
+ * ACP: a built-in provider on its default command stores **no** explicit
+ * command (``acp_command: null`` — the profile resolver falls back to the
+ * provider default); a customized or ``custom`` command is stored verbatim as a
+ * shell string. OpenHands: reuses the schema-driven ``tool_concurrency_limit``
+ * coercion, which **throws** on invalid input (callers catch at save time).
+ */
+export function buildAgentProfileFields(
+  input: AgentProfileFieldsInput,
+): AgentProfileFieldsDraft {
+  const {
+    isAcp,
+    selectedPreset,
+    isDefaultProviderCommand,
+    commandTokens,
+    acpModel,
+    subAgentsEnabled,
+    toolConcurrencyField,
+    toolConcurrency,
+  } = input;
+  if (isAcp) {
+    const isBuiltinDefault =
+      isDefaultProviderCommand && selectedPreset !== ACP_CUSTOM_PRESET_KEY;
+    return {
+      agent_kind: "acp",
+      acp_server: selectedPreset,
+      acp_model: acpModel.trim() || null,
+      acp_command: isBuiltinDefault
+        ? null
+        : formatCommand(commandTokens) || null,
+      acp_args: null,
+    };
+  }
+  const fields: Extract<AgentProfileFieldsDraft, { agent_kind: "openhands" }> =
+    {
+      agent_kind: "openhands",
+      enable_sub_agents: subAgentsEnabled,
+    };
+  if (toolConcurrencyField) {
+    // Reuse the schema-driven coercion/validation; throws on bad input.
+    const coerced = coerceFieldValue(toolConcurrencyField, toolConcurrency);
+    if (coerced != null) {
+      fields.tool_concurrency_limit = Number(coerced);
+    }
+  }
+  return fields;
+}
+
 /**
  * Handle the embedded form exposes to its parent (the Agent-profile editor) so
  * it can read the current state and persist it as an AgentProfile.
@@ -349,40 +414,20 @@ function AgentSettingsScreen({
     COMMAND_PLACEHOLDER_FALLBACK;
 
   // Assign the embedded control's field builder from the live render state.
-  // Built-in providers on their default command store no explicit command
-  // (the profile resolver falls back to the provider default); a customized or
-  // ``custom`` command is stored verbatim as a shell string. Throws only when
+  // The mapping itself lives in the pure `buildAgentProfileFields` (unit-
+  // tested); this closure just snapshots the current state. Throws only when
   // called (at save time), never during render.
-  buildFieldsRef.current = (): AgentProfileFieldsDraft => {
-    if (isAcp) {
-      const isBuiltinDefault =
-        isDefaultProviderCommand && selectedPreset !== ACP_CUSTOM_PRESET_KEY;
-      return {
-        agent_kind: "acp",
-        acp_server: selectedPreset,
-        acp_model: acpModel.trim() || null,
-        acp_command: isBuiltinDefault
-          ? null
-          : formatCommand(commandTokens) || null,
-        acp_args: null,
-      };
-    }
-    const fields: Extract<
-      AgentProfileFieldsDraft,
-      { agent_kind: "openhands" }
-    > = {
-      agent_kind: "openhands",
-      enable_sub_agents: subAgentsEnabled,
-    };
-    if (toolConcurrencyField) {
-      // Reuse the schema-driven coercion/validation; throws on bad input.
-      const coerced = coerceFieldValue(toolConcurrencyField, toolConcurrency);
-      if (coerced != null) {
-        fields.tool_concurrency_limit = Number(coerced);
-      }
-    }
-    return fields;
-  };
+  buildFieldsRef.current = (): AgentProfileFieldsDraft =>
+    buildAgentProfileFields({
+      isAcp,
+      selectedPreset,
+      isDefaultProviderCommand,
+      commandTokens,
+      acpModel,
+      subAgentsEnabled,
+      toolConcurrencyField,
+      toolConcurrency,
+    });
 
   // Dirty tracking: for OpenHands path, also check sub-agents toggle and the
   // parallel-tool-calls input.
