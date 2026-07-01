@@ -6,25 +6,31 @@
  *
  *   source string ──parse──▶ ExtensionSourceRef ──resolve──▶ ArtifactDescriptor ──acquire──▶ BundleSource ──▶ loadExtension
  *
- * `npm:`/`gh:` resolve a version via jsDelivr and point at a pinned CDN directory;
- * `url:` passes through unchanged. A future first-party registry (`registry:`) is just
- * another branch here that returns the same descriptor shape (likely `format: "zip"`
- * with an `integrity` hash) — the acquire/load stages do not change.
+ * `npm:` resolves via jsDelivr; `gh:` resolves via GitHub API (for branch/tag/SHA support
+ * including slashed branch names) then uses jsDelivr CDN for serving; `url:` passes through
+ * unchanged. A future first-party registry (`registry:`) is just another branch here that
+ * returns the same descriptor shape (likely `format: "zip"` with an `integrity` hash) —
+ * the acquire/load stages do not change.
  */
 
 import { createHttpBundleSource } from "../dev-bundle-source";
 import type { BundleSource } from "../loader";
+import { resolveGitHubRef, type GitHubResolverOptions } from "./github-api";
 import {
   formatSourceRef,
   parseSourceRef,
   type ExtensionSourceRef,
 } from "./ref";
-import {
-  githubBaseUrl,
-  npmBaseUrl,
-  resolveGithubVersion,
-  resolveNpmVersion,
-} from "./jsdelivr";
+import { githubBaseUrl, npmBaseUrl, resolveNpmVersion } from "./jsdelivr";
+
+/** Read GitHub token from environment (browser-side via Vite). */
+export function getGitHubToken(): string | undefined {
+  // Vite replaces import.meta.env at build time; this is undefined in Node tests
+  // unless explicitly provided.
+  return typeof import.meta?.env !== "undefined"
+    ? import.meta.env.VITE_GITHUB_TOKEN
+    : undefined;
+}
 
 export interface ArtifactDescriptor {
   /** Canonical source ref string (persisted for re-install, updates, and display). */
@@ -43,11 +49,26 @@ export interface ArtifactDescriptor {
 
 type FetchLike = typeof fetch;
 
+export interface ResolveOptions {
+  /** Custom fetch implementation (for testing). */
+  fetch?: FetchLike;
+  /** GitHub token for private repos or higher rate limits. */
+  githubToken?: string;
+}
+
 /** Resolve a parsed ref to an immutable artifact descriptor. */
 export async function resolveSourceRef(
   ref: ExtensionSourceRef,
-  fetchImpl: FetchLike = fetch,
+  fetchOrOptions?: FetchLike | ResolveOptions,
 ): Promise<ArtifactDescriptor> {
+  // Normalize options for backward compatibility with (ref, fetch) signature
+  const options: ResolveOptions =
+    typeof fetchOrOptions === "function"
+      ? { fetch: fetchOrOptions }
+      : (fetchOrOptions ?? {});
+  const fetchImpl = options.fetch ?? fetch;
+  const githubToken = options.githubToken ?? getGitHubToken();
+
   const sourceRef = formatSourceRef(ref);
   switch (ref.kind) {
     case "npm": {
@@ -61,12 +82,19 @@ export async function resolveSourceRef(
       };
     }
     case "gh": {
-      const version = await resolveGithubVersion(
+      // Use GitHub API for resolution (handles branches with slashes, SHAs, tags)
+      const ghOptions: GitHubResolverOptions = {
+        fetch: fetchImpl,
+        token: githubToken,
+      };
+      const resolved = await resolveGitHubRef(
         ref.owner,
         ref.repo,
         ref.range,
-        fetchImpl,
+        ghOptions,
       );
+      // Use the resolved SHA as the version - jsDelivr can serve by commit SHA
+      const version = resolved.sha;
       return {
         sourceRef,
         kind: "gh",
@@ -88,9 +116,9 @@ export async function resolveSourceRef(
 /** Parse + resolve a source ref string in one step. */
 export function resolveSource(
   input: string,
-  fetchImpl: FetchLike = fetch,
+  fetchOrOptions?: FetchLike | ResolveOptions,
 ): Promise<ArtifactDescriptor> {
-  return resolveSourceRef(parseSourceRef(input), fetchImpl);
+  return resolveSourceRef(parseSourceRef(input), fetchOrOptions);
 }
 
 /** Turn a resolved descriptor into a {@link BundleSource} for the loader. */
