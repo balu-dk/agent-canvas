@@ -73,14 +73,15 @@ describe("settings route", () => {
       updated_at: new Date().toISOString(),
     });
 
-    const response = (await clientLoader({
-      request: new Request("http://localhost/settings/llm"),
+    const response = await clientLoader({
+      request: new Request("http://localhost/settings/openhands"),
       params: {},
       context: {},
-    } as never)) as Response;
+    } as never);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/settings/agent");
+    // No loader redirect anymore: the page stays reachable and renders the
+    // in-page OpenHandsEngineGate instead (see routes/settings.tsx).
+    expect(response).toBeNull();
   });
 
   it("does not redirect unrelated removed nested paths through the settings loader", async () => {
@@ -135,7 +136,7 @@ describe("settings route", () => {
     expect(screen.getByTestId("app-settings-screen")).toBeInTheDocument();
   });
 
-  it("redirects to /settings/agent when ACP is active and the path is disabled-by-ACP", async () => {
+  it("does not redirect disabled-by-ACP paths (in-page gate instead)", async () => {
     vi.spyOn(OptionService, "getConfig").mockResolvedValue({
       posthog_client_key: null,
       feature_flags: {
@@ -158,14 +159,15 @@ describe("settings route", () => {
       },
     });
 
-    const response = (await clientLoader({
-      request: new Request("http://localhost/settings/llm"),
+    const response = await clientLoader({
+      request: new Request("http://localhost/settings/openhands"),
       params: {},
       context: {},
-    } as never)) as Response;
+    } as never);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/settings/agent");
+    // No loader redirect anymore: the page stays reachable and renders the
+    // in-page OpenHandsEngineGate instead (see routes/settings.tsx).
+    expect(response).toBeNull();
   });
 
   it("does not redirect when the active agent is OpenHands", async () => {

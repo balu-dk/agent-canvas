@@ -58,7 +58,7 @@ export function isSettingsPageHidden(
 }
 
 export function getFirstAvailablePath(
-  featureFlags: WebClientFeatureFlags | undefined,
+  _featureFlags: WebClientFeatureFlags | undefined,
 ): string | null {
   // ``/settings/agent`` always wins: it is the single place to switch
   // agent kinds (OpenHands / ACP) and the only sub-page that is always
@@ -68,8 +68,9 @@ export function getFirstAvailablePath(
   // are one nav-click away from the LLM page.
   const fallbackOrder = [
     { path: "/settings/agent", hidden: false },
-    { path: "/settings/llm", hidden: !!featureFlags?.hide_llm_settings },
-    { path: "/settings", hidden: !!featureFlags?.hide_llm_settings },
+    // Grouped OpenHands-engine page: Condenser/Verification remain even
+    // when the LLM sub-tab is hidden by hide_llm_settings.
+    { path: "/settings/openhands", hidden: false },
     { path: "/settings/app", hidden: false },
     { path: "/settings/secrets", hidden: false },
   ];

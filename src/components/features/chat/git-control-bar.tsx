@@ -203,16 +203,21 @@ export function GitControlBar({ onSuggestionsClick }: GitControlBarProps) {
     );
   };
 
-  // Local backends never use the remote-repo "Connect Repo" CTA, so suppress the
-  // empty-state button there. A repo or workspace label inferred from local git
-  // metadata is still informational and stays visible.
+  // The remote-repo flow needs a git provider to list from. On cloud that's
+  // always the case; on local backends it lights up when a provider is
+  // available (e.g. a GITHUB_TOKEN secret enables the direct GitHub listing —
+  // see api/git-service/github-direct.ts). Without one, keep the old
+  // behavior: informational pill only, no CTA.
+  const hasGitProvider = providers.length > 0;
   const showRepoButton =
-    !isLocalBackend || !!selectedRepository || !!workspaceName;
-  // On a local backend the informational pill (e.g. workspace name, or a repo
-  // detected without a recognized provider) should not open the remote-repo
-  // modal — that flow is cloud-only. Disable the button in that case so the
-  // click is a no-op. Linkable repos render as <a> and ignore `disabled`.
-  const isRepoButtonInert = isLocalBackend && !hasRepository;
+    !isLocalBackend ||
+    hasGitProvider ||
+    !!selectedRepository ||
+    !!workspaceName;
+  // Only render the pill inert when there is no provider to list repos from
+  // AND no recognized repo — otherwise clicking opens the remote-repo modal.
+  // Linkable repos render as <a> and ignore `disabled`.
+  const isRepoButtonInert = isLocalBackend && !hasRepository && !hasGitProvider;
 
   // True when the bar will render at least one chip (cloud always shows
   // "Open Repository"; local needs a repo or a workspace name; selected

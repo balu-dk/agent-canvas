@@ -33,14 +33,21 @@ import { OpenLauncherButton } from "./open-launcher-button";
 import { OpenWorkspaceDialog } from "./open-workspace-dialog";
 import { OpenRepositoryDialog } from "./open-repository-dialog";
 import { HomeGitControlBarPreview } from "./home-git-control-bar-preview";
+import { useUserProviders } from "#/hooks/use-user-providers";
 
 export function HomeChatLauncher() {
   const { t } = useTranslation("openhands");
   const { backend } = useActiveBackend();
   const { navigate } = useNavigation();
   const isLocal = backend.kind === "local";
+  const { providers } = useUserProviders();
+  // A git provider (e.g. a GITHUB_TOKEN secret enabling direct GitHub
+  // listing) lets local backends pick a remote repository on home too, not
+  // just a local folder. Without one, only the workspace picker shows.
+  const hasGitProvider = providers.length > 0;
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isRepoDialogOpen, setIsRepoDialogOpen] = useState(false);
   const [pendingWorkspace, setPendingWorkspace] =
     useState<LocalWorkspace | null>(null);
   const [pendingRepository, setPendingRepository] =
@@ -69,7 +76,7 @@ export function HomeChatLauncher() {
     : null;
 
   const hasSelection = isLocal
-    ? !!pendingWorkspace
+    ? !!pendingWorkspace || (!!pendingRepository && !!pendingBranch)
     : !!pendingRepository && !!pendingBranch;
 
   const handleSubmit = (message: string) => {
@@ -102,7 +109,7 @@ export function HomeChatLauncher() {
         workingDir: pendingWorkspace.path,
         workspaceMode,
       };
-    } else if (!isLocal && pendingRepository && pendingBranch) {
+    } else if (pendingRepository && pendingBranch) {
       variables = {
         ...variables,
         repository: {
@@ -111,6 +118,19 @@ export function HomeChatLauncher() {
           branch: pendingBranch.name,
         },
       };
+      // Cloud sandboxes clone the selected repo automatically; a local
+      // agent-server does not. Instruct the agent to clone as its first
+      // action (same proven flow the in-conversation git control bar uses)
+      // so the repo actually lands in the workspace.
+      if (isLocal) {
+        const providerName =
+          pendingRepository.git_provider.charAt(0).toUpperCase() +
+          pendingRepository.git_provider.slice(1);
+        variables = {
+          ...variables,
+          conversationInstructions: `Clone ${pendingRepository.full_name} from ${providerName} and checkout branch ${pendingBranch.name}.`,
+        };
+      }
     }
 
     // Explicitly-attached plugins are additive on top of any ambient set and
@@ -238,16 +258,31 @@ export function HomeChatLauncher() {
             provider={pendingProvider}
             workspaceMode={workspaceMode}
             backendKind={backend.kind}
-            onRepoClick={() => setIsDialogOpen(true)}
+            onRepoClick={() =>
+              pendingRepository
+                ? setIsRepoDialogOpen(true)
+                : setIsDialogOpen(true)
+            }
             onWorkspaceModeChange={setWorkspaceMode}
           />
         ) : (
-          <OpenLauncherButton
-            kind={isLocal ? "local" : "cloud"}
-            onClick={() => setIsDialogOpen(true)}
-            disabled={isCreating || Boolean(workspacesUnsupportedMessage)}
-            disabledTooltip={workspacesUnsupportedMessage}
-          />
+          <>
+            <OpenLauncherButton
+              kind={isLocal ? "local" : "cloud"}
+              onClick={() => setIsDialogOpen(true)}
+              disabled={isCreating || Boolean(workspacesUnsupportedMessage)}
+              disabledTooltip={workspacesUnsupportedMessage}
+            />
+            {/* Local backends with a git provider can also open a remote
+                repository from home, not just a local folder. */}
+            {isLocal && hasGitProvider && (
+              <OpenLauncherButton
+                kind="cloud"
+                onClick={() => setIsRepoDialogOpen(true)}
+                disabled={isCreating}
+              />
+            )}
+          </>
         )}
         <PluginPickerTrigger
           count={selectedPlugins.length}
@@ -256,7 +291,7 @@ export function HomeChatLauncher() {
         />
       </div>
 
-      {isLocal ? (
+      {isLocal && (
         <OpenWorkspaceDialog
           isOpen={isDialogOpen}
           onClose={() => setIsDialogOpen(false)}
@@ -268,19 +303,23 @@ export function HomeChatLauncher() {
             setWorkspaceMode("local_repo");
           }}
         />
-      ) : (
-        <OpenRepositoryDialog
-          isOpen={isDialogOpen}
-          onClose={() => setIsDialogOpen(false)}
-          onConfirm={({ repository, branch, provider }) => {
-            setPendingRepository(repository);
-            setPendingBranch(branch);
-            setPendingProvider(provider ?? repository.git_provider);
-            setPendingWorkspace(null);
-            setWorkspaceMode("local_repo");
-          }}
-        />
       )}
+      {/* Repo dialog: cloud always; local when a git provider is available.
+          On local the picked repo is cloned by the agent at start (see
+          handleSubmit); on cloud the sandbox clones it. */}
+      <OpenRepositoryDialog
+        isOpen={isLocal ? isRepoDialogOpen : isDialogOpen}
+        onClose={() =>
+          isLocal ? setIsRepoDialogOpen(false) : setIsDialogOpen(false)
+        }
+        onConfirm={({ repository, branch, provider }) => {
+          setPendingRepository(repository);
+          setPendingBranch(branch);
+          setPendingProvider(provider ?? repository.git_provider);
+          setPendingWorkspace(null);
+          setWorkspaceMode("local_repo");
+        }}
+      />
 
       {isPluginPickerOpen && (
         <PluginPickerModal

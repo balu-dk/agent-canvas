@@ -101,6 +101,9 @@ describe("useCreateConversation", () => {
         undefined,
         undefined,
         undefined,
+        undefined, // sandboxId
+        null, // agentProfile
+        null, // agentProfileModel
       );
     });
   });

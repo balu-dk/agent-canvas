@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Cpu } from "lucide-react";
 import { AgentStatus } from "#/components/features/controls/agent-status";
 import { ChangeAgentButton } from "../change-agent-button";
+import { AgentProfilePicker } from "../agent-profile-picker";
 import { ChatInputModel, ChatInputModelMenuContent } from "./chat-input-model";
 import { SwitchProfileButton } from "../switch-profile-button";
 import { ChatAddFileButton } from "../chat-add-file-button";
@@ -405,6 +406,10 @@ export function ChatInputActions({
               <ChangeAgentButton />
             </div>
           )}
+          {/* Pre-conversation only: pick the agent profile (engine +
+              provider + credential) the next conversation runs on. Running
+              conversations keep the agent they started with. */}
+          {!conversationId && <AgentProfilePicker />}
           <div ref={modelRef} className={cn(!showModelInline && "hidden")}>
             {modelState.isAcpContext ? (
               <ChatInputModel />

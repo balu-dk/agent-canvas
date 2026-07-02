@@ -6,6 +6,7 @@ import AgentServerConversationService from "../conversation-service/agent-server
 import { getAgentServerClientOptions } from "../agent-server-client-options";
 import { mapAnyGitStatusToClientStatus } from "#/utils/git-status-mapper";
 import { getActiveBackend } from "../backend-registry/active-store";
+import { listGitHubBranches, listGitHubRepositories } from "./github-direct";
 import {
   getCloudInstallations,
   getCloudRepositoryBranches,
@@ -24,6 +25,11 @@ const isCloudActive = () => getActiveBackend().backend.kind === "cloud";
 const isInvalidProvider = (provider: string | null | undefined): boolean =>
   !provider || provider === "undefined" || provider === "null";
 
+// Local backends have no git-provider API; GitHub listing goes directly to
+// api.github.com with the PAT from the backend's secrets store.
+const isLocalGitHub = (provider: string): boolean =>
+  !isCloudActive() && provider === "github";
+
 const EMPTY_REPOSITORY_PAGE: RepositoryPage = { items: [], next_page_id: null };
 const EMPTY_BRANCH_PAGE: BranchPage = { items: [], next_page_id: null };
 const EMPTY_INSTALLATION_PAGE: InstallationPage = {
@@ -39,7 +45,15 @@ class GitService {
     pageId?: string,
     installationId?: string,
   ): Promise<RepositoryPage> {
-    if (isInvalidProvider(provider) || !isCloudActive()) {
+    if (isInvalidProvider(provider)) {
+      return EMPTY_REPOSITORY_PAGE;
+    }
+    if (!isCloudActive()) {
+      if (isLocalGitHub(provider)) {
+        return listGitHubRepositories(query, limit).catch(
+          () => EMPTY_REPOSITORY_PAGE,
+        );
+      }
       return EMPTY_REPOSITORY_PAGE;
     }
     return searchCloudRepositories({
@@ -57,7 +71,15 @@ class GitService {
     limit = 30,
     installationId?: string,
   ): Promise<RepositoryPage> {
-    if (isInvalidProvider(provider) || !isCloudActive()) {
+    if (isInvalidProvider(provider)) {
+      return EMPTY_REPOSITORY_PAGE;
+    }
+    if (!isCloudActive()) {
+      if (isLocalGitHub(provider)) {
+        return listGitHubRepositories(undefined, limit).catch(
+          () => EMPTY_REPOSITORY_PAGE,
+        );
+      }
       return EMPTY_REPOSITORY_PAGE;
     }
     return searchCloudRepositories({
@@ -95,7 +117,15 @@ class GitService {
     pageId?: string,
     limit = 30,
   ): Promise<BranchPage> {
-    if (isInvalidProvider(provider) || !isCloudActive()) {
+    if (isInvalidProvider(provider)) {
+      return EMPTY_BRANCH_PAGE;
+    }
+    if (!isCloudActive()) {
+      if (isLocalGitHub(provider)) {
+        return listGitHubBranches(repository, query).catch(
+          () => EMPTY_BRANCH_PAGE,
+        );
+      }
       return EMPTY_BRANCH_PAGE;
     }
     return getCloudRepositoryBranches({
@@ -114,7 +144,15 @@ class GitService {
     pageId?: string,
     limit = 30,
   ): Promise<BranchPage> {
-    if (isInvalidProvider(provider) || !isCloudActive()) {
+    if (isInvalidProvider(provider)) {
+      return EMPTY_BRANCH_PAGE;
+    }
+    if (!isCloudActive()) {
+      if (isLocalGitHub(provider)) {
+        return listGitHubBranches(repository, query).catch(
+          () => EMPTY_BRANCH_PAGE,
+        );
+      }
       return EMPTY_BRANCH_PAGE;
     }
     return getCloudRepositoryBranches({

@@ -15,6 +15,12 @@ import {
   setStoredConversationMetadata,
   type WorkspaceMode,
 } from "#/api/conversation-metadata-store";
+import {
+  getAgentProfile,
+  getDefaultAgentProfile,
+  type AgentProfile,
+} from "#/api/agent-profile-store";
+import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
 
 interface CreateConversationVariables {
   query?: string;
@@ -30,6 +36,12 @@ interface CreateConversationVariables {
   plugins?: PluginSpec[];
   workingDir?: string;
   workspaceMode?: WorkspaceMode;
+  /**
+   * Agent profile (engine + provider + credential) for this conversation.
+   * Undefined → the backend's default profile (if any); null → explicitly
+   * follow the global Settings → Agent configuration.
+   */
+  agentProfile?: AgentProfile | null;
 }
 
 interface CreateConversationResponse {
@@ -63,6 +75,26 @@ export const useCreateConversation = () => {
         agentType,
       } = variables;
 
+      // Resolution order: explicit variable → home-page picker selection →
+      // the backend's default profile. An explicit null at any level forces
+      // the global Settings → Agent configuration. The transient model pick
+      // from the chat input rides along with the profile.
+      const resolvePickedProfile = (): AgentProfile | null => {
+        const { selection } = useAgentProfileSelectionStore.getState();
+        if (selection === null) return null;
+        if (typeof selection === "string") {
+          return getAgentProfile(selection) ?? getDefaultAgentProfile();
+        }
+        return getDefaultAgentProfile();
+      };
+      const agentProfile =
+        variables.agentProfile !== undefined
+          ? variables.agentProfile
+          : resolvePickedProfile();
+      const agentProfileModel = agentProfile
+        ? useAgentProfileSelectionStore.getState().pendingModel
+        : null;
+
       const conversation =
         await AgentServerConversationService.createConversation(
           query,
@@ -79,6 +111,9 @@ export const useCreateConversation = () => {
           workspaceMode,
           parentConversationId,
           agentType,
+          undefined, // sandboxId
+          agentProfile,
+          agentProfileModel,
         );
 
       // Stamp the active LLM profile onto the (local) conversation so the
@@ -127,7 +162,10 @@ export const useCreateConversation = () => {
         attachedPlugins = [...explicitPlugins, ...enabledInstalled];
       }
       const activeProfile = llmProfiles?.active_profile ?? null;
-      if (localConversationId && (activeProfile || attachedPlugins.length)) {
+      if (
+        localConversationId &&
+        (activeProfile || attachedPlugins.length || agentProfile)
+      ) {
         const prev = getStoredConversationMetadata(localConversationId);
         setStoredConversationMetadata(localConversationId, {
           selected_repository: prev?.selected_repository ?? null,
@@ -136,6 +174,7 @@ export const useCreateConversation = () => {
           selected_workspace: prev?.selected_workspace ?? null,
           workspace_mode: prev?.workspace_mode ?? null,
           active_profile: activeProfile ?? prev?.active_profile ?? null,
+          agent_profile: agentProfile?.name ?? prev?.agent_profile ?? null,
           plugins: attachedPlugins.length
             ? attachedPlugins
             : (prev?.plugins ?? null),

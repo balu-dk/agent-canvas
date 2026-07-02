@@ -881,14 +881,38 @@ export interface StartConversationOptions {
   encryptedConversationSettings?: Record<string, SettingsValue>;
   secretsEncrypted?: boolean;
   customSecrets?: Array<{ name: string; description?: string }>;
+  /**
+   * Per-conversation agent-settings overlay, merged over the (encrypted)
+   * saved agent settings before the payload is built. This is how an agent
+   * profile becomes THE conversation's engine without ever writing to the
+   * backend's settings slot: e.g. `{agent_kind: "acp", acp_server: "codex",
+   * acp_command: [], acp_args: [], acp_model: "gpt-5.5"}`. Keys not in the
+   * overlay (mcp_config, agent_context flags, llm for OpenHands) still come
+   * from the saved settings.
+   */
+  agentSettingsOverlay?: Record<string, SettingsValue>;
+  /**
+   * Per-conversation credential aliasing: env var name → stored secret name.
+   * Lets an agent profile inject a differently-named stored secret under the
+   * provider's canonical env var (e.g. CLAUDE_CODE_OAUTH_TOKEN →
+   * CLAUDE_CODE_OAUTH_TOKEN_WORK), so several profiles of the same provider
+   * can carry different credentials. Overrides the default same-name
+   * LookupSecret for the aliased env names.
+   */
+  credentialAliases?: Record<string, string>;
 }
 
 export function buildStartConversationRequest(
   options: StartConversationOptions,
 ): StartConversationPayload {
-  const sourceAgentSettings = options.encryptedAgentSettings
-    ? { ...options.settings, agent_settings: options.encryptedAgentSettings }
-    : options.settings;
+  const baseAgentSettings =
+    options.encryptedAgentSettings ?? toRecord(options.settings.agent_settings);
+  const sourceAgentSettings: Settings = {
+    ...options.settings,
+    agent_settings: (options.agentSettingsOverlay
+      ? { ...baseAgentSettings, ...options.agentSettingsOverlay }
+      : baseAgentSettings) as Settings["agent_settings"],
+  };
 
   const acpMode = isAcpAgent(sourceAgentSettings);
   const agentSettings = buildConfiguredAgentSettings(sourceAgentSettings);
@@ -990,23 +1014,39 @@ export function buildStartConversationRequest(
   // uniform for ACP and non-ACP (agent-canvas#1039). For ACP the resolution
   // runs off the event loop (software-agent-sdk#3510, >=1.25.0), so the loopback
   // fetch can't deadlock.
-  if (options.customSecrets && options.customSecrets.length > 0) {
+  const aliases = options.credentialAliases ?? {};
+  if (
+    (options.customSecrets && options.customSecrets.length > 0) ||
+    Object.keys(aliases).length > 0
+  ) {
     const backend = getEffectiveLocalBackend();
     const headers = backend ? buildAuthHeaders(backend) : {};
 
-    const secrets: Record<string, LookupSecret> = {};
-    for (const secret of options.customSecrets) {
+    const buildLookup = (
+      storedName: string,
+      description?: string,
+    ): LookupSecret => {
       const lookupSecret: LookupSecret = {
         kind: "LookupSecret",
-        url: `/api/settings/secrets/${encodeURIComponent(secret.name)}`,
-        description: secret.description,
+        url: `/api/settings/secrets/${encodeURIComponent(storedName)}`,
+        description,
       };
-
       if (Object.keys(headers).length > 0) {
         lookupSecret.headers = headers;
       }
+      return lookupSecret;
+    };
 
-      secrets[secret.name] = lookupSecret;
+    const secrets: Record<string, LookupSecret> = {};
+    for (const secret of options.customSecrets ?? []) {
+      secrets[secret.name] = buildLookup(secret.name, secret.description);
+    }
+
+    // Credential aliases win over same-name secrets: the env var (key) points
+    // at the profile's stored secret (URL), so the subprocess authenticates
+    // with the selected profile's credential rather than the global one.
+    for (const [envName, storedName] of Object.entries(aliases)) {
+      secrets[envName] = buildLookup(storedName);
     }
 
     payload.secrets = secrets;
@@ -1044,6 +1084,8 @@ export async function buildStartConversationRequestWithEncryptedSettings(options
   conversationId?: string;
   workingDir?: string;
   worktree?: boolean;
+  credentialAliases?: Record<string, string>;
+  agentSettingsOverlay?: Record<string, SettingsValue>;
 }): Promise<Record<string, unknown>> {
   const { SecretsService } = await import("./secrets-service");
 

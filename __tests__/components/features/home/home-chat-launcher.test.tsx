@@ -328,6 +328,9 @@ describe("HomeChatLauncher", () => {
       undefined,
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/conversations/conv-abc"),
@@ -376,6 +379,9 @@ describe("HomeChatLauncher", () => {
       "local_repo",
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/conversations/conv-ws"),
@@ -416,6 +422,9 @@ describe("HomeChatLauncher", () => {
       "new_worktree",
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/conversations/conv-wt"),
@@ -472,6 +481,9 @@ describe("HomeChatLauncher", () => {
       undefined,
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/conversations/conv-repo"),
@@ -498,6 +510,9 @@ describe("HomeChatLauncher", () => {
       undefined,
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     await waitFor(() =>
       expect(sendMessageWithAttachments).toHaveBeenCalledTimes(1),
@@ -579,6 +594,9 @@ describe("HomeChatLauncher", () => {
       undefined,
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
     expect(sendMessageWithAttachments).not.toHaveBeenCalled();
     await waitFor(() =>
@@ -618,6 +636,9 @@ describe("HomeChatLauncher", () => {
       undefined,
       undefined,
       undefined,
+      undefined, // sandboxId
+      null, // agentProfile (no default profile in tests)
+      null, // agentProfileModel
     );
   });
 });
