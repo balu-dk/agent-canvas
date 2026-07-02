@@ -3,7 +3,7 @@ import { useSettings } from "#/hooks/query/use-settings";
 import { useConfig } from "#/hooks/query/use-config";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
 import { useActiveBackend } from "#/contexts/active-backend-context";
-import { useActiveAgentKind } from "#/hooks/use-active-agent-profile";
+import { useActiveAgentProfile } from "#/hooks/use-active-agent-profile";
 import { isSettingsPageHidden } from "#/utils/settings-utils";
 import ProfilesService from "#/api/profiles-service/profiles-service.api";
 import {
@@ -58,12 +58,23 @@ export function useLlmConfigured(): LlmConfiguredResult {
   // The active AgentProfile is the current agent — an ACP profile owns its LLM
   // via the subprocess and never needs an API key. Fall back to the global
   // agent settings only while the profile list loads.
-  const activeAgentKind = useActiveAgentKind();
+  const { activeProfile: activeAgentProfile } = useActiveAgentProfile();
+  const activeAgentKind = activeAgentProfile?.agent_kind;
   const isAcpAgent =
     (activeAgentKind ?? settings?.agent_settings?.agent_kind) === "acp";
   const hasApiKey = settings?.llm_api_key_set === true;
+  // The LLM that will actually power the next conversation is the profile the
+  // active AGENT profile references (`llm_profile_ref`) — conversations launch
+  // from the agent profile, not the standalone "active LLM profile". Fall back
+  // to the active LLM profile only when there's no ref yet (list loading, or an
+  // agent profile without a ref).
+  const relevantLlmProfileName =
+    activeAgentProfile?.agent_kind === "openhands" &&
+    activeAgentProfile.llm_profile_ref
+      ? activeAgentProfile.llm_profile_ref
+      : profilesData?.active_profile;
   const activeProfile = profilesData?.profiles.find(
-    (profile) => profile.name === profilesData.active_profile,
+    (profile) => profile.name === relevantLlmProfileName,
   );
   const hasActiveProfileApiKey = activeProfile?.api_key_set === true;
   const shouldLoadActiveProfileDetail =
