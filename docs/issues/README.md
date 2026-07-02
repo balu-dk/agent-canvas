@@ -16,72 +16,93 @@ Extensions installed via `gh:owner/repo/path@ref` fail when:
 
 ### Solution Overview
 
+> **Architecture Decision (2025-07-01):** We chose a **postMessage relay** approach over a
+> backend proxy. This follows the VS Code extension model and keeps all extension-specific
+> code in agent-canvas without requiring changes to the shared agent-server.
+>
+> See [Asset Relay System](./asset-relay-system.md) for the full rationale.
+
 Three interconnected changes are needed:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Extension Install Flow                               │
+│                    Extension Install Flow (postMessage Relay)                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   User Input                                                                 │
+│   User Input: gh:owner/repo@feature/branch                                   │
 │       │                                                                      │
 │       ▼                                                                      │
-│   ┌─────────────────┐                                                        │
-│   │ Parse Source    │  gh:owner/repo/path@feature/branch                     │
-│   │ (unchanged)     │                                                        │
-│   └────────┬────────┘                                                        │
-│            │                                                                 │
-│            ▼                                                                 │
 │   ┌─────────────────┐     ┌─────────────────┐                               │
 │   │ GitHub API      │────▶│ Resolve ref to  │  Issue #1: GitHub API Resolver│
-│   │ Resolver (NEW)  │     │ commit SHA      │                               │
+│   │ Resolver        │     │ commit SHA      │                               │
 │   └────────┬────────┘     └─────────────────┘                               │
 │            │                                                                 │
 │            ▼                                                                 │
 │   ┌─────────────────┐                                                        │
-│   │ Source          │  Returns proxy-compatible descriptor                   │
+│   │ Source          │  Returns relay-compatible descriptor                   │
 │   │ Resolution      │  Issue #3: Source Resolution Updates                   │
-│   │ (updated)       │                                                        │
 │   └────────┬────────┘                                                        │
 │            │                                                                 │
 │            ▼                                                                 │
 │   ┌─────────────────┐     ┌─────────────────┐                               │
-│   │ Extension       │────▶│ Fetch assets    │  Issue #2: Proxy Endpoint     │
-│   │ Proxy (NEW)     │     │ from GitHub     │                               │
+│   │ Asset Loader    │────▶│ Fetch from      │  Issue #2: Asset Relay System │
+│   │ (parent window) │     │ GitHub (no CSP) │                               │
 │   └────────┬────────┘     └─────────────────┘                               │
+│            │                                                                 │
+│       postMessage                                                            │
 │            │                                                                 │
 │            ▼                                                                 │
 │   ┌─────────────────┐                                                        │
-│   │ Load Extension  │  Webview loads from same origin ✓                     │
-│   │ (unchanged)     │  CSP satisfied ✓                                      │
+│   │ Webview loads   │  Receives assets via postMessage                      │
+│   │ (sandboxed)     │  CSP satisfied ✓  No backend needed ✓                 │
 │   └─────────────────┘                                                        │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Why postMessage Relay Instead of Backend Proxy?
+
+| Consideration | Backend Proxy | postMessage Relay |
+|---------------|---------------|-------------------|
+| Backend changes | Requires agent-server changes | ✅ Frontend only |
+| Deployment | Must deploy backend first | ✅ Ships with agent-canvas |
+| Security model | Proxy accessible to any HTTP caller | ✅ Parent controls all access |
+| VS Code alignment | Different architecture | ✅ Same pattern as VS Code |
+| External service access | Needs allowlist in proxy | ✅ Extension author controls |
+
+The postMessage relay follows VS Code's proven extension model:
+- **Webviews are sandboxed** — strict CSP, no direct network access
+- **Extension host is privileged** — can fetch from anywhere
+- **Message passing bridges them** — parent relays content to webview
 
 ### Issue Documents
 
 | # | Issue | Priority | Description |
 |---|-------|----------|-------------|
 | 1 | [GitHub API Resolver](./github-api-resolver.md) | High | Replace jsDelivr resolution with GitHub API for `gh:` refs |
-| 2 | [Extension Proxy Endpoint](./extension-proxy-endpoint.md) | High | Backend endpoint to proxy extension assets |
-| 3 | [Source Resolution Updates](./source-resolution-updates.md) | Medium | Wire resolver and proxy into the install flow |
+| 2 | [Asset Relay System](./asset-relay-system.md) | High | Parent-side fetching + postMessage bridge for webviews |
+| 3 | [Source Resolution Updates](./source-resolution-updates.md) | Medium | Wire resolver and relay into the install flow |
 
 ### Implementation Order
 
-**Phase 1: Backend (Issues #1, #2)**
+**Phase 1: Resolution (Issue #1)**
 1. Implement GitHub API resolver (`github-api.ts`)
-2. Implement proxy endpoint (`/api/extensions/proxy`)
-3. Deploy backend changes
+2. Handle branches with slashes, tags, SHAs
+3. Add caching for resolved refs
 
-**Phase 2: Frontend (Issue #3)**
-1. Add `ProxiedBundleSource`
-2. Update `resolveSourceRef` for `gh:` case
-3. Update `toBundleSource` factory
-4. Test end-to-end
+**Phase 2: Asset Relay (Issue #2)**
+1. Implement asset loader in parent window
+2. Create postMessage protocol for webview requests
+3. Support blob URLs for initial load
+4. Handle runtime asset requests
 
-**Phase 3: Polish**
-1. Add caching layer to proxy
+**Phase 3: Integration (Issue #3)**
+1. Update `resolveSourceRef` for relay flow
+2. Update webview bootstrap to use relay
+3. Test end-to-end with real extensions
+
+**Phase 4: Polish**
+1. Add permission model for external URLs
 2. Support GitHub tokens for private repos
 3. Improve error messages
 4. Update documentation
@@ -93,18 +114,34 @@ After all three issues are resolved:
 - [ ] `gh:owner/repo@feature/my-branch` installs successfully
 - [ ] Extension webview loads without CSP errors
 - [ ] Extension worker activates and commands work
+- [ ] Extensions can request external resources (with permission)
 - [ ] Settings pages load correctly
 - [ ] Icons and assets display properly
 - [ ] `npm:` extensions continue working (no regression)
-- [ ] Clear error messages for all failure modes
+- [ ] No backend/agent-server changes required
+
+---
+
+## Security Model
+
+Extensions follow VS Code's security model with postMessage relay:
+
+1. **Webview sandbox** — `connect-src 'none'` prevents direct network access
+2. **Parent mediation** — All network requests go through parent window
+3. **Source validation** — Parent only fetches from the installed extension's source
+4. **Permission grants** — External URLs require explicit permission (future)
+
+This is **more secure** than a backend proxy because:
+- The parent has full visibility into every request
+- Requests are scoped to specific webview instances
+- No server-side endpoint exposed to arbitrary callers
 
 ---
 
 ## Other Planned Improvements
 
-(Add additional issue documents here as needed)
-
+- [ ] Permission model for external service access
 - [ ] Private GitHub repository support (requires token management UI)
 - [ ] Extension marketplace integration
-- [ ] Offline extension caching
+- [ ] Offline extension caching (IndexedDB)
 - [ ] Extension integrity verification (content hashes)

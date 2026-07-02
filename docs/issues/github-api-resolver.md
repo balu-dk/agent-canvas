@@ -2,7 +2,10 @@
 
 **Status:** Proposed  
 **Component:** `src/extensions/sources/`  
-**Related:** Extension Proxy Endpoint, Source Resolution Updates
+**Related:** Asset Relay System, Source Resolution Updates
+
+> **Note:** This resolver works with the postMessage relay system (not a backend proxy).
+> The resolved SHA is used by the parent window's `AssetLoader` to fetch from GitHub.
 
 ---
 
