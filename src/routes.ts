@@ -21,10 +21,20 @@ export default [
     route("mcp", "routes/mcp.tsx"),
     route("settings", "routes/settings.tsx", [
       index("routes/settings-index.tsx"),
-      route("llm", "routes/llm-settings.tsx"),
       route("agent", "routes/agent-settings.tsx"),
-      route("condenser", "routes/condenser-settings.tsx"),
-      route("verification", "routes/verification-settings.tsx"),
+      // OpenHands-engine settings (LLM / Condenser / Verification) are
+      // grouped under one nav entry with internal sub-tabs; the legacy
+      // paths redirect there with the matching ?tab=.
+      route("openhands", "routes/openhands-settings.tsx"),
+      route("llm", "routes/openhands-settings-redirect.tsx", {
+        id: "llm-redirect",
+      }),
+      route("condenser", "routes/openhands-settings-redirect.tsx", {
+        id: "condenser-redirect",
+      }),
+      route("verification", "routes/openhands-settings-redirect.tsx", {
+        id: "verification-redirect",
+      }),
       route("app", "routes/app-settings.tsx"),
       route("secrets", "routes/secrets-settings.tsx"),
     ]),

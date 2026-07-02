@@ -82,6 +82,12 @@ export interface AppConversationStartRequest {
   agent_type?: "default" | "plan";
   sandbox_id?: string | null;
   plugins?: PluginSpec[] | null; // Plugins to load when starting the conversation
+  // Per-conversation agent-settings override (sparse diff, same shape as the
+  // settings API): binds the agent engine to this conversation only, e.g.
+  // { agent_kind: "acp", acp_server: "claude-code" }. Supported by app-server
+  // backends that carry the per-session engine feature; credential keys are
+  // rejected server-side.
+  agent_settings_diff?: Record<string, unknown> | null;
 }
 
 export type AppConversationStartTaskStatus =

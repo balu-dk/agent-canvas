@@ -9,7 +9,7 @@ import {
   VSCodeClient,
 } from "@openhands/typescript-client/clients";
 import { v4 as uuidv4 } from "uuid";
-import { Provider } from "#/types/settings";
+import { Provider, SettingsValue } from "#/types/settings";
 import type { ConversationRuntimeContext } from "#/api/conversation-file-upload.api";
 import { buildHttpBaseUrl } from "#/utils/websocket-url";
 import {
@@ -48,6 +48,14 @@ import {
   NoBackendAvailableError,
 } from "../agent-server-client-options";
 import SettingsService from "../settings-service/settings-service.api";
+import {
+  getProfileCredentialAliases,
+  type AgentProfile,
+} from "../agent-profile-store";
+import {
+  buildAcpAgentSettingsDiff,
+  getAcpPreferredDefaultModel,
+} from "#/constants/acp-providers";
 import {
   ConversationMetadata,
   getStoredConversationMetadata,
@@ -352,7 +360,23 @@ class AgentServerConversationService {
     parentConversationId?: string,
     agentType?: "default" | "plan",
     sandboxId?: string,
+    agentProfile?: AgentProfile | null,
+    agentProfileModel?: string | null,
   ): Promise<AppConversationStartTask> {
+    // An agent profile binds engine + provider + credential to this
+    // conversation. On the local path it becomes a per-conversation
+    // agent-settings overlay (no settings-slot writes — see below); on the
+    // cloud/app-server path it travels as an ``agent_settings_diff`` since
+    // that backend builds the payload server-side. Credentials (when set)
+    // ride as start-time aliases so the provider's canonical env var
+    // resolves to the profile's stored secret.
+    const profileDiff = agentProfile
+      ? buildAcpAgentSettingsDiff(agentProfile.engine, {
+          command: agentProfile.command ?? undefined,
+          model: agentProfileModel ?? undefined,
+        })
+      : null;
+
     if (getActiveBackend().backend.kind === "cloud") {
       // Cloud path mirrors OpenHands' frontend: build a flat
       // AppConversationStartRequest, POST /api/v1/app-conversations
@@ -374,11 +398,55 @@ class AgentServerConversationService {
         parent_conversation_id: parentConversationId ?? null,
         agent_type: agentType,
         sandbox_id: sandboxId ?? null,
+        // Per-conversation engine binding (app-server feature). Credential
+        // aliasing has no cloud channel yet — cloud profiles switch engine
+        // and rely on the backend's stored secrets for auth.
+        agent_settings_diff: profileDiff,
       };
       return createCloudAppConversation(request);
     }
 
+    // Local path: the profile is built DIRECTLY into this conversation's
+    // payload as an agent-settings overlay — the backend's settings slot is
+    // never written. The slot remains only the storage for the OpenHands
+    // engine's LLM configuration; a profile IS the conversation's engine.
+    let agentSettingsOverlay: Record<string, SettingsValue> | undefined;
     const settings = await SettingsService.getSettings();
+    if (agentProfile) {
+      if (agentProfile.engine === "openhands") {
+        agentSettingsOverlay = { agent_kind: "openhands" };
+        // The OpenHands engine needs the slot's llm (the API key never
+        // reaches the browser, so it can't ride a client-side overlay).
+        // When the slot currently holds an ACP config, restore the active
+        // LLM profile server-side first — the one remaining slot write,
+        // scoped to this cross-kind case.
+        if (settings.agent_settings?.agent_kind === "acp") {
+          await SettingsService.saveSettings({
+            agent_settings_diff: { agent_kind: "openhands" },
+          });
+          try {
+            const profiles = await ProfilesService.listProfiles();
+            if (profiles.active_profile) {
+              await ProfilesService.activateProfile(profiles.active_profile);
+            }
+          } catch {
+            // Best-effort: without an active LLM profile the slot keeps
+            // its defaults and conversation start surfaces the real error.
+          }
+          SettingsService.invalidateCache();
+        }
+      } else {
+        agentSettingsOverlay = {
+          agent_kind: "acp",
+          acp_server: agentProfile.engine,
+          acp_command: agentProfile.command ?? [],
+          acp_args: [],
+          acp_model:
+            agentProfileModel ??
+            getAcpPreferredDefaultModel(agentProfile.engine),
+        };
+      }
+    }
     const conversationId = uuidv4();
     // @spec WUP-001 — Send an absolute working_dir to the agent-server.
     // The default is `workspace/project/<hex>` (relative); without
@@ -401,6 +469,8 @@ class AgentServerConversationService {
       conversationId,
       workingDir,
       worktree: resolvedWorkspaceMode === "new_worktree",
+      credentialAliases: getProfileCredentialAliases(agentProfile),
+      agentSettingsOverlay,
     });
 
     const data = await new ConversationClient(

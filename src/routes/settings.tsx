@@ -15,8 +15,9 @@ import {
   getFirstAvailablePath,
   isSettingsPageHidden,
 } from "#/utils/settings-utils";
-import { redirectIfAcpActive } from "#/utils/acp-route-guard";
 import { SettingsSectionHeaderProvider } from "#/contexts/settings-section-header-context";
+import { OpenHandsEngineGate } from "#/components/features/settings/openhands-engine-gate";
+import { useSettings } from "#/hooks/query/use-settings";
 
 export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const url = new URL(request.url);
@@ -37,19 +38,13 @@ export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
     }
   }
 
-  // ACP guard: the pages flagged ``disabledByAcp`` (LLM, Condenser, …)
-  // have no useful content while an external ACP subprocess drives
-  // conversations. Bounce them to ``/settings/agent``. Driven by the
-  // same ``disabledByAcp`` flag the nav hook uses for greying out, so
-  // the list of redirected paths and the greyed-out paths can never
-  // drift apart. See {@link redirectIfAcpActive} for why the redirect
-  // lives in the loader rather than a per-route ``useEffect``.
-  const currentNavItem = OSS_NAV_ITEMS.find((item) => item.to === pathname);
-  if (currentNavItem?.disabledByAcp) {
-    const acpRedirect = await redirectIfAcpActive();
-    if (acpRedirect) return acpRedirect;
-  }
-
+  // NOTE: pages flagged ``disabledByAcp`` (LLM, Condenser, …) are no longer
+  // redirected or greyed out while an ACP agent occupies the applied engine
+  // slot. They stay reachable and render an in-page gate
+  // ({@link OpenHandsEngineGate}) that explains the situation and offers a
+  // one-click engine switch — under the agent-profiles model the applied
+  // slot is ephemeral, so locking whole settings sections on it was
+  // hostile UX.
   return null;
 };
 
@@ -60,6 +55,16 @@ function SettingsScreen() {
   const navItems = useSettingsNavItems();
   const isMobile = useBreakpoint(768);
   const [hideSectionHeader, setHideSectionHeader] = useState(false);
+  const { data: settings } = useSettings();
+
+  // OpenHands-engine-only pages show an in-page gate while an ACP agent
+  // occupies the applied engine slot (see the clientLoader note above).
+  const currentNavItem = OSS_NAV_ITEMS.find(
+    (item) => item.to === location.pathname,
+  );
+  const showOpenHandsGate =
+    !!currentNavItem?.disabledByAcp &&
+    settings?.agent_settings?.agent_kind === "acp";
 
   const { currentSectionTitle, currentSectionSubtitle } = useMemo(() => {
     const currentRenderedItem = navItems.find(
@@ -110,7 +115,7 @@ function SettingsScreen() {
                 ) : null}
               </header>
             )}
-            <Outlet />
+            {showOpenHandsGate ? <OpenHandsEngineGate /> : <Outlet />}
           </div>
         </SettingsLayout>
       </SettingsSectionHeaderProvider>

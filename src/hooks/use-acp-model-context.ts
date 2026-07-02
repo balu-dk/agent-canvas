@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useSettings } from "#/hooks/query/use-settings";
+import { useEffectivePendingAgentProfile } from "#/hooks/use-agent-profiles";
 import { I18nKey } from "#/i18n/declaration";
 
 export interface AcpModelContext {
@@ -33,9 +34,17 @@ export function useAcpModelContext(): AcpModelContext {
   const { data: conversation } = useActiveConversation();
   const { data: settings } = useSettings();
 
+  const pendingProfile = useEffectivePendingAgentProfile();
+
   const isActiveAcpConversation = conversation?.agent_kind === "acp";
+  // On home, the NEXT conversation's engine decides the model affordance.
+  // A pending agent profile (picker selection or the default profile) takes
+  // precedence over the global settings it will overwrite at start.
   const isHomeAcp =
-    !conversation && settings?.agent_settings?.agent_kind === "acp";
+    !conversation &&
+    (pendingProfile
+      ? pendingProfile.engine !== "openhands"
+      : settings?.agent_settings?.agent_kind === "acp");
   const isAcpContext = isActiveAcpConversation || isHomeAcp;
 
   const destinationPath = isAcpContext ? "/settings/agent" : "/settings";

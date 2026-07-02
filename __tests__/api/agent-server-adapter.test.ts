@@ -1560,3 +1560,114 @@ describe("buildStartConversationRequest — ACP discriminator", () => {
     expect(acpPayload.agent_settings.condenser).toBeUndefined();
   });
 });
+
+describe("buildStartConversationRequest credential aliases", () => {
+  it("points the aliased env var at the profile's stored secret", () => {
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          llm: { model: "nested-model" },
+        },
+      },
+      customSecrets: [
+        { name: "CLAUDE_CODE_OAUTH_TOKEN", description: "Global token" },
+        { name: "CLAUDE_CODE_OAUTH_TOKEN_WORK", description: "Work token" },
+      ],
+      credentialAliases: {
+        CLAUDE_CODE_OAUTH_TOKEN: "CLAUDE_CODE_OAUTH_TOKEN_WORK",
+      },
+    }) as {
+      secrets: Record<string, { kind: string; url: string }>;
+    };
+
+    // The canonical env var resolves to the profile's stored secret — this is
+    // what lets two profiles of the same provider carry different credentials.
+    expect(payload.secrets.CLAUDE_CODE_OAUTH_TOKEN.url).toBe(
+      "/api/settings/secrets/CLAUDE_CODE_OAUTH_TOKEN_WORK",
+    );
+    // The profile secret also rides under its own name (harmless duplicate).
+    expect(payload.secrets.CLAUDE_CODE_OAUTH_TOKEN_WORK.url).toBe(
+      "/api/settings/secrets/CLAUDE_CODE_OAUTH_TOKEN_WORK",
+    );
+  });
+
+  it("attaches aliases even when no custom secrets are saved", () => {
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          llm: { model: "nested-model" },
+        },
+      },
+      credentialAliases: { OPENAI_API_KEY: "OPENAI_API_KEY_CODEX_PROFILE" },
+    }) as {
+      secrets: Record<string, { url: string }>;
+    };
+
+    expect(payload.secrets.OPENAI_API_KEY.url).toBe(
+      "/api/settings/secrets/OPENAI_API_KEY_CODEX_PROFILE",
+    );
+  });
+});
+
+describe("buildStartConversationRequest agent-settings overlay", () => {
+  it("builds an ACP conversation from an overlay over openhands slot settings", () => {
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          agent_kind: "openhands",
+          llm: { model: "nested-model", api_key: "slot-key" },
+        },
+      },
+      agentSettingsOverlay: {
+        agent_kind: "acp",
+        acp_server: "codex",
+        acp_command: [],
+        acp_args: [],
+        acp_model: "gpt-5.5",
+      },
+    }) as {
+      agent_settings: Record<string, unknown>;
+      tags?: Record<string, string>;
+    };
+
+    // The overlay decides the engine — the slot is never written.
+    expect(payload.agent_settings.agent_kind).toBe("acp");
+    expect(payload.agent_settings.acp_server).toBe("codex");
+    expect(payload.agent_settings.acp_model).toBe("gpt-5.5");
+    // The slot's LLM credentials must not leak onto the ACP payload.
+    expect(payload.agent_settings.llm).toBeUndefined();
+    expect(payload.tags?.[ACP_SERVER_TAG_KEY]).toBe("codex");
+  });
+
+  it("builds an OpenHands conversation from an overlay over an acp slot", () => {
+    const payload = buildStartConversationRequest({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agent_settings: {
+          ...DEFAULT_SETTINGS.agent_settings,
+          agent_kind: "acp",
+          acp_server: "claude-code",
+          llm: { model: "nested-model" },
+        },
+      },
+      agentSettingsOverlay: { agent_kind: "openhands" },
+    }) as {
+      agent_settings: Record<string, unknown> & {
+        llm: Record<string, unknown>;
+      };
+      tags?: Record<string, string>;
+    };
+
+    expect(payload.agent_settings.agent_kind).toBe("openhands");
+    // OpenHands payloads carry the llm and no acp fields or acp tag.
+    expect(payload.agent_settings.llm.model).toBe("nested-model");
+    expect(payload.agent_settings.acp_server).toBeUndefined();
+    expect(payload.tags).toBeUndefined();
+  });
+});

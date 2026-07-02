@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,7 +38,17 @@ function buildSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-function renderAgentSettingsScreen() {
+async function renderAgentSettingsScreen() {
+  const result = renderCollapsed();
+  // The applied-engine form ships collapsed behind the Advanced disclosure
+  // (profiles-first Agent page); expand it so the legacy form assertions
+  // keep exercising the real controls. findBy waits out the settings
+  // query's loading state.
+  fireEvent.click(await screen.findByTestId("agent-advanced-toggle"));
+  return result;
+}
+
+function renderCollapsed() {
   return render(<AgentSettingsScreen />, {
     wrapper: ({ children }) => (
       <MemoryRouter>
@@ -82,7 +92,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
     expect(screen.getByTestId("agent-type-selector")).toBeInTheDocument();
     // Sub-agents toggle visible on the OpenHands branch.
@@ -106,7 +116,7 @@ describe("AgentSettingsScreen", () => {
     );
 
     // Act
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     // Assert — t() is stubbed to return the key, so the rendered text is
@@ -130,7 +140,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     // Toggle sub-agents on via the enclosing label
@@ -167,7 +177,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     const input = screen.getByTestId("sdk-settings-tool_concurrency_limit");
@@ -198,7 +208,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     // Sub-agents toggle should be visible initially
@@ -236,7 +246,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const commandInput = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -262,7 +272,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
 
     await screen.findByTestId("agent-command-input");
     expect(screen.getByLabelText("SETTINGS$AGENT_MODEL")).toHaveValue(
@@ -285,7 +295,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-command-input");
     await user.click(screen.getByLabelText("SETTINGS$AGENT_MODEL"));
     await user.click(await screen.findByText("Claude Haiku 4.5"));
@@ -320,7 +330,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-command-input");
     // Form loads with the Claude Code default visible.
     expect(screen.getByLabelText("SETTINGS$AGENT_MODEL")).toHaveValue(
@@ -377,7 +387,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-command-input");
     expect(screen.getByLabelText("SETTINGS$AGENT_MODEL")).toHaveValue(
       "Claude Opus 4.8 (1M)",
@@ -418,7 +428,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     // Switching to ACP prefills the command from the first registered provider
@@ -475,7 +485,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     await user.click(screen.getByTestId("agent-type-selector"));
@@ -512,7 +522,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const cmd = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -538,7 +548,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const cmd = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -563,7 +573,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     await user.click(screen.getByTestId("agent-type-selector"));
@@ -620,7 +630,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const cmd = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -682,7 +692,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const cmd = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -730,7 +740,7 @@ describe("AgentSettingsScreen", () => {
     );
     const save = vi.spyOn(SettingsService, "saveSettings");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     const cmd = (await screen.findByTestId(
       "agent-command-input",
     )) as HTMLTextAreaElement;
@@ -769,7 +779,7 @@ describe("AgentSettingsScreen", () => {
     const saveSettings = vi.spyOn(SettingsService, "saveSettings");
     const createSecret = vi.spyOn(SecretsService, "createSecret");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     // Switch to ACP (Claude Code prefilled) and paste a credential, then click
@@ -823,7 +833,7 @@ describe("AgentSettingsScreen", () => {
     const saveSettings = vi.spyOn(SettingsService, "saveSettings");
     const createSecret = vi.spyOn(SecretsService, "createSecret");
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     await user.type(
@@ -860,7 +870,7 @@ describe("AgentSettingsScreen", () => {
       }),
     );
 
-    renderAgentSettingsScreen();
+    await renderAgentSettingsScreen();
     await screen.findByTestId("agent-settings-screen");
 
     expect(

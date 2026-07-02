@@ -4,6 +4,7 @@ import {
   type ChatInputModelState,
 } from "#/hooks/use-chat-input-model-state";
 import { useSwitchAcpModel } from "#/hooks/mutation/use-switch-acp-model";
+import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
 import { ComboboxCaretInline } from "#/ui/combobox-caret";
 import SettingsGearIcon from "#/icons/settings-gear.svg?react";
 import CheckIcon from "#/icons/checkmark.svg?react";
@@ -51,14 +52,24 @@ export function ChatInputModelMenuContent({
 }: ChatInputModelMenuContentProps) {
   const { t } = useTranslation("openhands");
   const switchAcpModel = useSwitchAcpModel();
+  const setPendingModel = useAgentProfileSelectionStore(
+    (state) => state.setPendingModel,
+  );
   const hasModelRows = model.showAcpPicker || Boolean(model.displayModel);
 
   const handleSelectAcpModel = (modelId: string) => {
     if (modelId !== model.currentModelId) {
-      switchAcpModel.mutate({
-        conversationId: model.switchConversationId,
-        model: modelId,
-      });
+      if (model.isPendingProfileMode) {
+        // A pending agent profile drives the next conversation: the pick is
+        // transient and rides the profile's diff at start. PATCHing global
+        // settings here would be overwritten by that diff anyway.
+        setPendingModel(modelId);
+      } else {
+        switchAcpModel.mutate({
+          conversationId: model.switchConversationId,
+          model: modelId,
+        });
+      }
     }
     onClose();
   };

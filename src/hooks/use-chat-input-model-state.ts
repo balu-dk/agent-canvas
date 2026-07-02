@@ -1,6 +1,8 @@
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useSettings } from "#/hooks/query/use-settings";
 import { useAcpModelContext } from "#/hooks/use-acp-model-context";
+import { useEffectivePendingAgentProfile } from "#/hooks/use-agent-profiles";
+import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
 import { useOptionalConversationId } from "#/hooks/use-conversation-id";
 import {
   getAcpPreferredDefaultModel,
@@ -17,6 +19,13 @@ export interface ChatInputModelState {
   availableAcpModels: ACPModelOption[];
   showAcpPicker: boolean;
   switchConversationId: string | null;
+  /**
+   * True on home when a pending agent profile drives the model affordance.
+   * Model picks must then update the transient pending selection (applied
+   * with the profile at conversation start) instead of PATCHing global
+   * settings — which the profile's diff would overwrite anyway.
+   */
+  isPendingProfileMode: boolean;
   destinationPath: "/settings/agent" | "/settings";
   destinationLabel: string;
 }
@@ -25,6 +34,10 @@ export function useChatInputModelState(): ChatInputModelState {
   const { data: conversation } = useActiveConversation();
   const { data: settings } = useSettings();
   const { conversationId } = useOptionalConversationId();
+  const pendingProfile = useEffectivePendingAgentProfile();
+  const pendingModel = useAgentProfileSelectionStore(
+    (state) => state.pendingModel,
+  );
   const {
     isActiveAcpConversation,
     isHomeAcp,
@@ -33,12 +46,19 @@ export function useChatInputModelState(): ChatInputModelState {
     destinationLabel,
   } = useAcpModelContext();
 
+  // On home a pending agent profile decides the engine — the model list and
+  // current model must follow the profile, not the global settings it will
+  // overwrite at start (Test 2 = Codex must show Codex models).
+  const isPendingProfileMode = !conversation && pendingProfile !== null;
+
   const acpServerKey = isActiveAcpConversation
     ? conversation?.acp_server
     : isHomeAcp
-      ? typeof settings?.agent_settings?.acp_server === "string"
-        ? settings.agent_settings.acp_server
-        : null
+      ? isPendingProfileMode
+        ? pendingProfile!.engine
+        : typeof settings?.agent_settings?.acp_server === "string"
+          ? settings.agent_settings.acp_server
+          : null
       : null;
   const acpProvider = isAcpContext ? getAcpProvider(acpServerKey) : undefined;
 
@@ -58,6 +78,13 @@ export function useChatInputModelState(): ChatInputModelState {
         configured: acpConfiguredModel,
         providerDefault: getAcpPreferredDefaultModel(acpServerKey),
       });
+  } else if (isHomeAcp && isPendingProfileMode) {
+    // Pending-profile mode: the transient pick, else the engine's preferred
+    // default — matching exactly what conversation start will send.
+    currentModelId = resolveEffectiveAcpModel({
+      configured: pendingModel,
+      providerDefault: getAcpPreferredDefaultModel(acpServerKey),
+    });
   } else if (isHomeAcp) {
     currentModelId = resolveEffectiveAcpModel({
       configured: acpConfiguredModel,
@@ -86,6 +113,7 @@ export function useChatInputModelState(): ChatInputModelState {
     availableAcpModels,
     showAcpPicker,
     switchConversationId,
+    isPendingProfileMode,
     destinationPath,
     destinationLabel,
   };

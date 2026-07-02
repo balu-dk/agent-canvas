@@ -36,6 +36,12 @@ export interface ConversationMetadata {
    */
   active_profile?: string | null;
   /**
+   * The agent profile (engine + provider + credential bundle) the
+   * conversation was created with. Client-side only; lets conversation
+   * chips/switchers show which profile a conversation runs on.
+   */
+  agent_profile?: string | null;
+  /**
    * Snapshot of the plugins loaded into the conversation, captured at creation
    * (coordinates only — `parameters` are stripped): plugins explicitly attached
    * at creation plus the enabled installed plugins the SDK auto-loads into new

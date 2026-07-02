@@ -60,20 +60,20 @@ describe("useSettingsNavItems", () => {
     });
   });
 
-  it("returns the LLM settings item unchanged on local backends", () => {
+  it("returns the grouped OpenHands settings item unchanged on local backends", () => {
     useConfigMock.mockReturnValue({ data: createConfig() });
 
     const { result } = renderHook(() => useSettingsNavItems());
-    const llmItem = result.current.find(
-      (item) => item.type === "item" && item.item.to === "/settings/llm",
+    const openhandsItem = result.current.find(
+      (item) => item.type === "item" && item.item.to === "/settings/openhands",
     );
 
-    const baseLlm = OSS_NAV_ITEMS.find(
-      (item) => item.to === "/settings/llm",
+    const baseOpenHands = OSS_NAV_ITEMS.find(
+      (item) => item.to === "/settings/openhands",
     )!;
-    expect(llmItem).toEqual({
+    expect(openhandsItem).toEqual({
       type: "item",
-      item: baseLlm,
+      item: baseOpenHands,
     });
   });
 
@@ -120,59 +120,23 @@ describe("useSettingsNavItems", () => {
     expect(paths).not.toContain("/settings/mcp");
   });
 
-  it("disables LLM + Condenser when the active agent_kind is acp", () => {
+  it("keeps every item enabled when the active agent_kind is acp (in-page gate instead of nav disable)", () => {
     useConfigMock.mockReturnValue({ data: createConfig() });
     useSettingsMock.mockReturnValue({ data: acpClaudeCodeSettings });
 
     const { result } = renderHook(() => useSettingsNavItems());
-    const byPath = new Map(
-      result.current
-        .filter((item) => item.type === "item")
-        .map(
-          (item) =>
-            [item.type === "item" ? item.item.to : "", item] as const,
-        ),
-    );
-
-    const llm = byPath.get("/settings/llm");
-    expect(llm?.type).toBe("item");
-    if (llm?.type === "item") {
-      expect(llm.disabled).toBe(true);
-      expect(llm.disabledAgentName).toBe("Claude Code");
+    for (const rendered of result.current) {
+      if (rendered.type === "item") {
+        expect(rendered.disabled).toBeFalsy();
+      }
     }
 
-    const condenser = byPath.get("/settings/condenser");
-    expect(condenser?.type).toBe("item");
-    if (condenser?.type === "item") {
-      expect(condenser.disabled).toBe(true);
-    }
-
-    // Items without `disabledByAcp` stay enabled.
-    const secrets = byPath.get("/settings/secrets");
-    if (secrets?.type === "item") {
-      expect(secrets.disabled).toBeUndefined();
-    }
-
-    // The agent-settings entry itself is not gated.
-    const agent = byPath.get("/settings/agent");
-    if (agent?.type === "item") {
-      expect(agent.disabled).toBeUndefined();
-    }
-  });
-
-  it("falls back to 'ACP Agent' when the saved acp_server is unknown", () => {
-    useConfigMock.mockReturnValue({ data: createConfig() });
-    useSettingsMock.mockReturnValue({
-      data: { agent_settings: { agent_kind: "acp", acp_server: "custom" } },
-    });
-
-    const { result } = renderHook(() => useSettingsNavItems());
-    const llm = result.current.find(
-      (r) => r.type === "item" && r.item.to === "/settings/llm",
-    );
-    if (llm?.type === "item") {
-      expect(llm.disabledAgentName).toBe("ACP Agent");
-    }
+    // The OpenHands group stays listed and reachable; the page itself
+    // renders the OpenHandsEngineGate while an ACP agent is applied.
+    const paths = result.current
+      .filter((item) => item.type === "item")
+      .map((item) => (item.type === "item" ? item.item.to : null));
+    expect(paths).toContain("/settings/openhands");
   });
 
   it("leaves all items enabled when agent_kind is openhands", () => {
