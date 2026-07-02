@@ -261,9 +261,10 @@ export function ChatInputActions({
         : "llm-profile"
       : "agent-profile"
     : isCloud
-      ? // In-conversation on cloud keeps the model picker for now: OpenHands
-        // live LLM-profile switch has no cloud per-conversation endpoint yet
-        // (tracked for full parity); ACP uses the model picker regardless.
+      ? // In-conversation on cloud uses the model picker (unchanged from before
+        // this PR). In-conversation LLM-profile switching is a local-only
+        // capability by design — cloud has no per-conversation switch endpoint
+        // and masks profile secrets. ACP uses the model picker regardless.
         "model"
       : modelState.isAcpContext
         ? "model"
