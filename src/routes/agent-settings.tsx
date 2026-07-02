@@ -211,7 +211,7 @@ interface AgentSettingsScreenProps {
   onSaveControlChange?: (control: AgentSettingsSaveControl) => void;
 }
 
-function AgentSettingsScreen({
+export function AgentSettingsScreen({
   embedded = false,
   agentSettingsOverride = null,
   onSaveControlChange,
@@ -795,4 +795,16 @@ function AgentSettingsScreen({
   );
 }
 
-export default AgentSettingsScreen;
+/**
+ * Route entry for `/settings/agent` (global Agent settings).
+ *
+ * Note: This is a route file; only the router should import the default export.
+ * React Router's Vite plugin wraps a route's default export with
+ * `withComponentProps`, which invokes it with route props and drops any props
+ * passed by a parent — so embedded consumers (the Agent-profile editor) MUST
+ * import the named `AgentSettingsScreen` export instead, or `embedded` /
+ * `onSaveControlChange` never arrive. Mirrors `LlmSettingsRoute`.
+ */
+export default function AgentSettingsRoute() {
+  return <AgentSettingsScreen />;
+}

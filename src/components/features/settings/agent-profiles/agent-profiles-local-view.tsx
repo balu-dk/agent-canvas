@@ -4,7 +4,8 @@ import { AgentProfilesManager } from "./agent-profiles-manager";
 import { ProfileNameInput } from "#/components/features/settings/llm-profiles/profile-name-input";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input";
-import AgentSettingsScreen, {
+import {
+  AgentSettingsScreen,
   type AgentSettingsSaveControl,
 } from "#/routes/agent-settings";
 import AgentProfilesService, {

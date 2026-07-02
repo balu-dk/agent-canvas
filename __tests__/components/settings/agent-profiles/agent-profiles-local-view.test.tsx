@@ -14,9 +14,11 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("#/routes/agent-settings", () => ({
-  __esModule: true,
-  default: ({
+// The view imports the NAMED `AgentSettingsScreen` export (not the route's
+// default, which React Router wraps and would strip the embedded props). Mock
+// the named export to match; the factory is hoisted, so define the stub inline.
+vi.mock("#/routes/agent-settings", () => {
+  const MockAgentSettings = ({
     onSaveControlChange,
   }: {
     onSaveControlChange?: (c: AgentSettingsSaveControl) => void;
@@ -25,8 +27,13 @@ vi.mock("#/routes/agent-settings", () => ({
       if (emitControl) onSaveControlChange?.(emitControl);
     }, [onSaveControlChange]);
     return <div data-testid="mock-agent-settings" />;
-  },
-}));
+  };
+  return {
+    __esModule: true,
+    AgentSettingsScreen: MockAgentSettings,
+    default: MockAgentSettings,
+  };
+});
 
 vi.mock("#/components/features/settings/agent-profiles/agent-profiles-manager", () => ({
   AgentProfilesManager: ({ onAddProfile }: { onAddProfile?: () => void }) => (
