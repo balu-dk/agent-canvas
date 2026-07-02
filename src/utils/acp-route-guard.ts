@@ -10,7 +10,7 @@ import AgentProfilesService from "#/api/agent-profiles-service/agent-profiles-se
 import { queryClient } from "#/query-client-config";
 
 /**
- * Issue a ``redirect`` to ``/settings/agent`` when the personal settings
+ * Issue a ``redirect`` to ``/settings/agents`` when the personal settings
  * say the active agent is ACP.
  *
  * The ACP sub-agent owns its own LLM and condenser, so the canvas-side

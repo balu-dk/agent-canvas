@@ -11,7 +11,7 @@ export interface SettingsNavItem {
   /** Short grey subline under the page title (`settings.tsx`). */
   subtitle: string;
   // When true, this item is greyed out (and its route redirects to
-  // ``/settings/agent``) while the active agent is ACP. The ACP sub-agent
+  // ``/settings/agents``) while the active agent is ACP. The ACP sub-agent
   // manages its own LLM / condenser / MCP, so these OpenHands-side
   // surfaces have nothing useful to configure. Drives both the navigation
   // disable in ``use-settings-nav-items.ts`` and the loader redirect in

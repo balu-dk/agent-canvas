@@ -243,14 +243,12 @@ export function ChatInputActions({
   };
 
   // Which chat-input model/profile picker to show:
-  //  - cloud: the model picker (AgentProfiles are local-first; the cloud
-  //    app-server has no profile surface yet, #3730)
-  //  - local home (no conversation): the AgentProfile picker, which starts a
-  //    new conversation / activates the default (#3727)
-  //  - local in an ACP conversation: the model picker, which live-switches the
-  //    running ACP model (set_session_model)
-  //  - local in an OpenHands conversation: the LLM-profile picker, which
-  //    live-switches the running conversation's LLM profile (/switch_profile)
+  //  - home (local or cloud): the AgentProfile picker, which starts a new
+  //    conversation / activates the default (#3727, cloud via #15060); when no
+  //    profiles exist yet, fall back (cloud → model, local → LLM-profile).
+  //  - in a cloud conversation, or a local ACP conversation: the model picker.
+  //  - in a local OpenHands conversation: the LLM-profile picker, which
+  //    live-switches the running conversation's LLM profile (/switch_profile).
   const pickerKind: "model" | "agent-profile" | "llm-profile" = !conversationId
     ? agentProfilesUnavailableOnHome
       ? // No profiles to launch from: cloud has no home LLM-profile activate
@@ -472,9 +470,8 @@ export function ChatInputActions({
             </div>
           )}
           <div ref={modelRef} className={cn(!showModelInline && "hidden")}>
-            {/* Home → AgentProfile picker (start-new/activate, #3727); inside a
-                conversation → live-switch the running model (ACP) or LLM profile
-                (OpenHands); cloud → model picker (#3730). See `pickerKind`. */}
+            {/* Picker depends on backend + whether we're in a conversation;
+                see the `pickerKind` cases above. */}
             {pickerKind === "model" ? (
               <ChatInputModel />
             ) : pickerKind === "agent-profile" ? (
