@@ -13,7 +13,8 @@ interface UseAgentProfilesOptions {
  * List the user's AgentProfiles (Settings → Agent profiles library). On first
  * GET of an empty store the backend lazily seeds one default profile mirroring
  * the user's prior config (#3719), so the list is never empty for an upgrading
- * user. Local-backend only — cloud has no `/api/agent-profiles` surface.
+ * user. Works on both local and cloud backends — `AgentProfilesService` routes
+ * cloud calls through the cloud proxy (OpenHands #15060).
  */
 export function useAgentProfiles(options: UseAgentProfilesOptions = {}) {
   const { backend, orgId } = useActiveBackend();
