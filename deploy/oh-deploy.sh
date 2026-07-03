@@ -173,6 +173,10 @@ cmd_check() {
 verify_build_smoke() {
   log "Installing deps + verifying"
   npm ci
+  # `src/i18n/declaration.ts` is generated (gitignored), so a fresh checkout
+  # lacks it and typecheck/lint fail without this. The Docker build regenerates
+  # it too (via `npm run build`), so the image is unaffected either way.
+  npm run make-i18n
   npm run typecheck
   npm run lint
   if [[ "$RUN_TESTS" == "1" ]]; then npm test; fi
