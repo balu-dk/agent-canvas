@@ -168,26 +168,9 @@ cmd_check() {
   return 0
 }
 
-cmd_build() {
-  ensure_src
-  cd "$SRC_DIR"
-  local up branch
-  up="$(upstream_sha)"
-  branch="sync/$(date +%Y%m%d-%H%M%S)"
-
-  log "Resetting working tree to fork/$FORK_BRANCH"
-  git checkout -B "$branch" "origin/$FORK_BRANCH"
-  git config user.email "deploy@balu.dk" >/dev/null 2>&1 || true
-  git config user.name "oh-deploy" >/dev/null 2>&1 || true
-
-  log "Merging upstream/$UPSTREAM_REF ($up) …"
-  if ! git merge --no-edit "upstream/$UPSTREAM_REF"; then
-    warn "Merge conflict — aborting, production untouched. Conflicted files:"
-    git diff --name-only --diff-filter=U || true
-    git merge --abort || true
-    exit 20
-  fi
-
+# Shared: install deps, verify, build the candidate image, and smoke-test it
+# in a throwaway container. Never touches production. Exits 30 on unhealthy.
+verify_build_smoke() {
   log "Installing deps + verifying"
   npm ci
   npm run typecheck
@@ -220,10 +203,55 @@ cmd_build() {
     docker rm -f oh-candidate >/dev/null 2>&1 || true
     exit 30
   fi
+}
+
+cmd_build() {
+  ensure_src
+  cd "$SRC_DIR"
+  local up branch
+  up="$(upstream_sha)"
+  branch="sync/$(date +%Y%m%d-%H%M%S)"
+
+  log "Resetting working tree to fork/$FORK_BRANCH"
+  git checkout -B "$branch" "origin/$FORK_BRANCH"
+  git config user.email "deploy@balu.dk" >/dev/null 2>&1 || true
+  git config user.name "oh-deploy" >/dev/null 2>&1 || true
+
+  log "Merging upstream/$UPSTREAM_REF ($up) …"
+  if ! git merge --no-edit "upstream/$UPSTREAM_REF"; then
+    warn "Merge conflict — aborting, production untouched. Conflicted files:"
+    git diff --name-only --diff-filter=U || true
+    git merge --abort || true
+    exit 20
+  fi
+
+  verify_build_smoke
 
   # Stash the upstream sha this candidate embeds, for `deploy` to record.
   echo "$up" > "$STATE_DIR/candidate-upstream.sha"
   log "BUILD OK. Candidate $CANDIDATE_TAG is ready to deploy."
+}
+
+# Build the fork's own main as-is, WITHOUT merging upstream. Use this to
+# deploy your own merged changes (a PR you just merged) without pulling
+# untested upstream work. Same safety as `build` (verify + smoke test).
+cmd_rebuild() {
+  ensure_src
+  cd "$SRC_DIR"
+
+  log "Checking out fork/$FORK_BRANCH (no upstream merge)"
+  git checkout -B "deploy-$(date +%Y%m%d-%H%M%S)" "origin/$FORK_BRANCH"
+
+  verify_build_smoke
+
+  # A rebuild doesn't advance the deployed upstream marker — carry the
+  # existing value forward so `deploy` leaves it unchanged.
+  if [[ -f "$DEPLOYED_SHA_FILE" ]]; then
+    cp "$DEPLOYED_SHA_FILE" "$STATE_DIR/candidate-upstream.sha"
+  else
+    rm -f "$STATE_DIR/candidate-upstream.sha"
+  fi
+  log "REBUILD OK. Candidate $CANDIDATE_TAG (fork main) is ready to deploy."
 }
 
 cmd_deploy() {
@@ -286,15 +314,18 @@ cmd_mark_notified() { echo "${1:?sha required}" > "$NOTIFIED_SHA_FILE"; log "Rec
 case "${1:-}" in
   check)         cmd_check ;;
   build)         cmd_build ;;
+  rebuild)       cmd_rebuild ;;
   deploy)        cmd_deploy ;;
   rollback)      cmd_rollback ;;
   status)        cmd_status ;;
   mark-notified) shift; cmd_mark_notified "${1:-}" ;;
   *) cat >&2 <<EOF
-usage: $0 <check|build|deploy|rollback|status|mark-notified <sha>>
+usage: $0 <check|build|rebuild|deploy|rollback|status|mark-notified <sha>>
   check          exit 0 if an undeployed upstream update exists (prints summary),
                  exit 10 if already up to date.
   build          merge upstream + verify + build & smoke-test candidate (safe).
+  rebuild        build the fork's own main as-is (no upstream merge) — deploy
+                 your own merged changes; verify + smoke-test (safe).
   deploy         promote the candidate to production (auto-rollback on failure).
   rollback       restore the last compose backup.
   status         show current vs upstream state.
