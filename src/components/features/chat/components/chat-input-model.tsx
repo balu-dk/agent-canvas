@@ -5,6 +5,7 @@ import {
 } from "#/hooks/use-chat-input-model-state";
 import { useSwitchAcpModel } from "#/hooks/mutation/use-switch-acp-model";
 import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
+import { useAcpModelMemoryStore } from "#/stores/acp-model-memory-store";
 import { ComboboxCaretInline } from "#/ui/combobox-caret";
 import SettingsGearIcon from "#/icons/settings-gear.svg?react";
 import CheckIcon from "#/icons/checkmark.svg?react";
@@ -55,6 +56,15 @@ export function ChatInputModelMenuContent({
   const setPendingModel = useAgentProfileSelectionStore(
     (state) => state.setPendingModel,
   );
+  const addCustomModel = useAcpModelMemoryStore((s) => s.addCustomModel);
+  const removeCustomModel = useAcpModelMemoryStore((s) => s.removeCustomModel);
+  const recordLastModel = useAcpModelMemoryStore((s) => s.recordLastModel);
+  const [isAddingCustom, setIsAddingCustom] = React.useState(false);
+  const [customValue, setCustomValue] = React.useState("");
+  const customInputRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (isAddingCustom) customInputRef.current?.focus();
+  }, [isAddingCustom]);
   const hasModelRows = model.showAcpPicker || Boolean(model.displayModel);
 
   const handleSelectAcpModel = (modelId: string) => {
@@ -71,7 +81,32 @@ export function ChatInputModelMenuContent({
         });
       }
     }
+    // Remember the pick per backend+engine so the next session defaults to it.
+    if (model.acpEngine) {
+      recordLastModel(model.backendId, model.acpEngine, modelId);
+    }
     onClose();
+  };
+
+  const handleAddCustomModel = () => {
+    const modelId = customValue.trim();
+    if (!modelId || !model.acpEngine) return;
+    // Persist the id so it becomes a permanent picker option, then select it.
+    addCustomModel(model.backendId, model.acpEngine, modelId);
+    setCustomValue("");
+    setIsAddingCustom(false);
+    handleSelectAcpModel(modelId);
+  };
+
+  const handleRemoveCustomModel = (
+    event: React.MouseEvent,
+    modelId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (model.acpEngine) {
+      removeCustomModel(model.backendId, model.acpEngine, modelId);
+    }
   };
 
   return (
@@ -108,6 +143,19 @@ export function ChatInputModelMenuContent({
                 >
                   {option.label}
                 </span>
+                {option.custom && (
+                  <button
+                    type="button"
+                    aria-label={t(I18nKey.COMMON$REMOVE)}
+                    title={t(I18nKey.COMMON$REMOVE)}
+                    className="shrink-0 px-1 text-[var(--oh-text-dim)] hover:text-[var(--oh-foreground)]"
+                    onClick={(event) =>
+                      handleRemoveCustomModel(event, option.id)
+                    }
+                  >
+                    ×
+                  </button>
+                )}
                 {isSelected && (
                   <CheckIcon
                     width={14}
@@ -119,6 +167,56 @@ export function ChatInputModelMenuContent({
               </ContextMenuListItem>
             );
           })}
+          {model.acpEngine &&
+            (isAddingCustom ? (
+              <li className="px-2 py-1">
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={customInputRef}
+                    type="text"
+                    value={customValue}
+                    placeholder={t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}
+                    aria-label={t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}
+                    data-testid="chat-input-acp-model-custom-input"
+                    className="min-w-0 flex-1 rounded border border-[var(--oh-border)] bg-transparent px-2 py-1 text-sm leading-5 text-[var(--oh-foreground)] outline-none focus:border-[var(--oh-interactive)]"
+                    onChange={(event) => setCustomValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleAddCustomModel();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        setIsAddingCustom(false);
+                        setCustomValue("");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!customValue.trim()}
+                    className="shrink-0 rounded px-2 py-1 text-sm text-[var(--oh-interactive)] hover:bg-[var(--oh-interactive-hover)] disabled:opacity-40"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      handleAddCustomModel();
+                    }}
+                  >
+                    {t(I18nKey.BUTTON$ADD)}
+                  </button>
+                </div>
+              </li>
+            ) : (
+              <ContextMenuListItem
+                testId="chat-input-acp-model-custom"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsAddingCustom(true);
+                }}
+                className="text-sm text-[var(--oh-text-dim)]"
+              >
+                {`+ ${t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}`}
+              </ContextMenuListItem>
+            ))}
         </>
       ) : model.displayModel ? (
         <li className="text-sm">

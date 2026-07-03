@@ -21,6 +21,8 @@ import {
   type AgentProfile,
 } from "#/api/agent-profile-store";
 import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
+import { getLastAcpModel } from "#/stores/acp-model-memory-store";
+import { getActiveBackend } from "#/api/backend-registry/active-store";
 
 interface CreateConversationVariables {
   query?: string;
@@ -91,8 +93,18 @@ export const useCreateConversation = () => {
         variables.agentProfile !== undefined
           ? variables.agentProfile
           : resolvePickedProfile();
+      // The transient chat-input pick rides along; if the user never opened the
+      // picker this session, fall back to the last-used model persisted for this
+      // engine so a saved custom model (e.g. a newer id missing from the
+      // provider list) still applies. OpenHands profiles carry no ACP model.
       const agentProfileModel = agentProfile
-        ? useAgentProfileSelectionStore.getState().pendingModel
+        ? (useAgentProfileSelectionStore.getState().pendingModel ??
+          (agentProfile.engine !== "openhands"
+            ? getLastAcpModel(
+                getActiveBackend().backend.id,
+                agentProfile.engine,
+              )
+            : null))
         : null;
 
       const conversation =
