@@ -83,6 +83,16 @@ ensure_src() {
   log "Fetching fork + upstream"
   git fetch --quiet origin
   git fetch --quiet upstream
+  # A shallow checkout (e.g. an earlier `clone --depth`) omits the commit the
+  # fork and upstream share as their merge-base, so `build`'s upstream merge
+  # aborts with "refusing to merge unrelated histories" even though they ARE
+  # related. Restore full history so the merge sees the real merge-base. This
+  # is a no-op on an already-complete checkout.
+  if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+    log "Shallow checkout — unshallowing for a valid merge-base"
+    git fetch --unshallow --quiet origin || true
+    git fetch --quiet upstream || true
+  fi
 }
 
 upstream_sha() { git -C "$SRC_DIR" rev-parse "upstream/$UPSTREAM_REF"; }
