@@ -185,24 +185,36 @@ cmd_check_fork() {
   # said so). Independent of the upstream watcher; a fork update needs
   # `rebuild` (no upstream merge), not `build`.
   ensure_src
-  local fork dep
+  local fork dep dep_valid=0 ahead
   fork="$(fork_sha)"
   dep="$(cat "$DEPLOYED_FORK_SHA_FILE" 2>/dev/null || echo '')"
+  # The recorded sha may be missing (first run) or no longer exist (fork history
+  # rewritten / force-pushed). Only trust it if it resolves to a real commit —
+  # otherwise a bad revision range would make `git log`/`rev-list` fail.
+  if [[ -n "$dep" ]] && \
+     git -C "$SRC_DIR" rev-parse --verify --quiet "$dep^{commit}" >/dev/null; then
+    dep_valid=1
+  fi
   echo "fork_branch=$FORK_BRANCH"
   echo "fork_sha=$fork"
   echo "deployed_fork_sha=${dep:-<none>}"
-  if [[ -n "$dep" && "$fork" == "$dep" ]]; then
-    echo "status=up-to-date"
-    return 10
+  # Count commits on the fork branch not yet deployed. Zero means equal OR
+  # behind (e.g. main was reverted under what's deployed) — nothing to ship.
+  if [[ "$dep_valid" -eq 1 ]]; then
+    ahead="$(git -C "$SRC_DIR" rev-list --count "$dep..origin/$FORK_BRANCH")"
+    if [[ "$ahead" -eq 0 ]]; then
+      echo "status=up-to-date"
+      return 10
+    fi
   fi
   echo "status=update-available"
   echo "--- fork commits not yet deployed (deployed..origin/$FORK_BRANCH) ---"
-  if [[ -n "$dep" ]]; then
+  if [[ "$dep_valid" -eq 1 ]]; then
     git -C "$SRC_DIR" log --oneline "$dep..origin/$FORK_BRANCH" | head -40 || true
   else
-    # No recorded deployed fork sha (pre-existing deploy). Show recent history
-    # so OpenClaw can summarise, and let the user decide.
-    echo "(no deployed_fork_sha on record — showing recent fork commits)"
+    # No usable recorded sha (first run, or rewritten history). Show recent
+    # history so OpenClaw can summarise, and let the user decide.
+    echo "(no valid deployed_fork_sha on record — showing recent fork commits)"
     git -C "$SRC_DIR" log --oneline -20 "origin/$FORK_BRANCH" || true
   fi
   return 0
