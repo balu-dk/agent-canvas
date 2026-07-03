@@ -8,6 +8,7 @@
 # risking the running server:
 #
 #   check         Is there a new upstream commit we haven't deployed? (summary)
+#   check-fork    Is our own fork main ahead of what's deployed? (merged PRs)
 #   build         Merge upstream into the fork checkout, verify, build a
 #                 CANDIDATE image, and smoke-test it in a throwaway container.
 #                 Never touches production. Stops (non-zero) on merge conflict
@@ -61,6 +62,11 @@ die()  { printf '\033[31m[oh-deploy] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 mkdir -p "$STATE_DIR"
 DEPLOYED_SHA_FILE="$STATE_DIR/deployed-upstream.sha"
 NOTIFIED_SHA_FILE="$STATE_DIR/notified-upstream.sha"
+# Fork-side markers: the fork `main` commit a build is based on. `deploy` records
+# the deployed one so `check-fork` can tell when our own merges (PRs) are ahead
+# of what's running — the token-free half of the "deploy my own change" loop.
+DEPLOYED_FORK_SHA_FILE="$STATE_DIR/deployed-fork.sha"
+NOTIFIED_FORK_SHA_FILE="$STATE_DIR/notified-fork.sha"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +86,7 @@ ensure_src() {
 }
 
 upstream_sha() { git -C "$SRC_DIR" rev-parse "upstream/$UPSTREAM_REF"; }
+fork_sha()     { git -C "$SRC_DIR" rev-parse "origin/$FORK_BRANCH"; }
 
 read_agent_server_image() {
   # AGENT_SERVER_IMAGE = <images.agentServer>:<versions.agentServer>-python
@@ -171,6 +178,48 @@ cmd_check() {
   return 0
 }
 
+cmd_check_fork() {
+  # Is our own fork main ahead of what's deployed? Answers the "did a PR get
+  # merged that we haven't shipped?" question with zero LLM tokens — OpenClaw
+  # only speaks up when fork_sha != deployed_fork_sha (and it hasn't already
+  # said so). Independent of the upstream watcher; a fork update needs
+  # `rebuild` (no upstream merge), not `build`.
+  ensure_src
+  local fork dep dep_valid=0 ahead
+  fork="$(fork_sha)"
+  dep="$(cat "$DEPLOYED_FORK_SHA_FILE" 2>/dev/null || echo '')"
+  # The recorded sha may be missing (first run) or no longer exist (fork history
+  # rewritten / force-pushed). Only trust it if it resolves to a real commit —
+  # otherwise a bad revision range would make `git log`/`rev-list` fail.
+  if [[ -n "$dep" ]] && \
+     git -C "$SRC_DIR" rev-parse --verify --quiet "$dep^{commit}" >/dev/null; then
+    dep_valid=1
+  fi
+  echo "fork_branch=$FORK_BRANCH"
+  echo "fork_sha=$fork"
+  echo "deployed_fork_sha=${dep:-<none>}"
+  # Count commits on the fork branch not yet deployed. Zero means equal OR
+  # behind (e.g. main was reverted under what's deployed) — nothing to ship.
+  if [[ "$dep_valid" -eq 1 ]]; then
+    ahead="$(git -C "$SRC_DIR" rev-list --count "$dep..origin/$FORK_BRANCH")"
+    if [[ "$ahead" -eq 0 ]]; then
+      echo "status=up-to-date"
+      return 10
+    fi
+  fi
+  echo "status=update-available"
+  echo "--- fork commits not yet deployed (deployed..origin/$FORK_BRANCH) ---"
+  if [[ "$dep_valid" -eq 1 ]]; then
+    git -C "$SRC_DIR" log --oneline "$dep..origin/$FORK_BRANCH" | head -40 || true
+  else
+    # No usable recorded sha (first run, or rewritten history). Show recent
+    # history so OpenClaw can summarise, and let the user decide.
+    echo "(no valid deployed_fork_sha on record — showing recent fork commits)"
+    git -C "$SRC_DIR" log --oneline -20 "origin/$FORK_BRANCH" || true
+  fi
+  return 0
+}
+
 # Shared: install deps, verify, build the candidate image, and smoke-test it
 # in a throwaway container. Never touches production. Exits 30 on unhealthy.
 verify_build_smoke() {
@@ -234,8 +283,10 @@ cmd_build() {
 
   verify_build_smoke
 
-  # Stash the upstream sha this candidate embeds, for `deploy` to record.
+  # Stash the upstream + fork-base shas this candidate embeds, for `deploy` to
+  # record. The fork base is the pre-merge fork main tip the candidate contains.
   echo "$up" > "$STATE_DIR/candidate-upstream.sha"
+  fork_sha > "$STATE_DIR/candidate-fork.sha"
   log "BUILD OK. Candidate $CANDIDATE_TAG is ready to deploy."
 }
 
@@ -258,6 +309,8 @@ cmd_rebuild() {
   else
     rm -f "$STATE_DIR/candidate-upstream.sha"
   fi
+  # The candidate IS fork main as-is, so record its tip for `check-fork`.
+  fork_sha > "$STATE_DIR/candidate-fork.sha"
   log "REBUILD OK. Candidate $CANDIDATE_TAG (fork main) is ready to deploy."
 }
 
@@ -298,6 +351,8 @@ cmd_deploy() {
     log "Deploy healthy ✓"
     [[ -f "$STATE_DIR/candidate-upstream.sha" ]] && \
       cp "$STATE_DIR/candidate-upstream.sha" "$DEPLOYED_SHA_FILE"
+    [[ -f "$STATE_DIR/candidate-fork.sha" ]] && \
+      cp "$STATE_DIR/candidate-fork.sha" "$DEPLOYED_FORK_SHA_FILE"
     log "DEPLOY OK. Running image: $IMAGE_TAG"
   else
     warn "New container unhealthy — ROLLING BACK"
@@ -337,29 +392,39 @@ cmd_status() {
   echo "upstream_${UPSTREAM_REF}_sha=$(upstream_sha)"
   echo "candidate_present=$([[ -n "$(docker images -q "$CANDIDATE_TAG" 2>/dev/null)" ]] && echo yes || echo no)"
   echo "last_notified_sha=$(cat "$NOTIFIED_SHA_FILE" 2>/dev/null || echo '<none>')"
+  echo "deployed_fork_sha=$(cat "$DEPLOYED_FORK_SHA_FILE" 2>/dev/null || echo '<none>')"
+  echo "fork_${FORK_BRANCH}_sha=$(fork_sha)"
+  echo "last_notified_fork_sha=$(cat "$NOTIFIED_FORK_SHA_FILE" 2>/dev/null || echo '<none>')"
 }
 
 cmd_mark_notified() { echo "${1:?sha required}" > "$NOTIFIED_SHA_FILE"; log "Recorded notified sha ${1}"; }
+cmd_mark_notified_fork() { echo "${1:?sha required}" > "$NOTIFIED_FORK_SHA_FILE"; log "Recorded notified fork sha ${1}"; }
 
 # ── Dispatch ─────────────────────────────────────────────────────────────────
 case "${1:-}" in
-  check)         cmd_check ;;
-  build)         cmd_build ;;
-  rebuild)       cmd_rebuild ;;
-  deploy)        cmd_deploy ;;
-  rollback)      cmd_rollback ;;
-  status)        cmd_status ;;
-  mark-notified) shift; cmd_mark_notified "${1:-}" ;;
+  check)              cmd_check ;;
+  check-fork)         cmd_check_fork ;;
+  build)              cmd_build ;;
+  rebuild)            cmd_rebuild ;;
+  deploy)             cmd_deploy ;;
+  rollback)           cmd_rollback ;;
+  status)             cmd_status ;;
+  mark-notified)      shift; cmd_mark_notified "${1:-}" ;;
+  mark-notified-fork) shift; cmd_mark_notified_fork "${1:-}" ;;
   *) cat >&2 <<EOF
-usage: $0 <check|build|rebuild|deploy|rollback|status|mark-notified <sha>>
-  check          exit 0 if an undeployed upstream update exists (prints summary),
+usage: $0 <check|check-fork|build|rebuild|deploy|rollback|status|mark-notified[-fork] <sha>>
+  check          exit 0 if an undeployed UPSTREAM update exists (prints summary),
                  exit 10 if already up to date.
+  check-fork     exit 0 if our own fork main is ahead of what's deployed (a
+                 merged PR to ship), exit 10 if up to date. Needs 'rebuild'.
   build          merge upstream + verify + build & smoke-test candidate (safe).
   rebuild        build the fork's own main as-is (no upstream merge) — deploy
                  your own merged changes; verify + smoke-test (safe).
   deploy         promote the candidate to production (auto-rollback on failure).
   rollback       restore the last compose backup.
-  status         show current vs upstream state.
+  status         show current vs upstream + fork state.
+  mark-notified <sha>        record an upstream sha the user was told about.
+  mark-notified-fork <sha>   record a fork sha the user was told about.
 See deploy/README.md for the OpenClaw watcher/approval prompts.
 EOF
      exit 2 ;;

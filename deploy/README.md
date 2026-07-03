@@ -14,7 +14,7 @@ deploys, so conversations, secrets and projects survive every rebuild.
 `oh-deploy.sh` is the deterministic engine; OpenClaw provides the judgment
 (deciding what to notify about, and whether to proceed on a merge conflict).
 
-## The two loops
+## The loops
 
 ### 1. Watcher (scheduled — the "let me know" loop)
 
@@ -36,7 +36,28 @@ haven't already been told about, OpenClaw messages you and asks.
 > `oh-deploy.sh mark-notified <upstream_sha>` so you don't repeat yourself.
 > Do NOT build or deploy anything in this loop.
 
-### 2. Build + deploy (on your approval — the "do it" loop)
+### 2. Fork watcher (scheduled — ship your own merged PRs)
+
+Same shape as the upstream watcher, but for **our own fork**. `check-fork`
+compares `origin/main` against the fork SHA that's actually deployed (recorded
+by `deploy`), so it fires only when you've merged something we haven't shipped —
+e.g. a bugfix PR. A fork update ships with **`rebuild`** (no upstream merge),
+not `build`. Costs zero tokens while nothing is merged.
+
+**OpenClaw prompt (schedule daily, or run on demand):**
+
+> Run `/opt/agent-canvas-src/deploy/oh-deploy.sh check-fork`. If it reports
+> `status=up-to-date`, do nothing. If `status=update-available`, compare the
+> printed `fork_sha` to `oh-deploy.sh status` field `last_notified_fork_sha`:
+> if equal, stay quiet. Otherwise message me with a one-line summary of the
+> listed commits and ask: **"Deploy the merged fork changes now, or wait?"**
+> Then run `oh-deploy.sh mark-notified-fork <fork_sha>` so you don't repeat
+> yourself. Do NOT build or deploy in this loop. On my "yes", run
+> `oh-deploy.sh rebuild` and, on **"REBUILD OK"**, `oh-deploy.sh deploy`
+> (report `DEPLOY OK` / the running image, or the auto-rollback). Do NOT touch
+> `/etc/caddy`, rotate secrets, prune images, or touch volumes.
+
+### 3. Build + deploy (on your approval — the "do it" loop)
 
 **OpenClaw prompt (run when you say yes):**
 
@@ -87,10 +108,13 @@ arg regardless.
 ## Commands quick-reference
 
 ```
-oh-deploy.sh check     # update available? (exit 0 yes / 10 no) + summary
-oh-deploy.sh build     # merge + verify + candidate image + smoke test (safe)
-oh-deploy.sh deploy    # promote candidate (auto-rollback on failure)
-oh-deploy.sh rollback  # restore last compose backup
-oh-deploy.sh status    # current vs upstream state
-oh-deploy.sh mark-notified <sha>
+oh-deploy.sh check       # upstream update available? (exit 0 yes / 10 no) + summary
+oh-deploy.sh check-fork  # fork main ahead of deployed? (merged PRs to ship)
+oh-deploy.sh build       # merge upstream + verify + candidate image + smoke test
+oh-deploy.sh rebuild     # build fork main as-is (no upstream merge) — ship own PRs
+oh-deploy.sh deploy      # promote candidate (auto-rollback on failure)
+oh-deploy.sh rollback    # restore last compose backup
+oh-deploy.sh status      # current vs upstream + fork state
+oh-deploy.sh mark-notified <sha>        # upstream sha the user was told about
+oh-deploy.sh mark-notified-fork <sha>   # fork sha the user was told about
 ```
