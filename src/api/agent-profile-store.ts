@@ -1,6 +1,17 @@
 import { getActiveBackend } from "#/api/backend-registry/active-store";
+import SettingsService from "#/api/settings-service/settings-service.api";
 
 const STORAGE_KEY = "openhands-agent-profiles";
+
+// Fired whenever profiles change (local write or server load) so subscribed
+// surfaces re-read. Canonical here; re-exported from hooks/use-agent-profiles.
+export const AGENT_PROFILES_CHANGED_EVENT = "openhands-agent-profiles-changed";
+
+export const notifyAgentProfilesChanged = (): void => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AGENT_PROFILES_CHANGED_EVENT));
+  }
+};
 
 /**
  * A named agent configuration: engine + provider + credential.
@@ -88,7 +99,26 @@ const activeBackendId = (): string => getActiveBackend().backend.id;
 const readBackend = (backendId: string): BackendProfiles =>
   readAll()[backendId] ?? { profiles: [], defaultProfileId: null };
 
-const writeBackend = (backendId: string, data: BackendProfiles): void => {
+// Best-effort write-through to the server (misc_settings.agent_profiles) so
+// profiles sync across browsers/devices. Fire-and-forget: the localStorage
+// cache is the sync source for the UI, and a failed server write (offline,
+// old agent-server, cloud) never blocks the local change.
+const persistToServer = (backendId: string): void => {
+  if (getActiveBackend().backend.id !== backendId) return;
+  const data = readBackend(backendId);
+  void SettingsService.saveMiscAgentProfiles({
+    profiles: data.profiles,
+    default_profile_id: data.defaultProfileId,
+  }).catch((error) => {
+    console.warn("agent-profiles: server persist failed", error);
+  });
+};
+
+const writeBackend = (
+  backendId: string,
+  data: BackendProfiles,
+  opts: { persist?: boolean; notify?: boolean } = {},
+): void => {
   const all = readAll();
   if (data.profiles.length === 0 && data.defaultProfileId === null) {
     delete all[backendId];
@@ -96,6 +126,46 @@ const writeBackend = (backendId: string, data: BackendProfiles): void => {
     all[backendId] = data;
   }
   writeAll(all);
+  if (opts.persist !== false) persistToServer(backendId);
+  if (opts.notify !== false) notifyAgentProfilesChanged();
+};
+
+// Track which backends we've already hydrated from the server this session so
+// the load only runs once per backend (until a reload).
+const hydratedBackends = new Set<string>();
+
+/**
+ * Hydrate the active backend's profiles from the server
+ * (misc_settings.agent_profiles), making localStorage a cache of the
+ * server-side source of truth. On a fresh browser this restores your saved
+ * profiles; on an existing browser whose profiles predate server storage, it
+ * migrates them up to the server once (so they start syncing).
+ */
+export const loadAgentProfilesFromServer = async (
+  force = false,
+): Promise<void> => {
+  const backendId = activeBackendId();
+  if (!force && hydratedBackends.has(backendId)) return;
+  hydratedBackends.add(backendId);
+
+  const serverVal = await SettingsService.getMiscAgentProfiles();
+  const local = readBackend(backendId);
+
+  if (serverVal && Array.isArray(serverVal.profiles)) {
+    // Server is the source of truth — mirror it into the local cache.
+    writeBackend(
+      backendId,
+      {
+        profiles: serverVal.profiles as AgentProfile[],
+        defaultProfileId: serverVal.default_profile_id ?? null,
+      },
+      { persist: false },
+    );
+  } else if (local.profiles.length > 0) {
+    // Server has nothing yet but this browser has profiles → seed the server
+    // once (migration). Keep the local copy as-is.
+    persistToServer(backendId);
+  }
 };
 
 /** All profiles for the active backend, in insertion order. */

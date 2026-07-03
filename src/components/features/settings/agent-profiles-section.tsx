@@ -15,8 +15,10 @@ import {
   deleteAgentProfile,
   getAgentProfiles,
   getDefaultAgentProfile,
+  loadAgentProfilesFromServer,
   saveAgentProfile,
   setDefaultAgentProfile,
+  AGENT_PROFILES_CHANGED_EVENT,
   type AgentProfile,
 } from "#/api/agent-profile-store";
 import { notifyAgentProfilesChanged } from "#/hooks/use-agent-profiles";
@@ -76,11 +78,32 @@ export function AgentProfilesSection() {
   const [draft, setDraft] = React.useState<ProfileDraft | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
 
-  const refresh = () => {
+  const refresh = React.useCallback(() => {
     setProfiles(getAgentProfiles());
     setDefaultId(getDefaultAgentProfile()?.id ?? null);
     notifyAgentProfilesChanged();
-  };
+  }, []);
+
+  // Hydrate from the server on mount (fresh browser / another device) and
+  // re-read whenever profiles change anywhere in the app.
+  React.useEffect(() => {
+    let active = true;
+    void loadAgentProfilesFromServer().then(() => {
+      if (active) {
+        setProfiles(getAgentProfiles());
+        setDefaultId(getDefaultAgentProfile()?.id ?? null);
+      }
+    });
+    const onChange = () => {
+      setProfiles(getAgentProfiles());
+      setDefaultId(getDefaultAgentProfile()?.id ?? null);
+    };
+    window.addEventListener(AGENT_PROFILES_CHANGED_EVENT, onChange);
+    return () => {
+      active = false;
+      window.removeEventListener(AGENT_PROFILES_CHANGED_EVENT, onChange);
+    };
+  }, []);
 
   const credentialFields =
     draft && draft.engine !== OPENHANDS_ENGINE_KEY
