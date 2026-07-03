@@ -41,6 +41,10 @@ const LLM_EXCLUDED_KEYS = new Set([
   LLM_SUBSCRIPTION_VENDOR_KEY,
 ]);
 
+// Sentinel key for the "Custom model" entry in the subscription model
+// dropdown — lets the user enter a model id the server list doesn't suggest.
+const SUBSCRIPTION_CUSTOM_MODEL_KEY = "__custom_subscription_model__";
+
 const buildModelId = (provider: string | null, model: string | null) => {
   if (!provider || !model) return null;
   return `${provider}/${model}`;
@@ -140,6 +144,11 @@ export function LlmSettingsScreen({
   );
   const [enableSubscriptionModels, setEnableSubscriptionModels] =
     React.useState(initialAuthType === LLM_AUTH_TYPE_SUBSCRIPTION);
+  // Lets the user type a subscription model id that isn't in the server's
+  // suggested list (which lags newer models). Escape hatch: the model still
+  // has to be one OpenAI actually serves the subscription.
+  const [subscriptionCustomMode, setSubscriptionCustomMode] =
+    React.useState(false);
   const {
     data: subscriptionModels,
     isLoading: isSubscriptionModelsLoading,
@@ -200,6 +209,13 @@ export function LlmSettingsScreen({
       const subscriptionModelValue = subscriptionModels?.includes(modelValue)
         ? modelValue
         : (subscriptionModels?.[0] ?? "");
+      // Custom when explicitly toggled, or when the persisted model isn't one
+      // of the server's suggestions (e.g. a newer id typed here previously).
+      const isCustomSubscriptionModel =
+        subscriptionCustomMode ||
+        (!!modelValue &&
+          subscriptionModels != null &&
+          !subscriptionModels.includes(modelValue));
 
       const apiKeyValue =
         typeof values["llm.api_key"] === "string" ? values["llm.api_key"] : "";
@@ -302,17 +318,32 @@ export function LlmSettingsScreen({
             testId="llm-subscription-model-input"
             name="llm.subscription_model"
             label={t(I18nKey.SETTINGS$SUBSCRIPTION_MODEL)}
-            items={(subscriptionModels ?? []).map((model) => ({
-              key: model,
-              label: model,
-            }))}
-            selectedKey={subscriptionModelValue}
+            items={[
+              ...(subscriptionModels ?? []).map((model) => ({
+                key: model,
+                label: model,
+              })),
+              {
+                key: SUBSCRIPTION_CUSTOM_MODEL_KEY,
+                label: t(I18nKey.SETTINGS$CUSTOM_MODEL),
+              },
+            ]}
+            selectedKey={
+              isCustomSubscriptionModel
+                ? SUBSCRIPTION_CUSTOM_MODEL_KEY
+                : subscriptionModelValue
+            }
             isClearable={false}
             required
             isDisabled={
               shouldDisableSubscriptionControls || !subscriptionModels?.length
             }
             onSelectionChange={(selectedKey) => {
+              if (selectedKey === SUBSCRIPTION_CUSTOM_MODEL_KEY) {
+                setSubscriptionCustomMode(true);
+                return;
+              }
+              setSubscriptionCustomMode(false);
               const nextModel =
                 typeof selectedKey === "string"
                   ? selectedKey
@@ -322,6 +353,19 @@ export function LlmSettingsScreen({
               }
             }}
           />
+          {isCustomSubscriptionModel && (
+            <SettingsInput
+              testId="llm-subscription-custom-model-input"
+              name="llm.subscription_custom_model"
+              label={t(I18nKey.SETTINGS$CUSTOM_MODEL)}
+              type="text"
+              className="w-full"
+              value={subscriptionModels?.includes(modelValue) ? "" : modelValue}
+              placeholder={subscriptionModels?.[0] ?? ""}
+              onChange={(value) => onChange("llm.model", value)}
+              isDisabled={isDisabled}
+            />
+          )}
           <OpenAISubscriptionAuthCard isDisabled={isDisabled} />
         </div>
       );
@@ -421,6 +465,7 @@ export function LlmSettingsScreen({
       isWaitingForSubscriptionModels,
       settings?.llm_api_key_set,
       subscriptionModels,
+      subscriptionCustomMode,
       t,
     ],
   );
@@ -451,15 +496,14 @@ export function LlmSettingsScreen({
             ? llm.model
             : String(context.values["llm.model"] ?? "");
         const fallbackSubscriptionModel = subscriptionModels?.[0];
-        if (
-          !subscriptionModels?.includes(model) &&
-          !fallbackSubscriptionModel
-        ) {
+        // A non-empty model wins — including a custom id not in the server's
+        // suggested list. Only fall back to the first suggestion when the
+        // field is empty; error only if there's nothing to fall back to.
+        const hasModel = typeof model === "string" && model.trim().length > 0;
+        if (!hasModel && !fallbackSubscriptionModel) {
           throw new Error("Subscription models are not loaded yet.");
         }
-        llm.model = subscriptionModels?.includes(model)
-          ? model
-          : fallbackSubscriptionModel;
+        llm.model = hasModel ? model : fallbackSubscriptionModel;
         delete llm.api_key;
         delete llm.base_url;
       } else {
