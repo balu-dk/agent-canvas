@@ -65,9 +65,12 @@ export function useLlmConfigured(): LlmConfiguredResult {
   // `agent_kind` alone under-reports readiness. If the profile the next
   // conversation will run on is an ACP engine, it owns its own credential and
   // needs no OpenHands LLM — treat it the same as an applied ACP agent.
+  // Require `engine` to be explicitly present: a malformed/legacy profile with
+  // no engine must NOT be classified as ACP (that would bypass the LLM check
+  // and hide the banner), so an absent engine falls through to the LLM check.
   const pendingProfile = useEffectivePendingAgentProfile();
   const pendingProfileIsAcp =
-    !!pendingProfile && pendingProfile.engine !== "openhands";
+    !!pendingProfile?.engine && pendingProfile.engine !== "openhands";
   const hasApiKey = settings?.llm_api_key_set === true;
   const activeProfile = profilesData?.profiles.find(
     (profile) => profile.name === profilesData.active_profile,

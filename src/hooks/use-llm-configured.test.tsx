@@ -36,7 +36,7 @@ vi.mock("#/api/profiles-service/profiles-service.api", () => ({
 // The pending agent profile is resolved from the localStorage-backed store and
 // selection state; mock it so tests control the engine directly and the real
 // store's server hydration effect doesn't fire.
-let pendingProfile: { engine: string } | null = null;
+let pendingProfile: { engine?: string } | null = null;
 vi.mock("#/hooks/use-agent-profiles", () => ({
   useEffectivePendingAgentProfile: () => pendingProfile,
   notifyAgentProfilesChanged: vi.fn(),
@@ -217,6 +217,34 @@ describe("useLlmConfigured", () => {
     // An OpenHands-engine profile still needs a usable LLM; with a key-less,
     // non-subscription active profile it must remain unconfigured.
     pendingProfile = { engine: "openhands" };
+    mockListProfiles.mockResolvedValue({
+      active_profile: "gpt-5.5",
+      profiles: [
+        {
+          name: "gpt-5.5",
+          model: "gpt-5.5",
+          base_url: "https://api.openai.com/v1",
+          api_key_set: false,
+        },
+      ],
+    });
+    mockGetProfile.mockResolvedValue({
+      name: "gpt-5.5",
+      api_key_set: false,
+      config: { model: "openai/gpt-5.5" },
+    });
+
+    const { result } = renderLlmConfiguredHook();
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isConfigured).toBe(false);
+  });
+
+  it("does not classify a profile with a missing engine as ACP", async () => {
+    // A malformed/legacy profile with no engine must fail closed: it falls
+    // through to the LLM check rather than bypassing it as an ACP agent.
+    pendingProfile = {};
     mockListProfiles.mockResolvedValue({
       active_profile: "gpt-5.5",
       profiles: [
