@@ -18,6 +18,7 @@ import {
 import { SettingsSectionHeaderProvider } from "#/contexts/settings-section-header-context";
 import { OpenHandsEngineGate } from "#/components/features/settings/openhands-engine-gate";
 import { useSettings } from "#/hooks/query/use-settings";
+import { useEffectivePendingAgentProfile } from "#/hooks/use-agent-profiles";
 
 export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const url = new URL(request.url);
@@ -57,14 +58,19 @@ function SettingsScreen() {
   const [hideSectionHeader, setHideSectionHeader] = useState(false);
   const { data: settings } = useSettings();
 
-  // OpenHands-engine-only pages show an in-page gate while an ACP agent
-  // occupies the applied engine slot (see the clientLoader note above).
+  // OpenHands-engine-only pages (LLM, Condenser, …) show an in-page gate when
+  // the agent in effect is ACP. The SELECTED agent profile decides this, not
+  // the applied slot: picking an OpenHands profile must reveal its model/LLM
+  // settings immediately, without a manual engine switch. Only fall back to
+  // the applied slot when no profile is in effect.
+  const pendingProfile = useEffectivePendingAgentProfile();
+  const effectiveIsAcp = pendingProfile
+    ? pendingProfile.engine !== "openhands"
+    : settings?.agent_settings?.agent_kind === "acp";
   const currentNavItem = OSS_NAV_ITEMS.find(
     (item) => item.to === location.pathname,
   );
-  const showOpenHandsGate =
-    !!currentNavItem?.disabledByAcp &&
-    settings?.agent_settings?.agent_kind === "acp";
+  const showOpenHandsGate = !!currentNavItem?.disabledByAcp && effectiveIsAcp;
 
   const { currentSectionTitle, currentSectionSubtitle } = useMemo(() => {
     const currentRenderedItem = navItems.find(

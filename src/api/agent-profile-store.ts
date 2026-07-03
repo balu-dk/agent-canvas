@@ -199,14 +199,17 @@ export const deleteAgentProfile = (id: string): void => {
 };
 
 /**
- * The profile new conversations use when the user doesn't pick one.
- * Null = no default; conversations follow the global Settings → Agent
- * configuration exactly as before profiles existed.
+ * The profile new conversations use when the user doesn't pick one. When no
+ * default is explicitly marked, falls back to the first profile so a profile
+ * is always in effect — profiles are the only agent concept, there is no
+ * "global settings" fallback. Null only when the backend has no profiles.
  */
 export const getDefaultAgentProfile = (): AgentProfile | null => {
   const data = readBackend(activeBackendId());
-  if (!data.defaultProfileId) return null;
-  return data.profiles.find((p) => p.id === data.defaultProfileId) ?? null;
+  const marked = data.defaultProfileId
+    ? data.profiles.find((p) => p.id === data.defaultProfileId)
+    : null;
+  return marked ?? data.profiles[0] ?? null;
 };
 
 export const setDefaultAgentProfile = (id: string | null): void => {

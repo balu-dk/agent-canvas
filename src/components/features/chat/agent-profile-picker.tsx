@@ -49,19 +49,21 @@ export function AgentProfilePicker() {
     return null;
   }
 
+  // Profiles are the only agent concept — there is no "global settings"
+  // option. A default always exists when profiles do (getDefaultAgentProfile
+  // falls back to the first), and legacy `null`/`undefined` selections both
+  // resolve to it, so a profile is always in effect.
   const defaultProfile = getDefaultAgentProfile();
   const effectiveProfile: AgentProfile | null =
-    selection === null
-      ? null
-      : typeof selection === "string"
-        ? (profiles.find((p) => p.id === selection) ?? defaultProfile)
-        : defaultProfile;
+    typeof selection === "string"
+      ? (profiles.find((p) => p.id === selection) ?? defaultProfile)
+      : defaultProfile;
 
   const buttonLabel = effectiveProfile
     ? truncateLabel(effectiveProfile.name)
     : t(I18nKey.AGENT_PROFILE$GLOBAL_SETTINGS);
 
-  const handleSelect = (value: string | null) => {
+  const handleSelect = (value: string) => {
     setSelection(value);
     setIsOpen(false);
   };
@@ -128,31 +130,6 @@ export function AgentProfilePicker() {
               </ContextMenuListItem>
             );
           })}
-
-          <ContextMenuListItem
-            testId="agent-profile-option-global"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleSelect(null);
-            }}
-            className={cn(
-              "flex items-center gap-2",
-              effectiveProfile === null && "bg-[var(--oh-interactive-hover)]",
-            )}
-          >
-            <span className="flex-1 truncate text-sm leading-5">
-              {t(I18nKey.AGENT_PROFILE$GLOBAL_SETTINGS)}
-            </span>
-            {effectiveProfile === null && (
-              <CheckIcon
-                width={14}
-                height={14}
-                className="shrink-0"
-                aria-hidden
-              />
-            )}
-          </ContextMenuListItem>
 
           <Divider />
           <li className="text-sm">
