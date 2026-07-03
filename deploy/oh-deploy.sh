@@ -44,6 +44,9 @@ UPSTREAM_REF="${UPSTREAM_REF:-main}"
 
 IMAGE_TAG="${IMAGE_TAG:-agent-canvas:balu}"
 CANDIDATE_TAG="${CANDIDATE_TAG:-agent-canvas:candidate}"
+# The current production image is preserved under this tag before each promote,
+# so rollback works even for locally-built images with no registry digest.
+ROLLBACK_TAG="${ROLLBACK_TAG:-agent-canvas:rollback}"
 
 STATE_DIR="${STATE_DIR:-/var/lib/oh-deploy}"
 HEALTH_PORT="${HEALTH_PORT:-18099}"          # temp host port for the candidate
@@ -262,13 +265,26 @@ cmd_deploy() {
   [[ -n "$(docker images -q "$CANDIDATE_TAG" 2>/dev/null)" ]] \
     || die "No candidate image ($CANDIDATE_TAG). Run 'build' first."
 
-  local ts backup digest
+  local ts backup prev_id digest
   ts="$(date +%Y%m%d-%H%M%S)"
   backup="$STATE_DIR/docker-compose.yml.bak-$ts"
   cp "$COMPOSE_FILE" "$backup"
+
+  # Preserve the CURRENT running image under the rollback tag BEFORE we move
+  # the production tag onto the candidate. Promotion retags in place, so
+  # without this the old (good) image would lose its only tag and rollback
+  # would land back on the new (bad) one. Capture by image ID so it survives
+  # the retag; locally-built images have no registry digest to fall back on.
+  prev_id="$(docker inspect --format '{{.Image}}' "$CONTAINER" 2>/dev/null || true)"
+  if [[ -n "$prev_id" ]]; then
+    docker tag "$prev_id" "$ROLLBACK_TAG"
+    log "Preserved current image as $ROLLBACK_TAG (id ${prev_id#sha256:})"
+  else
+    warn "Could not resolve current image — rollback will fall back to the compose backup only."
+  fi
   digest="$(current_deployed_digest)"
   [[ -n "$digest" ]] && echo "$digest" > "$STATE_DIR/last-good-digest"
-  log "Backup: $backup   rollback digest: ${digest:-<unknown>}"
+  log "Backup: $backup"
 
   log "Promoting candidate -> $IMAGE_TAG and updating compose"
   docker tag "$CANDIDATE_TAG" "$IMAGE_TAG"
@@ -284,9 +300,13 @@ cmd_deploy() {
       cp "$STATE_DIR/candidate-upstream.sha" "$DEPLOYED_SHA_FILE"
     log "DEPLOY OK. Running image: $IMAGE_TAG"
   else
-    warn "New container unhealthy — ROLLING BACK to $backup"
-    cp "$backup" "$COMPOSE_FILE"
-    if [[ -n "$digest" ]]; then set_compose_image "$digest"; fi
+    warn "New container unhealthy — ROLLING BACK"
+    if [[ -n "$prev_id" ]]; then
+      # Point production at the preserved previous image (survives the retag).
+      set_compose_image "$ROLLBACK_TAG"
+    else
+      cp "$backup" "$COMPOSE_FILE"
+    fi
     ( cd "$COMPOSE_DIR" && compose up -d )
     health_ok "http://127.0.0.1:8000" && log "Rollback healthy ✓" || warn "Rollback health check failed — inspect manually!"
     exit 40
@@ -294,11 +314,18 @@ cmd_deploy() {
 }
 
 cmd_rollback() {
-  local backup
-  backup="$(ls -1t "$STATE_DIR"/docker-compose.yml.bak-* 2>/dev/null | head -1 || true)"
-  [[ -n "$backup" ]] || die "No compose backup found in $STATE_DIR."
-  log "Restoring $backup"
-  cp "$backup" "$COMPOSE_FILE"
+  # Prefer the preserved previous image (reliable for local images); fall back
+  # to the most recent compose backup only if no rollback image exists.
+  if docker image inspect "$ROLLBACK_TAG" >/dev/null 2>&1; then
+    log "Rolling back to $ROLLBACK_TAG"
+    set_compose_image "$ROLLBACK_TAG"
+  else
+    local backup
+    backup="$(ls -1t "$STATE_DIR"/docker-compose.yml.bak-* 2>/dev/null | head -1 || true)"
+    [[ -n "$backup" ]] || die "No $ROLLBACK_TAG image and no compose backup in $STATE_DIR."
+    log "No rollback image; restoring compose backup $backup"
+    cp "$backup" "$COMPOSE_FILE"
+  fi
   ( cd "$COMPOSE_DIR" && compose up -d )
   health_ok "http://127.0.0.1:8000" && log "Rollback healthy ✓" || warn "Rollback health check failed — inspect manually!"
 }
