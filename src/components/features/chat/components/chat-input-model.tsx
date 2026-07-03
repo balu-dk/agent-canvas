@@ -18,6 +18,7 @@ import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
 import { chatInputPillButtonClassName } from "#/utils/form-control-classes";
+import { dropdownMenuRowForegroundClassName } from "#/utils/dropdown-classes";
 import React from "react";
 
 const MODEL_LABEL_MAX_CHARS = 10;
@@ -36,7 +37,7 @@ function truncateModelLabel(
   return `${model.slice(0, maxChars)}…`;
 }
 
-interface ChatInputModelMenuContentProps {
+export interface ChatInputModelMenuContentProps {
   model: ChatInputModelState;
   onClose: () => void;
   dividerInset?: "menu";
@@ -59,12 +60,7 @@ export function ChatInputModelMenuContent({
   const addCustomModel = useAcpModelMemoryStore((s) => s.addCustomModel);
   const removeCustomModel = useAcpModelMemoryStore((s) => s.removeCustomModel);
   const recordLastModel = useAcpModelMemoryStore((s) => s.recordLastModel);
-  const [isAddingCustom, setIsAddingCustom] = React.useState(false);
   const [customValue, setCustomValue] = React.useState("");
-  const customInputRef = React.useRef<HTMLInputElement>(null);
-  React.useEffect(() => {
-    if (isAddingCustom) customInputRef.current?.focus();
-  }, [isAddingCustom]);
   const hasModelRows = model.showAcpPicker || Boolean(model.displayModel);
 
   const handleSelectAcpModel = (modelId: string) => {
@@ -94,7 +90,6 @@ export function ChatInputModelMenuContent({
     // Persist the id so it becomes a permanent picker option, then select it.
     addCustomModel(model.backendId, model.acpEngine, modelId);
     setCustomValue("");
-    setIsAddingCustom(false);
     handleSelectAcpModel(modelId);
   };
 
@@ -123,6 +118,58 @@ export function ChatInputModelMenuContent({
           </li>
           {model.availableAcpModels.map((option) => {
             const isSelected = option.id === model.currentModelId;
+            const label = (
+              <span
+                className="flex-1 truncate text-sm leading-5"
+                title={option.label}
+              >
+                {option.label}
+              </span>
+            );
+            const check = isSelected && (
+              <CheckIcon
+                width={14}
+                height={14}
+                className="shrink-0"
+                aria-hidden
+              />
+            );
+            if (option.custom) {
+              // Custom rows carry a remove control, so select + remove render
+              // as SIBLING buttons — a button nested in a button is invalid.
+              return (
+                <li key={option.id} className="flex items-center">
+                  <button
+                    type="button"
+                    data-testid={`chat-input-acp-model-option-${option.id}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleSelectAcpModel(option.id);
+                    }}
+                    className={cn(
+                      dropdownMenuRowForegroundClassName,
+                      "flex flex-1 items-center gap-2 min-w-0 text-left",
+                      isSelected && "bg-[var(--oh-interactive-hover)]",
+                    )}
+                  >
+                    {label}
+                    {check}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t(I18nKey.COMMON$REMOVE)}
+                    title={t(I18nKey.COMMON$REMOVE)}
+                    className="shrink-0 px-2 py-1 text-[var(--oh-text-dim)] hover:text-[var(--oh-foreground)]"
+                    onClick={(event) =>
+                      handleRemoveCustomModel(event, option.id)
+                    }
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            }
             return (
               <ContextMenuListItem
                 key={option.id}
@@ -137,86 +184,47 @@ export function ChatInputModelMenuContent({
                   isSelected && "bg-[var(--oh-interactive-hover)]",
                 )}
               >
-                <span
-                  className="flex-1 truncate text-sm leading-5"
-                  title={option.label}
-                >
-                  {option.label}
-                </span>
-                {option.custom && (
-                  <button
-                    type="button"
-                    aria-label={t(I18nKey.COMMON$REMOVE)}
-                    title={t(I18nKey.COMMON$REMOVE)}
-                    className="shrink-0 px-1 text-[var(--oh-text-dim)] hover:text-[var(--oh-foreground)]"
-                    onClick={(event) =>
-                      handleRemoveCustomModel(event, option.id)
-                    }
-                  >
-                    ×
-                  </button>
-                )}
-                {isSelected && (
-                  <CheckIcon
-                    width={14}
-                    height={14}
-                    className="shrink-0"
-                    aria-hidden
-                  />
-                )}
+                {label}
+                {check}
               </ContextMenuListItem>
             );
           })}
-          {model.acpEngine &&
-            (isAddingCustom ? (
-              <li className="px-2 py-1">
-                <div className="flex items-center gap-1">
-                  <input
-                    ref={customInputRef}
-                    type="text"
-                    value={customValue}
-                    placeholder={t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}
-                    aria-label={t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}
-                    data-testid="chat-input-acp-model-custom-input"
-                    className="min-w-0 flex-1 rounded border border-[var(--oh-border)] bg-transparent px-2 py-1 text-sm leading-5 text-[var(--oh-foreground)] outline-none focus:border-[var(--oh-interactive)]"
-                    onChange={(event) => setCustomValue(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleAddCustomModel();
-                      } else if (event.key === "Escape") {
-                        event.preventDefault();
-                        setIsAddingCustom(false);
-                        setCustomValue("");
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={!customValue.trim()}
-                    className="shrink-0 rounded px-2 py-1 text-sm text-[var(--oh-interactive)] hover:bg-[var(--oh-interactive-hover)] disabled:opacity-40"
-                    onClick={(event) => {
+          {model.acpEngine && (
+            // Always-rendered custom-model input. A click-to-reveal toggle
+            // unmounted its own trigger on click, and the document-level
+            // click-outside handler then saw a detached target and closed the
+            // popover before the user could type — so the input is permanent.
+            <li className="px-2 py-1">
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={customValue}
+                  placeholder={`+ ${t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}`}
+                  aria-label={t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}
+                  data-testid="chat-input-acp-model-custom-input"
+                  className="min-w-0 flex-1 rounded border border-[var(--oh-border)] bg-transparent px-2 py-1 text-sm leading-5 text-[var(--oh-foreground)] outline-none focus:border-[var(--oh-interactive)]"
+                  onChange={(event) => setCustomValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
                       event.preventDefault();
                       handleAddCustomModel();
-                    }}
-                  >
-                    {t(I18nKey.BUTTON$ADD)}
-                  </button>
-                </div>
-              </li>
-            ) : (
-              <ContextMenuListItem
-                testId="chat-input-acp-model-custom"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setIsAddingCustom(true);
-                }}
-                className="text-sm text-[var(--oh-text-dim)]"
-              >
-                {`+ ${t(I18nKey.SETTINGS$AGENT_CUSTOM_MODEL)}`}
-              </ContextMenuListItem>
-            ))}
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!customValue.trim()}
+                  className="shrink-0 rounded px-2 py-1 text-sm text-[var(--oh-interactive)] hover:bg-[var(--oh-interactive-hover)] disabled:opacity-40"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    handleAddCustomModel();
+                  }}
+                >
+                  {t(I18nKey.BUTTON$ADD)}
+                </button>
+              </div>
+            </li>
+          )}
         </>
       ) : model.displayModel ? (
         <li className="text-sm">
