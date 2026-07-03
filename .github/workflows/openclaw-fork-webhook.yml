@@ -1,0 +1,55 @@
+name: Notify OpenClaw fork deploy watcher
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  notify-openclaw:
+    name: Notify OpenClaw
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          token_json="$(curl -fsSL \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=agent-canvas-fork-webhook")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"${token_json}")"
+          echo "::add-mask::${token}"
+          printf 'token=%s\n' "${token}" >> "${GITHUB_OUTPUT}"
+
+      - name: Notify OpenClaw webhook
+        shell: bash
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          WEBHOOK_URL: https://agent.balu.dk/hooks/github/agent-canvas-fork
+        run: |
+          python3 - <<'PY' > payload.json
+          import json
+          import os
+
+          payload = {
+              "event_name": os.environ.get("GITHUB_EVENT_NAME"),
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "ref": os.environ.get("GITHUB_REF"),
+              "sha": os.environ.get("GITHUB_SHA"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "workflow": os.environ.get("GITHUB_WORKFLOW"),
+              "server_url": os.environ.get("GITHUB_SERVER_URL"),
+          }
+          print(json.dumps(payload, separators=(",", ":")))
+          PY
+
+          curl -fsS -X POST "${WEBHOOK_URL}" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @payload.json
