@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { BaseModalTitle } from "#/components/shared/modals/confirmation-modals/base-modal";
@@ -14,12 +14,26 @@ import {
   type HomeDirectoryResponse,
   useHomeDirectory,
   useSearchSubdirs,
+  useCreateSubdir,
 } from "#/hooks/query/use-search-subdirs";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { cn } from "#/utils/utils";
 import { modalTitleSmClassName } from "#/utils/modal-classes";
+import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import FolderIcon from "#/icons/folder.svg?react";
 import ChevronLeft from "#/icons/chevron-left-small.svg?react";
+
+// A folder name is a single path segment: no separators, and not the
+// current/parent shorthands.
+function isValidFolderName(name: string): boolean {
+  const trimmed = name.trim();
+  return (
+    trimmed.length > 0 &&
+    !/[\\/]/.test(trimmed) &&
+    trimmed !== "." &&
+    trimmed !== ".."
+  );
+}
 
 const PROJECTS_PATH = "/projects";
 
@@ -124,7 +138,15 @@ export function FolderBrowserModal({
 }: FolderBrowserModalProps) {
   const { t } = useTranslation("openhands");
   const [currentPath, setCurrentPath] = useState<string | null>(null);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const active = useActiveBackend();
+  const createSubdir = useCreateSubdir();
+  const newFolderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isCreatingFolder) newFolderInputRef.current?.focus();
+  }, [isCreatingFolder]);
 
   const { data: homeData } = useHomeDirectory();
 
@@ -137,6 +159,8 @@ export function FolderBrowserModal({
     }
     if (!isOpen) {
       setCurrentPath(null);
+      setIsCreatingFolder(false);
+      setNewFolderName("");
     }
   }, [isOpen, homeData?.home, currentPath]);
 
@@ -201,6 +225,32 @@ export function FolderBrowserModal({
     return idx >= 0 ? trimmed.slice(idx + 1) || trimmed : trimmed;
   };
 
+  const navigateTo = (path: string) => {
+    // Navigating cancels an in-progress folder creation to avoid a stale input.
+    setIsCreatingFolder(false);
+    setNewFolderName("");
+    setCurrentPath(path);
+  };
+
+  const handleCreateFolder = () => {
+    const name = newFolderName.trim();
+    if (!currentPath || !isValidFolderName(name) || createSubdir.isPending) {
+      return;
+    }
+    createSubdir.mutate(
+      { parentPath: currentPath, name },
+      {
+        onSuccess: (createdPath) => {
+          setIsCreatingFolder(false);
+          setNewFolderName("");
+          setCurrentPath(createdPath); // step into the new folder
+        },
+        onError: (err) =>
+          displayErrorToast(err instanceof Error ? err.message : String(err)),
+      },
+    );
+  };
+
   const handleAddDirectory = () => {
     if (!currentPath) return;
     const item: LocalWorkspace = {
@@ -257,13 +307,13 @@ export function FolderBrowserModal({
               label={t(I18nKey.HOME$FAVORITES)}
               entries={favorites}
               currentPath={currentPath}
-              onPick={setCurrentPath}
+              onPick={navigateTo}
             />
             <SidebarSection
               label={t(I18nKey.HOME$LOCATIONS)}
               entries={locations}
               currentPath={currentPath}
-              onPick={setCurrentPath}
+              onPick={navigateTo}
             />
           </aside>
 
@@ -274,7 +324,7 @@ export function FolderBrowserModal({
               <button
                 type="button"
                 data-testid="folder-browser-up"
-                onClick={() => parent && setCurrentPath(parent)}
+                onClick={() => parent && navigateTo(parent)}
                 disabled={!parent}
                 aria-label={t(I18nKey.COMMON$UP)}
                 className="p-1 rounded hover:bg-[var(--oh-interactive-hover)] text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
@@ -282,11 +332,59 @@ export function FolderBrowserModal({
                 <ChevronLeft width={16} height={16} />
               </button>
               <span
-                className="text-xs text-[var(--oh-muted)] truncate"
+                className="flex-1 min-w-0 text-xs text-[var(--oh-muted)] truncate"
                 data-testid="folder-browser-current-path"
               >
                 {currentPath ?? ""}
               </span>
+              {isCreatingFolder ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <input
+                    ref={newFolderInputRef}
+                    type="text"
+                    value={newFolderName}
+                    placeholder={t(I18nKey.HOME$FOLDER)}
+                    aria-label={t(I18nKey.HOME$FOLDER)}
+                    data-testid="folder-browser-new-input"
+                    className="w-40 rounded border border-[var(--oh-border-input)] bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-[var(--oh-interactive)]"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleCreateFolder();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        setIsCreatingFolder(false);
+                        setNewFolderName("");
+                      }
+                    }}
+                    onChange={(event) => setNewFolderName(event.target.value)}
+                  />
+                  <BrandButton
+                    type="button"
+                    variant="primary"
+                    onClick={handleCreateFolder}
+                    isDisabled={
+                      !isValidFolderName(newFolderName) ||
+                      createSubdir.isPending
+                    }
+                    testId="folder-browser-new-confirm"
+                  >
+                    {t(I18nKey.BUTTON$CREATE)}
+                  </BrandButton>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="folder-browser-new"
+                  onClick={() => setIsCreatingFolder(true)}
+                  disabled={!currentPath}
+                  aria-label={`${t(I18nKey.BUTTON$CREATE)} ${t(I18nKey.HOME$FOLDER)}`}
+                  className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--oh-text-tertiary)] hover:bg-[var(--oh-interactive-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <FolderIcon width={14} height={14} className="shrink-0" />
+                  <span>+ {t(I18nKey.HOME$FOLDER)}</span>
+                </button>
+              )}
             </div>
 
             {/* Column headers */}
@@ -332,7 +430,7 @@ export function FolderBrowserModal({
                 <li key={entry.path}>
                   <button
                     type="button"
-                    onClick={() => setCurrentPath(entry.path)}
+                    onClick={() => navigateTo(entry.path)}
                     className="grid grid-cols-[1fr_120px] items-center w-full text-left px-4 py-1.5 text-sm text-white hover:bg-[var(--oh-interactive-hover)] cursor-pointer"
                     data-testid={`folder-browser-entry-${entry.name}`}
                   >

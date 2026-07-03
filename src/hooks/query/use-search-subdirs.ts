@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileClient } from "@openhands/typescript-client/clients";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import { useActiveBackend } from "#/contexts/active-backend-context";
@@ -26,6 +26,41 @@ export const useSearchSubdirs = (path: string | null) => {
     enabled: !!path,
     retry: false,
     meta: { disableToast: true },
+  });
+};
+
+/**
+ * Create a new subdirectory under `parentPath`. The agent-server has no
+ * mkdir endpoint, but `/api/file/upload` `mkdir -p`s the destination, so we
+ * create the folder by writing an empty `.gitkeep` placeholder into it.
+ * Invalidates the parent listing so the new folder appears.
+ */
+export const useCreateSubdir = () => {
+  const active = useActiveBackend();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      parentPath,
+      name,
+    }: {
+      parentPath: string;
+      name: string;
+    }): Promise<string> => {
+      const newPath = `${parentPath.replace(/\/+$/, "")}/${name}`;
+      await getFileClient().uploadTextFile("", newPath, ".gitkeep");
+      return newPath;
+    },
+    onSuccess: (_newPath, { parentPath }) => {
+      queryClient.invalidateQueries({
+        queryKey: [
+          "file",
+          "search_subdirs",
+          parentPath,
+          active.backend.id,
+          active.orgId,
+        ],
+      });
+    },
   });
 };
 
