@@ -128,7 +128,13 @@ export async function listGitHubRepositories(
   return { items, next_page_id: null };
 }
 
-/** List a repository's branches (single 100-entry page, query-filtered). */
+/**
+ * List a repository's branches, query-filtered. GitHub returns branches in
+ * ALPHABETICAL order, 100 per page, and the REST API has no name search — so
+ * a single page silently drops the default branch (e.g. `main`, mid-alphabet)
+ * in repos with many earlier branches (dependabot/, feature/ …). Page through
+ * all of them (bounded) so the default branch is always present.
+ */
 export async function listGitHubBranches(
   repository: string,
   query?: string,
@@ -136,13 +142,22 @@ export async function listGitHubBranches(
   const token = await getGitHubToken();
   if (!token) return { items: [], next_page_id: null };
 
-  const branches = await githubFetch<GitHubBranch[]>(
-    token,
-    `/repos/${repository}/branches?per_page=100`,
-  );
+  const PER_PAGE = 100;
+  const MAX_PAGES = 20; // up to 2000 branches — beyond any realistic repo
+  const all: GitHubBranch[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    // Pages are walked sequentially until a short (final) page — GitHub gives
+    // no total count to parallelise against.
+    const batch = await githubFetch<GitHubBranch[]>(
+      token,
+      `/repos/${repository}/branches?per_page=${PER_PAGE}&page=${page}`,
+    );
+    all.push(...batch);
+    if (batch.length < PER_PAGE) break; // reached the last page
+  }
 
   const needle = query?.trim().toLowerCase();
-  const items: Branch[] = branches
+  const items: Branch[] = all
     .filter((branch) => !needle || branch.name.toLowerCase().includes(needle))
     .map((branch) => ({
       name: branch.name,
