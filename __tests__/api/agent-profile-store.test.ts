@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetActiveBackend } = vi.hoisted(() => ({
+const { mockGetActiveBackend, mockGetMisc, mockSaveMisc } = vi.hoisted(() => ({
   mockGetActiveBackend: vi.fn(() => ({
     backend: {
       id: "backend-a",
@@ -10,10 +10,19 @@ const { mockGetActiveBackend } = vi.hoisted(() => ({
       kind: "local" as const,
     },
   })),
+  mockGetMisc: vi.fn(async () => null as unknown),
+  mockSaveMisc: vi.fn(async () => {}),
 }));
 
 vi.mock("#/api/backend-registry/active-store", () => ({
   getActiveBackend: mockGetActiveBackend,
+}));
+
+vi.mock("#/api/settings-service/settings-service.api", () => ({
+  default: {
+    getMiscAgentProfiles: mockGetMisc,
+    saveMiscAgentProfiles: mockSaveMisc,
+  },
 }));
 
 import {
@@ -22,6 +31,7 @@ import {
   getAgentProfiles,
   getDefaultAgentProfile,
   getProfileCredentialAliases,
+  loadAgentProfilesFromServer,
   saveAgentProfile,
   setDefaultAgentProfile,
   type AgentProfile,
@@ -43,6 +53,8 @@ const openhands: AgentProfile = {
 
 beforeEach(() => {
   window.localStorage.clear();
+  mockGetMisc.mockReset().mockResolvedValue(null);
+  mockSaveMisc.mockReset().mockResolvedValue(undefined);
   mockGetActiveBackend.mockReturnValue({
     backend: {
       id: "backend-a",
@@ -110,5 +122,39 @@ describe("agent-profile-store", () => {
         credentialSecretName: "CLAUDE_CODE_OAUTH_TOKEN",
       }),
     ).toEqual({});
+  });
+});
+
+describe("agent-profile-store server persistence", () => {
+  it("writes through to the server on save (full object)", () => {
+    saveAgentProfile(claudeWork);
+    expect(mockSaveMisc).toHaveBeenCalledWith({
+      profiles: [claudeWork],
+      default_profile_id: null,
+    });
+  });
+
+  it("hydrates from the server, mirroring it into the local cache", async () => {
+    mockGetMisc.mockResolvedValue({
+      profiles: [claudeWork, openhands],
+      default_profile_id: "p1",
+    });
+    await loadAgentProfilesFromServer(true);
+    expect(getAgentProfiles().map((p) => p.id)).toEqual(["p1", "p2"]);
+    expect(getDefaultAgentProfile()?.id).toBe("p1");
+  });
+
+  it("migrates local-only profiles up to the server when the server is empty", async () => {
+    saveAgentProfile(openhands); // local write (also calls save once)
+    mockSaveMisc.mockClear();
+    mockGetMisc.mockResolvedValue(null); // server has nothing yet
+    await loadAgentProfilesFromServer(true);
+    // Local profile preserved…
+    expect(getAgentProfiles().map((p) => p.id)).toEqual(["p2"]);
+    // …and seeded to the server.
+    expect(mockSaveMisc).toHaveBeenCalledWith({
+      profiles: [openhands],
+      default_profile_id: null,
+    });
   });
 });

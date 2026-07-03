@@ -1,20 +1,17 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   getAgentProfiles,
   getDefaultAgentProfile,
+  loadAgentProfilesFromServer,
+  notifyAgentProfilesChanged,
+  AGENT_PROFILES_CHANGED_EVENT as PROFILES_CHANGED_EVENT,
   type AgentProfile,
 } from "#/api/agent-profile-store";
+import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useAgentProfileSelectionStore } from "#/stores/agent-profile-selection-store";
 
-// localStorage-backed store subscription: re-read profiles when another
-// surface (e.g. the Settings → Agent manager) mutates them in this tab.
-const PROFILES_CHANGED_EVENT = "openhands-agent-profiles-changed";
-
-export const notifyAgentProfilesChanged = (): void => {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(PROFILES_CHANGED_EVENT));
-  }
-};
+// Re-exported for existing importers (e.g. the Settings → Agent manager).
+export { notifyAgentProfilesChanged };
 
 const subscribeToProfiles = (onStoreChange: () => void): (() => void) => {
   if (typeof window === "undefined") return () => {};
@@ -37,8 +34,16 @@ const getProfilesSnapshot = (): AgentProfile[] => {
   return profilesSnapshotCache.value;
 };
 
-/** Reactive list of the active backend's agent profiles. */
+/**
+ * Reactive list of the active backend's agent profiles. Hydrates from the
+ * server (misc_settings.agent_profiles) once per backend so profiles saved in
+ * another browser/device show up here, and local-only profiles migrate up.
+ */
 export function useAgentProfiles(): AgentProfile[] {
+  const { backend } = useActiveBackend();
+  useEffect(() => {
+    void loadAgentProfilesFromServer();
+  }, [backend.id]);
   return useSyncExternalStore(
     subscribeToProfiles,
     getProfilesSnapshot,

@@ -37,8 +37,21 @@ export type AppPreferences = Partial<Pick<Settings, AppPreferenceField>>;
  * category (e.g. `ui_preferences`) is a non-breaking change for the wire
  * shape — it just adds another optional sibling here.
  */
+/**
+ * Server-persisted agent profiles (engine + provider + credential bundles).
+ * Stored under `misc_settings.agent_profiles` so they sync across browsers
+ * and devices instead of living only in per-browser localStorage. Holds
+ * profile *definitions* only — the referenced credentials are separate
+ * secrets in the secrets store, not values here.
+ */
+export interface StoredAgentProfilesMisc {
+  profiles: unknown[];
+  default_profile_id: string | null;
+}
+
 export interface MiscSettings {
   app_preferences?: AppPreferences;
+  agent_profiles?: StoredAgentProfilesMisc;
 }
 
 /**
@@ -591,6 +604,38 @@ class SettingsService {
     clearCache();
 
     return true;
+  }
+
+  /**
+   * Read server-persisted agent profiles from `misc_settings.agent_profiles`.
+   * Returns null on cloud backends (no misc-settings channel there yet),
+   * on agent-servers older than 1.27 (no misc_settings), or on any error —
+   * callers fall back to the local cache.
+   */
+  static async getMiscAgentProfiles(): Promise<StoredAgentProfilesMisc | null> {
+    if (getActiveBackend().backend.kind === "cloud") return null;
+    try {
+      const resp = await this.fetchSettingsFromApi();
+      return resp.misc_settings?.agent_profiles ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist agent profiles to `misc_settings.agent_profiles`. Sends the full
+   * object every write (profiles + default) so the server-side deep-merge —
+   * which replaces lists wholesale — always lands the exact intended state.
+   * No-op on cloud backends.
+   */
+  static async saveMiscAgentProfiles(
+    value: StoredAgentProfilesMisc,
+  ): Promise<void> {
+    if (getActiveBackend().backend.kind === "cloud") return;
+    await new SettingsClient(getAgentServerClientOptions()).updateSettings({
+      misc_settings_diff: { agent_profiles: value },
+    });
+    this.invalidateCache();
   }
 
   /**
