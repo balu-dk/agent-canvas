@@ -10,11 +10,16 @@ import {
   LLM_PROFILES_QUERY_KEYS,
 } from "#/hooks/query/query-keys";
 import { isSubscriptionLlmConfig } from "#/constants/llm-subscription";
+import { useEffectivePendingAgentProfile } from "#/hooks/use-agent-profiles";
 
 interface LlmConfiguredResult {
   /**
    * True when the active backend's agent has a usable LLM:
    * - ACP agents own their LLM via a subprocess, so they never need a key.
+   *   This includes the agent profile the next conversation will run on: an
+   *   ACP profile (any engine other than "openhands") carries its own
+   *   credential, so it needs no OpenHands LLM even when the applied slot is
+   *   still OpenHands.
    * - OpenHands agents are ready only once an LLM API key has been saved.
    * - When the LLM settings page is hidden by a feature flag there is no
    *   place to finish setup, so we treat the LLM as configured to avoid
@@ -55,6 +60,17 @@ export function useLlmConfigured(): LlmConfiguredResult {
   const isLocal = backend.kind === "local";
 
   const isAcpAgent = settings?.agent_settings?.agent_kind === "acp";
+  // Agent profiles resolve the engine per conversation without writing the
+  // global slot (they overlay at conversation start), so the slot's
+  // `agent_kind` alone under-reports readiness. If the profile the next
+  // conversation will run on is an ACP engine, it owns its own credential and
+  // needs no OpenHands LLM — treat it the same as an applied ACP agent.
+  // Require `engine` to be explicitly present: a malformed/legacy profile with
+  // no engine must NOT be classified as ACP (that would bypass the LLM check
+  // and hide the banner), so an absent engine falls through to the LLM check.
+  const pendingProfile = useEffectivePendingAgentProfile();
+  const pendingProfileIsAcp =
+    !!pendingProfile?.engine && pendingProfile.engine !== "openhands";
   const hasApiKey = settings?.llm_api_key_set === true;
   const activeProfile = profilesData?.profiles.find(
     (profile) => profile.name === profilesData.active_profile,
@@ -117,7 +133,8 @@ export function useLlmConfigured(): LlmConfiguredResult {
       (activeProfileDetailError && !activeProfileDetail));
 
   return {
-    isConfigured: isAcpAgent || llmSettingsHidden || hasUsableLlm,
+    isConfigured:
+      isAcpAgent || pendingProfileIsAcp || llmSettingsHidden || hasUsableLlm,
     isLoading:
       settingsIndeterminate ||
       configIndeterminate ||
